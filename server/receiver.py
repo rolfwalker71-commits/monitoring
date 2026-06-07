@@ -260,6 +260,8 @@ _read_endpoint_cache: dict[str, tuple[float, object]] = {}
 _identity_maps_cache_lock = threading.Lock()
 _identity_maps_cache: dict[str, object] = {"expires_at": 0.0}
 _identity_maps_build_lock = threading.Lock()
+_identity_snapshot_refresh_lock = threading.Lock()
+_identity_snapshot_refresh_scheduled = False
 _latest_report_rows_semaphore = threading.Semaphore(1)
 _identity_maps_invalidate_lock = threading.Lock()
 _identity_maps_invalidate_scheduled_at = 0.0
@@ -805,40 +807,14 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_received_utc_id ON reports(received_at_utc, id)")
         conn.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_reports_host_key_id
-            ON reports(COALESCE(NULLIF(host_uid, ''), hostname), id)
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_reports_host_key_received
-            ON reports(COALESCE(NULLIF(host_uid, ''), hostname), received_at_utc)
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_reports_host_agent_ip_uid
-            ON reports(hostname, agent_id, primary_ip, host_uid, id)
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_reports_host_uid_received
-            ON reports(host_uid, received_at_utc, id)
-            WHERE COALESCE(host_uid, '') <> ''
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_reports_hostname_received_id
-            ON reports(hostname, received_at_utc, id)
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_reports_legacy_no_uid_id
-            ON reports(id)
-            WHERE COALESCE(host_uid, '') = ''
+            CREATE TABLE IF NOT EXISTS host_identity_snapshot (
+                host_key TEXT PRIMARY KEY,
+                hostname TEXT NOT NULL DEFAULT '',
+                last_seen_utc TEXT NOT NULL DEFAULT '',
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                primary_ip TEXT NOT NULL DEFAULT '',
+                report_count INTEGER NOT NULL DEFAULT 0
+            )
             """
         )
         conn.execute(
@@ -971,19 +947,6 @@ def init_db() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_alerts_host_uid_status
             ON alerts(host_uid, status, mountpoint)
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_alerts_status_severity_id
-            ON alerts(status, severity, id DESC)
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_alerts_status_open_id
-            ON alerts(id DESC)
-            WHERE status = 'open'
             """
         )
         conn.execute(
@@ -2259,8 +2222,6 @@ def init_db() -> None:
             (utc_now_iso(),),
         )
 
-        # Backfill host_uid for historical reports without changing existing hostname data.
-        _backfill_report_host_uids(conn)
         migration_done = conn.execute(
             "SELECT 1 FROM app_migrations WHERE migration_key = ?",
             (LINUX_MOUNTPOINT_DEFAULTS_MIGRATION_KEY,),
@@ -9589,6 +9550,185 @@ def _invalidate_identity_maps_cache() -> None:
         _identity_maps_cache["expires_at"] = 0.0
 
 
+def _sqlite_index_exists(conn: sqlite3.Connection, index_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ? LIMIT 1",
+        (str(index_name or "").strip(),),
+    ).fetchone()
+    return row is not None
+
+
+def _ensure_deferred_performance_indexes(conn: sqlite3.Connection) -> None:
+    deferred_indexes: list[tuple[str, str]] = [
+        (
+            "idx_reports_host_key_id",
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_host_key_id
+            ON reports(COALESCE(NULLIF(host_uid, ''), hostname), id)
+            """,
+        ),
+        (
+            "idx_reports_host_key_received",
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_host_key_received
+            ON reports(COALESCE(NULLIF(host_uid, ''), hostname), received_at_utc)
+            """,
+        ),
+        (
+            "idx_reports_host_agent_ip_uid",
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_host_agent_ip_uid
+            ON reports(hostname, agent_id, primary_ip, host_uid, id)
+            """,
+        ),
+        (
+            "idx_reports_host_uid_received",
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_host_uid_received
+            ON reports(host_uid, received_at_utc, id)
+            WHERE COALESCE(host_uid, '') <> ''
+            """,
+        ),
+        (
+            "idx_reports_hostname_received_id",
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_hostname_received_id
+            ON reports(hostname, received_at_utc, id)
+            """,
+        ),
+        (
+            "idx_reports_legacy_no_uid_id",
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_legacy_no_uid_id
+            ON reports(id)
+            WHERE COALESCE(host_uid, '') = ''
+            """,
+        ),
+        (
+            "idx_alerts_status_severity_id",
+            """
+            CREATE INDEX IF NOT EXISTS idx_alerts_status_severity_id
+            ON alerts(status, severity, id DESC)
+            """,
+        ),
+        (
+            "idx_alerts_status_open_id",
+            """
+            CREATE INDEX IF NOT EXISTS idx_alerts_status_open_id
+            ON alerts(id DESC)
+            WHERE status = 'open'
+            """,
+        ),
+    ]
+    for index_name, create_sql in deferred_indexes:
+        if _sqlite_index_exists(conn, index_name):
+            continue
+        conn.execute(create_sql)
+        conn.commit()
+        print(f"[startup] deferred index created: {index_name}")
+
+
+def _persist_identity_snapshot(conn: sqlite3.Connection, rows: list[tuple]) -> None:
+    conn.execute("DELETE FROM host_identity_snapshot")
+    if not rows:
+        conn.commit()
+        return
+    conn.executemany(
+        """
+        INSERT INTO host_identity_snapshot (
+            host_key, hostname, last_seen_utc, payload_json, primary_ip, report_count
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                str(row[0] or "").strip(),
+                str(row[1] or "").strip(),
+                str(row[2] or "").strip(),
+                str(row[3] or "{}"),
+                str(row[4] or "").strip(),
+                int(row[5] or 0),
+            )
+            for row in rows
+            if str(row[0] or "").strip()
+        ],
+    )
+    conn.commit()
+
+
+def _load_identity_snapshot_rows(conn: sqlite3.Connection) -> list[tuple]:
+    rows = conn.execute(
+        """
+        SELECT host_key, hostname, last_seen_utc, payload_json, primary_ip, report_count
+        FROM host_identity_snapshot
+        ORDER BY last_seen_utc DESC
+        """
+    ).fetchall()
+    if not rows:
+        return []
+    return [
+        (
+            str(row[0] or "").strip(),
+            str(row[1] or "").strip(),
+            str(row[2] or "").strip(),
+            str(row[3] or "{}"),
+            str(row[4] or "").strip(),
+            int(row[5] or 0),
+        )
+        for row in rows
+        if str(row[0] or "").strip()
+    ]
+
+
+def _store_identity_maps_cache(
+    rows: list[tuple],
+    *,
+    ttl_seconds: float | None = None,
+) -> tuple[list[tuple], dict[str, dict[str, object]], dict[str, dict[str, object]], dict[str, str]]:
+    now_ts = datetime.now(timezone.utc).timestamp()
+    ttl = IDENTITY_MAPS_CACHE_TTL_SECONDS if ttl_seconds is None else max(0.0, float(ttl_seconds))
+    canonical_by_hostname = _canonical_identities_by_hostname_from_rows(rows)
+    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(rows)
+    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(rows)
+    with _identity_maps_cache_lock:
+        _identity_maps_cache.clear()
+        _identity_maps_cache.update(
+            {
+                "expires_at": now_ts + ttl,
+                "rows": rows,
+                "canonical_by_hostname": canonical_by_hostname,
+                "canonical_by_cluster": canonical_by_cluster,
+                "last_seen_by_host_uid": last_seen_by_host_uid,
+            }
+        )
+    return rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid
+
+
+def _schedule_identity_snapshot_refresh() -> None:
+    global _identity_snapshot_refresh_scheduled
+
+    with _identity_snapshot_refresh_lock:
+        if _identity_snapshot_refresh_scheduled:
+            return
+        _identity_snapshot_refresh_scheduled = True
+
+    def _worker() -> None:
+        global _identity_snapshot_refresh_scheduled
+        try:
+            with sqlite_connect_read() as conn:
+                _get_latest_identity_context(conn, force_refresh=True)
+        except Exception as exc:
+            print(f"[startup] identity snapshot refresh failed: {exc}")
+        finally:
+            with _identity_snapshot_refresh_lock:
+                _identity_snapshot_refresh_scheduled = False
+
+    threading.Thread(
+        target=_worker,
+        name="identity-snapshot-refresh",
+        daemon=True,
+    ).start()
+
+
 def _peek_identity_maps_cache() -> tuple[
     list[tuple] | None,
     dict[str, dict[str, object]] | None,
@@ -9624,23 +9764,19 @@ def _get_latest_identity_context(
             if rows is not None:
                 return rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid
 
-        now_ts = datetime.now(timezone.utc).timestamp()
+            snapshot_rows = _load_identity_snapshot_rows(conn)
+            if snapshot_rows:
+                result = _store_identity_maps_cache(snapshot_rows, ttl_seconds=45.0)
+                _schedule_identity_snapshot_refresh()
+                return result
+
         rows = _latest_report_rows_by_host_key(conn)
-        canonical_by_hostname = _canonical_identities_by_hostname_from_rows(rows)
-        canonical_by_cluster = _canonical_identities_by_cluster_from_rows(rows)
-        last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(rows)
-        with _identity_maps_cache_lock:
-            _identity_maps_cache.clear()
-            _identity_maps_cache.update(
-                {
-                    "expires_at": now_ts + IDENTITY_MAPS_CACHE_TTL_SECONDS,
-                    "rows": rows,
-                    "canonical_by_hostname": canonical_by_hostname,
-                    "canonical_by_cluster": canonical_by_cluster,
-                    "last_seen_by_host_uid": last_seen_by_host_uid,
-                }
-            )
-        return rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid
+        result = _store_identity_maps_cache(rows)
+        try:
+            _persist_identity_snapshot(conn, rows)
+        except Exception as exc:
+            print(f"[identity] snapshot persist failed: {exc}")
+        return result
 
 
 def _identity_report_rows(conn: sqlite3.Connection) -> list[tuple]:
@@ -24484,11 +24620,29 @@ def main() -> None:
     )
     if args.rebuild_changelog_days > 0:
         startup_rebuild_days = args.rebuild_changelog_days
-    try:
-        with sqlite_connect() as conn:
-            _ensure_db_maintenance_snapshot(conn, force_if_empty=True)
-    except Exception as exc:
-        print(f"[startup] db maintenance snapshot failed: {exc}")
+    def _deferred_startup_db_tasks() -> None:
+        try:
+            with sqlite_connect() as conn:
+                _backfill_report_host_uids(conn)
+                conn.commit()
+        except Exception as exc:
+            print(f"[startup] deferred host_uid backfill failed: {exc}")
+        try:
+            with sqlite_connect() as conn:
+                _ensure_deferred_performance_indexes(conn)
+        except Exception as exc:
+            print(f"[startup] deferred performance indexes failed: {exc}")
+        try:
+            with sqlite_connect() as conn:
+                _ensure_db_maintenance_snapshot(conn, force_if_empty=True)
+        except Exception as exc:
+            print(f"[startup] db maintenance snapshot failed: {exc}")
+
+    threading.Thread(
+        target=_deferred_startup_db_tasks,
+        name="deferred-startup-db-tasks",
+        daemon=True,
+    ).start()
 
     scheduler_thread = threading.Thread(
         target=_db_maintenance_scheduler_loop,
@@ -24512,6 +24666,8 @@ def main() -> None:
     agent_ingest_worker_thread.start()
 
     def _startup_prewarm_read_caches() -> None:
+        # Let login/session/hosts requests win right after restart.
+        time.sleep(max(5, min(120, int(os.getenv("MONITORING_STARTUP_PREWARM_DELAY_SECONDS", "12") or "12"))))
         try:
             with sqlite_connect_read() as conn:
                 _get_latest_identity_context(conn)
@@ -24520,6 +24676,8 @@ def main() -> None:
             print("[startup] identity + hosts read caches pre-warmed")
         except Exception as exc:
             print(f"[startup] identity/hosts pre-warm failed: {exc}")
+        overview_delay = max(20, min(300, int(os.getenv("MONITORING_STARTUP_OVERVIEW_PREWARM_DELAY_SECONDS", "45") or "45")))
+        time.sleep(overview_delay)
         try:
             with sqlite_connect_read() as conn:
                 system_data = collect_system_overview(conn, search_query="")
@@ -24531,12 +24689,12 @@ def main() -> None:
             print(f"[startup] overview pre-warm failed: {exc}")
 
     server = ThreadingHTTPServer((args.host, args.port), MonitoringHandler)
+    print(f"Monitoring receiver running on http://{args.host}:{args.port}")
     threading.Thread(
         target=_startup_prewarm_read_caches,
         name="startup-read-cache-prewarm",
         daemon=True,
     ).start()
-    print(f"Monitoring receiver running on http://{args.host}:{args.port}")
     if startup_rebuild_days > 0:
         threading.Thread(
             target=_startup_changelog_rebuild,

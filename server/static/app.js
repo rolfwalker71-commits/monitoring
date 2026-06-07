@@ -1686,13 +1686,14 @@ async function refreshDashboard(options = {}) {
 
     await hostsPromise;
     if (state.selectedHost || state.selectedHostUid) {
-      await loadReportsForHost();
-      void Promise.allSettled([
-        loadAnalysisForHost(),
-        loadAlertsForHost(),
-      ]);
+      void loadReportsForHost().then(() => {
+        void Promise.allSettled([
+          loadAnalysisForHost(),
+          loadAlertsForHost(),
+        ]);
+      });
     }
-    await kpiPromise;
+    void kpiPromise;
 
     if (state.viewMode === "settings") {
       try {
@@ -18761,26 +18762,36 @@ function wireEvents() {
 }
 
 async function init() {
+  window.__monitoringAppBooted = true;
+  setAuthUiState(false);
+  setLoginStatus("Sitzung wird geprüft…");
+  wireEvents();
+
+  const isAuthenticated = await ensureAuthenticatedSession();
+  if (!isAuthenticated) {
+    setAuthUiState(false);
+    setLoginStatus("Bitte anmelden, um den Webclient zu nutzen.");
+    void loadWebclientVersion().catch((error) => {
+      console.warn("initial loadWebclientVersion failed:", error);
+    });
+    return;
+  }
+
   state.analysisHours = loadAnalysisRangePreference();
   applyTheme(loadThemePreference());
-    autoRefreshCurrentIntervalSec = loadAutoRefreshPreference();
-    const arSelect = document.getElementById("autoRefreshIntervalSelect");
-    if (arSelect) arSelect.value = String(autoRefreshCurrentIntervalSec);
+  autoRefreshCurrentIntervalSec = loadAutoRefreshPreference();
+  const arSelect = document.getElementById("autoRefreshIntervalSelect");
+  if (arSelect) arSelect.value = String(autoRefreshCurrentIntervalSec);
   updateAutoRefreshStatus(null);
   const oauthResult = consumeOauthStatusFromUrl();
   const startRoute = consumeStartRouteFromUrl();
 
-  // Start version fetch and auth check in parallel — neither depends on the other
   const webclientVersionPromise = loadWebclientVersion().catch((error) => {
     console.warn("initial loadWebclientVersion failed:", error);
   });
   const sapB1VersionMapPromise = loadSapB1VersionMap();
   const sapLicenseTypeMapPromise = loadSapLicenseTypeMap();
 
-  wireEvents();
-  window.__monitoringAppBooted = true;
-  setAuthUiState(false);
-  setLoginStatus("Sitzung wird geprüft…");
   initLiveReportFeed();
   initHeaderSectionCollapsibles();
   applyInitialHeaderKpiWidth();
@@ -18813,12 +18824,6 @@ async function init() {
   document.getElementById("hostSearchInput").value = state.hostSearchQuery;
   document.getElementById("loginUsernameInput").value = "";
   document.getElementById("loginPasswordInput").value = "";
-  const isAuthenticated = await ensureAuthenticatedSession();
-  if (!isAuthenticated) {
-    setAuthUiState(false);
-    setLoginStatus("Bitte anmelden, um den Webclient zu nutzen.");
-    return;
-  }
   sessionEstablishedAtMs = Date.now();
   // SAP maps already started above; hosts render immediately, badges fill in once ready.
   sapB1VersionMapPromise.then(() => {

@@ -14,15 +14,7 @@
     <link rel="apple-touch-icon" href="/icons/logo.png" />
   </head>
   <body>
-    <script>
-      window.setTimeout(function () {
-        var overlay = document.getElementById("loginOverlay");
-        if (overlay && overlay.classList.contains("hidden") && !window.__monitoringAppBooted) {
-          overlay.classList.remove("hidden");
-        }
-      }, 3500);
-    </script>
-    <div id="loginOverlay" class="login-overlay hidden">
+    <div id="loginOverlay" class="login-overlay">
       <div class="login-shell">
         <div class="login-logo-floating" aria-hidden="true">
           <img src="icons/logo.png" alt="Monitoring" />
