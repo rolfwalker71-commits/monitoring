@@ -879,6 +879,7 @@ function ensureAdminSettingsSplitLayout(container) {
         state.adminSettingsSubMode = normalizeAdminSettingsSubMode(button.getAttribute("data-admin-settings-mode"));
         applyAdminSettingsSubMode(container);
         persistAdminUiState();
+        void loadAdminSettingsGroup(state.adminSettingsSubMode);
       });
     });
     shell.setAttribute("data-wired", "1");
@@ -4045,7 +4046,7 @@ async function loadWebUsers(force = false) {
   }
 
   const rowsEl = document.getElementById("userManagementRows");
-  rowsEl.innerHTML = '<tr><td colspan="6" class="muted">Lade Benutzer...</td></tr>';
+  rowsEl.innerHTML = '<tr><td colspan="7" class="muted">Lade Benutzer...</td></tr>';
   try {
     const response = await fetch("/api/v1/web-users");
     if (!response.ok) {
@@ -4057,7 +4058,7 @@ async function loadWebUsers(force = false) {
     state.userManagementLoaded = true;
     setUserManagementStatus("Benutzerliste geladen.");
   } catch (error) {
-    rowsEl.innerHTML = `<tr><td colspan="6" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    rowsEl.innerHTML = `<tr><td colspan="7" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
     setUserManagementStatus(`Fehler beim Laden: ${error.message}`, true);
   }
 }
@@ -5845,63 +5846,94 @@ async function wireCustomerAlertTestSection(container) {
   });
 }
 
+async function loadAdminSettingsGroup(mode, force = false) {
+  if (!state.isAdmin) {
+    return;
+  }
+  const normalized = normalizeAdminSettingsSubMode(mode);
+  const container = document.getElementById("globalAdminSettingsContainer");
+
+  if (normalized === "operations") {
+    setDbMaintenanceStatus("Lade DB Kennzahlen-Verlauf...");
+    setBackupAutomationStatus("Lade Backup-Automation...");
+    setAgentIngestQueueStatus("Lade Queue-Status...");
+    setAgentIngestAuditStatus("Lade Ingest-Lieferlog...");
+    const opsResults = await Promise.allSettled([
+      loadAdminDatabaseStats(),
+      loadAdminBackupAutomation(),
+      loadAdminAgentIngestQueue(),
+      loadAdminAgentIngestAuditLog(),
+    ]);
+    if (opsResults[0]?.status === "rejected") {
+      setDbMaintenanceStatus(`Fehler: ${opsResults[0].reason?.message || opsResults[0].reason}`, true);
+    }
+    if (opsResults[1]?.status === "rejected") {
+      setBackupAutomationStatus(`Fehler: ${opsResults[1].reason?.message || opsResults[1].reason}`, true);
+    }
+    if (opsResults[2]?.status === "rejected") {
+      setAgentIngestQueueStatus(`Fehler: ${opsResults[2].reason?.message || opsResults[2].reason}`, true);
+    }
+    if (opsResults[3]?.status === "rejected") {
+      setAgentIngestAuditStatus(`Fehler: ${opsResults[3].reason?.message || opsResults[3].reason}`, true);
+    }
+    return;
+  }
+
+  if (normalized === "security") {
+    await Promise.allSettled([
+      loadOauthSettings(force),
+      loadWebUsers(force),
+    ]);
+    return;
+  }
+
+  if (normalized === "alerting") {
+    await loadAlarmSettings(force);
+    if (container && !container.querySelector("#customerAlertTestSection")) {
+      container.insertAdjacentHTML("beforeend", renderCustomerAlertTestSection());
+    }
+    if (container) {
+      await wireCustomerAlertTestSection(container);
+    }
+    return;
+  }
+
+  if (normalized === "sap") {
+    await Promise.allSettled([
+      loadSapB1VersionMap(),
+      loadSapLicenseTypeMap(),
+    ]);
+    if (container) {
+      container.querySelector("#sapB1VersionMapAdminSection")?.remove();
+      container.insertAdjacentHTML("beforeend", renderSapB1VersionMapAdminSection());
+      wireSapB1VersionMapAdminSection(container);
+
+      container.querySelector("#sapLicenseTypeMapAdminSection")?.remove();
+      container.insertAdjacentHTML("beforeend", renderSapLicenseTypeMapAdminSection());
+      wireSapLicenseTypeMapAdminSection(container);
+    }
+    return;
+  }
+
+  if (normalized === "data") {
+    await loadFilesystemBlacklist(force);
+    if (container && !container.querySelector("#filesystemBlacklistAdminSection")) {
+      container.insertAdjacentHTML("beforeend", renderFilesystemBlacklistAdminSection());
+      wireFilesystemBlacklistAdminSection(container);
+    }
+  }
+}
+
 async function loadGlobalAdminSettingsPanel(force = false) {
   updateAdminSettingsVisibility();
   if (!state.isAdmin) {
     return;
   }
-  setDbMaintenanceStatus("Lade DB Kennzahlen-Verlauf...");
-  setBackupAutomationStatus("Lade Backup-Automation...");
-  setAgentIngestQueueStatus("Lade Queue-Status...");
-  setAgentIngestAuditStatus("Lade Ingest-Lieferlog...");
-  const opsResults = await Promise.allSettled([
-    loadAdminDatabaseStats(),
-    loadAdminBackupAutomation(),
-    loadAdminAgentIngestQueue(),
-    loadAdminAgentIngestAuditLog(),
-  ]);
-  if (opsResults[0]?.status === "rejected") {
-    setDbMaintenanceStatus(`Fehler: ${opsResults[0].reason?.message || opsResults[0].reason}`, true);
-  }
-  if (opsResults[1]?.status === "rejected") {
-    setBackupAutomationStatus(`Fehler: ${opsResults[1].reason?.message || opsResults[1].reason}`, true);
-  }
-  if (opsResults[2]?.status === "rejected") {
-    setAgentIngestQueueStatus(`Fehler: ${opsResults[2].reason?.message || opsResults[2].reason}`, true);
-  }
-  if (opsResults[3]?.status === "rejected") {
-    setAgentIngestAuditStatus(`Fehler: ${opsResults[3].reason?.message || opsResults[3].reason}`, true);
-  }
-
-  await Promise.allSettled([
-    loadSapB1VersionMap(),
-    loadSapLicenseTypeMap(),
-    loadAlarmSettings(force),
-    loadOauthSettings(force),
-    loadWebUsers(force),
-    loadFilesystemBlacklist(force),
-  ]);
-  // Render SAP B1 version map editor (idempotent — skip if already rendered)
+  mountAdminSettingsIntoGlobalView();
   const container = document.getElementById("globalAdminSettingsContainer");
-  if (container) {
-    container.querySelector("#sapB1VersionMapAdminSection")?.remove();
-    container.insertAdjacentHTML("beforeend", renderSapB1VersionMapAdminSection());
-    wireSapB1VersionMapAdminSection(container);
-
-    container.querySelector("#sapLicenseTypeMapAdminSection")?.remove();
-    container.insertAdjacentHTML("beforeend", renderSapLicenseTypeMapAdminSection());
-    wireSapLicenseTypeMapAdminSection(container);
-  }
-  if (container && !container.querySelector("#filesystemBlacklistAdminSection")) {
-    container.insertAdjacentHTML("beforeend", renderFilesystemBlacklistAdminSection());
-    wireFilesystemBlacklistAdminSection(container);
-  }
-  if (container && !container.querySelector("#customerAlertTestSection")) {
-    container.insertAdjacentHTML("beforeend", renderCustomerAlertTestSection());
-    await wireCustomerAlertTestSection(container);
-  }
   ensureAdminSettingsSplitLayout(container);
   reapplyAdminWorkspaceUi();
+  await loadAdminSettingsGroup(state.adminSettingsSubMode, force);
 }
 
 async function loadSettingsPanel(force = false) {
