@@ -558,7 +558,12 @@ def _resolve_cross_identity_open_alerts(
         SELECT id, hostname, COALESCE(host_uid, ''), mountpoint
         FROM alerts
         WHERE status = 'open'
-        """
+          AND (
+            LOWER(hostname) = ?
+            OR LOWER(hostname) LIKE ?
+          )
+        """,
+        (cluster_key, f"{cluster_key}.%"),
     ).fetchall()
 
     resolved = 0
@@ -2489,8 +2494,7 @@ def _repoint_host_identity_rows(
     return stats
 
 
-def _canonical_identities_by_hostname(conn: sqlite3.Connection) -> dict[str, dict[str, object]]:
-    rows = _latest_report_rows_by_host_key(conn)
+def _canonical_identities_by_hostname_from_rows(rows: list[tuple]) -> dict[str, dict[str, object]]:
     best_row_by_hostname = _best_report_row_by_hostname(rows)
     canonical: dict[str, dict[str, object]] = {}
     for hostname, row in best_row_by_hostname.items():
@@ -2502,11 +2506,53 @@ def _canonical_identities_by_hostname(conn: sqlite3.Connection) -> dict[str, dic
     return canonical
 
 
+def _canonical_identities_by_hostname(conn: sqlite3.Connection) -> dict[str, dict[str, object]]:
+    return _canonical_identities_by_hostname_from_rows(_latest_report_rows_by_host_key(conn))
+
+
+def _canonical_identities_by_cluster_from_rows(rows: list[tuple]) -> dict[str, dict[str, object]]:
+    best_row_by_cluster = _best_report_row_by_hostname_cluster(rows)
+    canonical: dict[str, dict[str, object]] = {}
+    for cluster_key, row in best_row_by_cluster.items():
+        canonical[cluster_key] = {
+            "host_uid": str(row[0] or "").strip(),
+            "hostname": str(row[1] or "").strip(),
+            "last_report_time_utc": str(row[2] or "").strip(),
+            "report_count": int(row[5] or 0),
+        }
+    return canonical
+
+
+def _last_seen_by_host_uid_from_rows(rows: list[tuple]) -> dict[str, str]:
+    last_seen: dict[str, str] = {}
+    for row in rows:
+        host_uid = str(row[0] or "").strip()
+        last_seen_utc = str(row[2] or "").strip()
+        if not host_uid or host_uid.startswith("__legacy_report__:") or not last_seen_utc:
+            continue
+        existing = last_seen.get(host_uid)
+        if not existing or last_seen_utc > existing:
+            last_seen[host_uid] = last_seen_utc
+    return last_seen
+
+
+def _identity_is_older_than(identity_last_seen: str, canonical_last_seen: str) -> bool:
+    safe_identity_last = str(identity_last_seen or "").strip()
+    safe_canonical_last = str(canonical_last_seen or "").strip()
+    if not safe_canonical_last:
+        return False
+    if not safe_identity_last:
+        return True
+    return safe_identity_last < safe_canonical_last
+
+
 def _is_superseded_host_identity_key(
     conn: sqlite3.Connection,
     hostname: str,
     host_uid: str,
     canonical_by_hostname: dict[str, dict[str, object]] | None = None,
+    canonical_by_cluster: dict[str, dict[str, object]] | None = None,
+    last_seen_by_host_uid: dict[str, str] | None = None,
 ) -> bool:
     safe_hostname = str(hostname or "").strip()
     safe_host_uid = str(host_uid or "").strip()
@@ -2523,30 +2569,40 @@ def _is_superseded_host_identity_key(
         if canonical_uid and canonical_last:
             if safe_host_uid == canonical_uid:
                 return False
-            if _should_repoint_superseded_identity(conn, safe_hostname, safe_host_uid, canonical_uid):
+            if last_seen_by_host_uid is not None:
+                if _identity_is_older_than(last_seen_by_host_uid.get(safe_host_uid, ""), canonical_last):
+                    return True
+            elif _should_repoint_superseded_identity(conn, safe_hostname, safe_host_uid, canonical_uid):
                 return True
 
     cluster_key = _hostname_cluster_key(safe_hostname)
     if not cluster_key:
         return False
 
-    cluster_canonical = _canonical_identities_by_cluster(conn).get(cluster_key)
+    cluster_map = canonical_by_cluster if canonical_by_cluster is not None else _canonical_identities_by_cluster(conn)
+    cluster_canonical = cluster_map.get(cluster_key)
     if not cluster_canonical:
         return False
 
     cluster_uid = str(cluster_canonical.get("host_uid") or "").strip()
-    cluster_hostname = str(cluster_canonical.get("hostname") or "").strip() or safe_hostname
+    cluster_last = str(cluster_canonical.get("last_report_time_utc") or "").strip()
     if not cluster_uid:
         return False
-    if safe_host_uid == cluster_uid and _hostname_cluster_key(cluster_hostname) == cluster_key:
+    if safe_host_uid == cluster_uid:
         return False
 
+    if last_seen_by_host_uid is not None:
+        return _identity_is_older_than(last_seen_by_host_uid.get(safe_host_uid, ""), cluster_last)
+
+    cluster_hostname = str(cluster_canonical.get("hostname") or "").strip() or safe_hostname
     return _should_repoint_superseded_identity(conn, cluster_hostname, safe_host_uid, cluster_uid)
 
 
 def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, int]:
-    canonical_by_hostname = _canonical_identities_by_hostname(conn)
-    canonical_by_cluster = _canonical_identities_by_cluster(conn)
+    latest_identity_rows = _latest_report_rows_by_host_key(conn)
+    canonical_by_hostname = _canonical_identities_by_hostname_from_rows(latest_identity_rows)
+    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(latest_identity_rows)
+    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(latest_identity_rows)
     host_key_expr = reports_host_key_sql()
     identity_rows = conn.execute(
         f"""
@@ -2584,20 +2640,24 @@ def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, in
 
         canonical_uid = ""
         canonical_hostname = hostname
+        canonical_last = ""
+        cluster_canonical = None
         canonical = canonical_by_hostname.get(hostname)
         if canonical:
             canonical_uid = str(canonical.get("host_uid") or "").strip()
             canonical_hostname = hostname
+            canonical_last = str(canonical.get("last_report_time_utc") or "").strip()
         else:
             cluster_key = _hostname_cluster_key(hostname)
             cluster_canonical = canonical_by_cluster.get(cluster_key) if cluster_key else None
             if cluster_canonical:
                 canonical_uid = str(cluster_canonical.get("host_uid") or "").strip()
                 canonical_hostname = str(cluster_canonical.get("hostname") or "").strip() or hostname
+                canonical_last = str(cluster_canonical.get("last_report_time_utc") or "").strip()
 
         if not canonical_uid or identity_key == canonical_uid:
             continue
-        if not _should_repoint_superseded_identity(conn, canonical_hostname, identity_key, canonical_uid):
+        if not _identity_is_older_than(last_seen_by_host_uid.get(identity_key, ""), canonical_last):
             continue
 
         pair = (hostname, identity_key)
@@ -9079,17 +9139,7 @@ def _hostname_clusters_with_recent_reports(rows: list[tuple], cutoff_iso: str) -
 
 
 def _canonical_identities_by_cluster(conn: sqlite3.Connection) -> dict[str, dict[str, object]]:
-    rows = _latest_report_rows_by_host_key(conn)
-    best_row_by_cluster = _best_report_row_by_hostname_cluster(rows)
-    canonical: dict[str, dict[str, object]] = {}
-    for cluster_key, row in best_row_by_cluster.items():
-        canonical[cluster_key] = {
-            "host_uid": str(row[0] or "").strip(),
-            "hostname": str(row[1] or "").strip(),
-            "last_report_time_utc": str(row[2] or "").strip(),
-            "report_count": int(row[5] or 0),
-        }
-    return canonical
+    return _canonical_identities_by_cluster_from_rows(_latest_report_rows_by_host_key(conn))
 
 
 def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
@@ -9098,7 +9148,8 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
 
     rows = _latest_report_rows_by_host_key(conn)
     active_clusters = _hostname_clusters_with_recent_reports(rows, cutoff_iso)
-    canonical_by_cluster = _canonical_identities_by_cluster(conn)
+    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(rows)
+    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(rows)
     best_row_by_cluster = _best_report_row_by_hostname_cluster(rows)
 
     inactive_hosts = []
@@ -9118,8 +9169,9 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
 
         canonical = canonical_by_cluster.get(cluster_key) or {}
         canonical_uid = str(canonical.get("host_uid") or "").strip()
+        canonical_last = str(canonical.get("last_report_time_utc") or "").strip()
         if canonical_uid and host_uid != canonical_uid:
-            if _should_repoint_superseded_identity(conn, hostname, host_uid, canonical_uid):
+            if _identity_is_older_than(last_seen_by_host_uid.get(host_uid, ""), canonical_last):
                 continue
 
         try:
@@ -9337,7 +9389,10 @@ def collect_open_alerts(
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC, id DESC
         """
     ).fetchall()
-    canonical_by_hostname = _canonical_identities_by_hostname(conn)
+    latest_identity_rows = _latest_report_rows_by_host_key(conn)
+    canonical_by_hostname = _canonical_identities_by_hostname_from_rows(latest_identity_rows)
+    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(latest_identity_rows)
+    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(latest_identity_rows)
     rows = [
         row
         for row in rows
@@ -9346,6 +9401,8 @@ def collect_open_alerts(
             str(row[1] or ""),
             str(row[2] or ""),
             canonical_by_hostname,
+            canonical_by_cluster,
+            last_seen_by_host_uid,
         )
     ]
     rows = _dedupe_open_alert_rows_by_cluster_mountpoint(rows)
@@ -17399,14 +17456,6 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
         )
 
         if not open_alert:
-            _resolve_cross_identity_open_alerts(
-                conn,
-                hostname=hostname,
-                canonical_host_uid=host_uid,
-                now_utc=now_utc,
-                report_id=report_id,
-                mountpoint=mountpoint,
-            )
             conn.execute(
                 """
                 INSERT INTO alerts (
@@ -23278,6 +23327,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not self._require_admin_session():
                 return
 
+            if not _db_maintenance_lock.acquire(blocking=False):
+                self._send_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {"error": "Datenbankwartung läuft bereits. Bitte später erneut versuchen."},
+                )
+                return
+
             try:
                 with sqlite3.connect(DB_PATH) as conn:
                     result = cleanup_superseded_host_identities(conn)
@@ -23285,6 +23341,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
+            finally:
+                _db_maintenance_lock.release()
 
             _read_cache_invalidate_prefix("hosts:")
             _read_cache_invalidate_prefix("inactive-hosts:")
@@ -23457,6 +23515,15 @@ def main() -> None:
     init_db()
 
     def _startup_identity_cleanup_loop() -> None:
+        enabled_raw = str(os.getenv("MONITORING_STARTUP_IDENTITY_CLEANUP", "0") or "0").strip().lower()
+        if enabled_raw not in {"1", "true", "yes", "on"}:
+            return
+
+        # Let the HTTP server become reachable before running heavy DB maintenance.
+        time.sleep(max(30, min(600, int(os.getenv("MONITORING_STARTUP_IDENTITY_CLEANUP_DELAY_SECONDS", "120") or "120"))))
+        if not _db_maintenance_lock.acquire(blocking=False):
+            print("[startup] superseded host identity cleanup skipped: maintenance lock busy")
+            return
         try:
             with sqlite_connect() as conn:
                 identity_cleanup = cleanup_superseded_host_identities(conn)
@@ -23472,6 +23539,8 @@ def main() -> None:
             _read_cache_invalidate_prefix("inactive-hosts:")
         except Exception as exc:
             print(f"[startup] superseded host identity cleanup failed: {exc}")
+        finally:
+            _db_maintenance_lock.release()
 
     threading.Thread(
         target=_startup_identity_cleanup_loop,
