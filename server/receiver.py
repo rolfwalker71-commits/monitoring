@@ -136,6 +136,10 @@ ALERTS_SUMMARY_CACHE_TTL_SECONDS = max(
     0.0,
     min(600.0, float(os.getenv("MONITORING_ALERTS_SUMMARY_CACHE_TTL_SECONDS", "45") or "45")),
 )
+ALERTS_LIST_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_ALERTS_LIST_CACHE_TTL_SECONDS", "45") or "45")),
+)
 IDENTITY_MAPS_CACHE_TTL_SECONDS = max(
     5.0,
     min(180.0, float(os.getenv("MONITORING_IDENTITY_MAPS_CACHE_TTL_SECONDS", "120") or "120")),
@@ -9826,12 +9830,64 @@ def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: li
     return usage_by_host
 
 
+def _usage_by_mountpoint_from_payload(payload: object) -> dict[str, float]:
+    usage_by_mountpoint: dict[str, float] = {}
+    filesystems = payload.get("filesystems", []) if isinstance(payload, dict) else []
+    if not isinstance(filesystems, list):
+        return usage_by_mountpoint
+    for fs in filesystems:
+        if not isinstance(fs, dict):
+            continue
+        mountpoint = str(fs.get("mountpoint", "") or "").strip()
+        if not mountpoint:
+            continue
+        try:
+            used_percent = float(fs.get("used_percent"))
+        except (TypeError, ValueError):
+            continue
+        usage_by_mountpoint[normalize_mountpoint_key(mountpoint)] = used_percent
+    return usage_by_mountpoint
+
+
+def _report_details_from_identity_row(row: tuple) -> dict[str, object]:
+    host_key = str(row[0] or "").strip()
+    hostname = str(row[1] or "").strip()
+    last_seen_utc = str(row[2] or "").strip()
+    payload = parse_payload_json(str(row[3] or "{}"))
+    primary_ip = str(row[4] or "").strip()
+    return {
+        "hostname": hostname,
+        "latest_report_ip": _resolve_std_nic_ipv4(payload, primary_ip),
+        "usage_by_mountpoint": _usage_by_mountpoint_from_payload(payload),
+        "country_code": extract_country_code_from_payload(payload),
+        "received_at_utc": last_seen_utc,
+    }
+
+
 def _collect_latest_report_details_by_host_keys(conn: sqlite3.Connection, host_keys: list[str]) -> dict[str, dict]:
     normalized_keys = [str(item or "").strip() for item in (host_keys or []) if str(item or "").strip()]
     if not normalized_keys:
         return {}
 
     unique_keys = sorted(set(normalized_keys))
+    details_by_host_key: dict[str, dict] = {}
+    missing_keys: list[str] = []
+
+    identity_rows, _, _, _ = _peek_identity_maps_cache()
+    if identity_rows is not None:
+        row_by_key = {str(row[0] or "").strip(): row for row in identity_rows if str(row[0] or "").strip()}
+        for host_key in unique_keys:
+            identity_row = row_by_key.get(host_key)
+            if identity_row is None:
+                missing_keys.append(host_key)
+                continue
+            details_by_host_key[host_key] = _report_details_from_identity_row(identity_row)
+        if not missing_keys:
+            return details_by_host_key
+        unique_keys = missing_keys
+    else:
+        details_by_host_key = {}
+
     placeholders = ",".join("?" for _ in unique_keys)
     host_key_expr = reports_host_key_sql()
     latest_rows = conn.execute(
@@ -9855,7 +9911,6 @@ def _collect_latest_report_details_by_host_keys(conn: sqlite3.Connection, host_k
         tuple(unique_keys),
     ).fetchall()
 
-    details_by_host_key: dict[str, dict] = {}
     for row in latest_rows:
         host_key = str(row[0] or "").strip()
         if not host_key:
@@ -9863,27 +9918,10 @@ def _collect_latest_report_details_by_host_keys(conn: sqlite3.Connection, host_k
         hostname = str(row[1] or "").strip()
         primary_ip = str(row[2] or "").strip()
         payload = parse_payload_json(str(row[3] or "{}"))
-        latest_report_ip = _resolve_std_nic_ipv4(payload, primary_ip)
-
-        usage_by_mountpoint: dict[str, float] = {}
-        filesystems = payload.get("filesystems", []) if isinstance(payload, dict) else []
-        if isinstance(filesystems, list):
-            for fs in filesystems:
-                if not isinstance(fs, dict):
-                    continue
-                mountpoint = str(fs.get("mountpoint", "") or "").strip()
-                if not mountpoint:
-                    continue
-                try:
-                    used_percent = float(fs.get("used_percent"))
-                except (TypeError, ValueError):
-                    continue
-                usage_by_mountpoint[normalize_mountpoint_key(mountpoint)] = used_percent
-
         details_by_host_key[host_key] = {
             "hostname": hostname,
-            "latest_report_ip": latest_report_ip,
-            "usage_by_mountpoint": usage_by_mountpoint,
+            "latest_report_ip": _resolve_std_nic_ipv4(payload, primary_ip),
+            "usage_by_mountpoint": _usage_by_mountpoint_from_payload(payload),
             "country_code": extract_country_code_from_payload(payload),
             "received_at_utc": str(row[4] or "").strip(),
         }
@@ -17282,7 +17320,8 @@ def _load_alert_mobile_context_map(
     conn: sqlite3.Connection,
     host_pairs: list[tuple[str, str]],
 ) -> dict[str, dict[str, str]]:
-    context_by_host_key: dict[str, dict[str, str]] = {}
+    ensure_customers_extended_columns(conn)
+    unique_pairs: list[tuple[str, str, str]] = []
     seen_keys: set[str] = set()
     for hostname_raw, host_uid_raw in host_pairs:
         hostname = str(hostname_raw or "").strip()
@@ -17291,25 +17330,173 @@ def _load_alert_mobile_context_map(
         if not host_key or host_key in seen_keys:
             continue
         seen_keys.add(host_key)
-        host_settings = get_host_settings(conn, hostname, host_uid)
-        contact_name = str(host_settings.get("customer_it_provider_contact", "") or "").strip()
-        provider_name = str(host_settings.get("customer_it_provider_name", "") or "").strip()
-        provider_email = str(host_settings.get("customer_it_provider_email", "") or "").strip()
-        contact_line = contact_name or provider_name or provider_email
-        environment_type = str(host_settings.get("environment_type", "") or "").strip().lower()
+        unique_pairs.append((hostname, host_uid, host_key))
+
+    if not unique_pairs:
+        return {}
+
+    hostnames = sorted({hostname for hostname, _, _ in unique_pairs if hostname})
+    host_keys = sorted({host_key for _, _, host_key in unique_pairs})
+    hostname_settings: dict[str, dict[str, object]] = {}
+    if hostnames:
+        placeholders = ",".join("?" for _ in hostnames)
+        settings_rows = conn.execute(
+            f"""
+            SELECT
+                h.hostname,
+                COALESCE(h.country_code_override, ''),
+                COALESCE(h.environment_type, ''),
+                COALESCE(c.customer_name, ''),
+                COALESCE(c.logo_filename, ''),
+                COALESCE(c.updated_at_utc, ''),
+                h.customer_id,
+                COALESCE(c.it_provider_name, ''),
+                COALESCE(c.it_provider_contact, ''),
+                COALESCE(c.it_provider_email, ''),
+                COALESCE(c.it_provider_phone, '')
+            FROM host_settings h
+            LEFT JOIN customers c ON c.id = h.customer_id
+            WHERE h.hostname IN ({placeholders})
+            """,
+            tuple(hostnames),
+        ).fetchall()
+        for row in settings_rows:
+            hostname = str(row[0] or "").strip()
+            if not hostname:
+                continue
+            environment_type = str(row[2] or "").strip().lower()
+            if environment_type not in {"prod", "test"}:
+                environment_type = ""
+            hostname_settings[hostname] = {
+                "country_code_override": normalize_country_code(row[1]),
+                "environment_type": environment_type,
+                "customer_name": str(row[3] or "").strip(),
+                "customer_logo_url": build_customer_logo_url(row[6], row[4], row[5]),
+                "it_provider_contact_line": str(row[8] or "").strip() or str(row[7] or "").strip() or str(row[9] or "").strip(),
+                "it_provider_email": str(row[9] or "").strip(),
+                "it_provider_phone": str(row[10] or "").strip(),
+            }
+
+    uid_settings: dict[str, dict[str, object]] = {}
+    if host_keys:
+        placeholders = ",".join("?" for _ in host_keys)
+        uid_rows = conn.execute(
+            f"""
+            SELECT
+                hus.host_uid,
+                COALESCE(hus.country_code_override, ''),
+                COALESCE(hus.environment_type, ''),
+                hus.customer_id,
+                COALESCE(c.customer_name, ''),
+                COALESCE(c.logo_filename, ''),
+                COALESCE(c.updated_at_utc, ''),
+                COALESCE(c.it_provider_name, ''),
+                COALESCE(c.it_provider_contact, ''),
+                COALESCE(c.it_provider_email, ''),
+                COALESCE(c.it_provider_phone, '')
+            FROM host_uid_settings hus
+            LEFT JOIN customers c ON c.id = hus.customer_id
+            WHERE hus.host_uid IN ({placeholders})
+            """,
+            tuple(host_keys),
+        ).fetchall()
+        for row in uid_rows:
+            host_key = str(row[0] or "").strip()
+            if not host_key:
+                continue
+            environment_type = str(row[2] or "").strip().lower()
+            if environment_type not in {"prod", "test"}:
+                environment_type = ""
+            uid_settings[host_key] = {
+                "country_code_override": normalize_country_code(row[1]),
+                "environment_type": environment_type,
+                "customer_name": str(row[4] or "").strip(),
+                "customer_logo_url": build_customer_logo_url(row[3], row[5], row[6]),
+                "it_provider_contact_line": str(row[8] or "").strip() or str(row[7] or "").strip() or str(row[9] or "").strip(),
+                "it_provider_email": str(row[9] or "").strip(),
+                "it_provider_phone": str(row[10] or "").strip(),
+            }
+
+    context_by_host_key: dict[str, dict[str, str]] = {}
+    for hostname, _host_uid, host_key in unique_pairs:
+        base = hostname_settings.get(hostname, {})
+        override = uid_settings.get(host_key, {})
+        customer_name = str(override.get("customer_name") or base.get("customer_name") or "").strip()
+        customer_logo_url = str(override.get("customer_logo_url") or base.get("customer_logo_url") or "").strip()
+        environment_type = str(override.get("environment_type") or base.get("environment_type") or "").strip().lower()
         if environment_type not in {"prod", "test"}:
             environment_type = ""
-        country_override = normalize_country_code(str(host_settings.get("country_code_override", "") or ""))
+        country_override = normalize_country_code(
+            str(override.get("country_code_override") or base.get("country_code_override") or "")
+        )
+        contact_line = str(override.get("it_provider_contact_line") or base.get("it_provider_contact_line") or "").strip()
+        provider_email = str(override.get("it_provider_email") or base.get("it_provider_email") or "").strip()
+        provider_phone = str(override.get("it_provider_phone") or base.get("it_provider_phone") or "").strip()
         context_by_host_key[host_key] = {
-            "customer_name": str(host_settings.get("customer_name", "") or "").strip(),
-            "customer_logo_url": str(host_settings.get("customer_logo_url", "") or "").strip(),
+            "customer_name": customer_name,
+            "customer_logo_url": customer_logo_url,
             "environment_type": environment_type,
             "country_code_override": country_override,
             "it_provider_contact_line": contact_line,
             "it_provider_email": provider_email,
-            "it_provider_phone": str(host_settings.get("customer_it_provider_phone", "") or "").strip(),
+            "it_provider_phone": provider_phone,
         }
     return context_by_host_key
+
+
+def _bulk_alert_country_codes(
+    conn: sqlite3.Connection,
+    rows: list[tuple],
+) -> dict[str, str]:
+    country_by_host_key: dict[str, str] = {}
+    if not rows:
+        return country_by_host_key
+
+    identity_row_by_key: dict[str, tuple] = {}
+    identity_rows, _, _, _ = _peek_identity_maps_cache()
+    if identity_rows is not None:
+        identity_row_by_key = {str(row[0] or "").strip(): row for row in identity_rows if str(row[0] or "").strip()}
+
+    hostnames = sorted({str(row[1] or "").strip() for row in rows if str(row[1] or "").strip()})
+    host_keys = sorted(
+        {
+            alert_host_key(str(row[1] or ""), str(row[6] or ""))
+            for row in rows
+            if alert_host_key(str(row[1] or ""), str(row[6] or ""))
+        }
+    )
+    host_settings_by_hostname, _ = _load_host_metadata_maps(conn, hostnames, host_keys)
+
+    uid_country_overrides: dict[str, str] = {}
+    if host_keys:
+        placeholders = ",".join("?" for _ in host_keys)
+        for uid_row in conn.execute(
+            f"""
+            SELECT host_uid, COALESCE(country_code_override, '')
+            FROM host_uid_settings
+            WHERE host_uid IN ({placeholders})
+            """,
+            tuple(host_keys),
+        ).fetchall():
+            host_uid = str(uid_row[0] or "").strip()
+            if host_uid:
+                uid_country_overrides[host_uid] = normalize_country_code(uid_row[1])
+
+    for row in rows:
+        host_key = alert_host_key(str(row[1] or ""), str(row[6] or ""))
+        if not host_key or host_key in country_by_host_key:
+            continue
+        country_code = uid_country_overrides.get(host_key, "")
+        if not country_code:
+            country_code = host_settings_by_hostname.get(str(row[1] or "").strip(), {}).get("country_code_override", "")
+            country_code = normalize_country_code(country_code)
+        if not country_code:
+            identity_row = identity_row_by_key.get(host_key)
+            if identity_row is not None:
+                payload = parse_payload_json(str(identity_row[3] or "{}"))
+                country_code = extract_country_code_from_payload(payload)
+        country_by_host_key[host_key] = country_code
+    return country_by_host_key
 
 
 def _resolve_alert_country_code(
@@ -17491,6 +17678,7 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     _schedule_read_cache_invalidation("hosts:")
     _schedule_read_cache_invalidation("inactive-hosts:")
     _schedule_read_cache_invalidation("alerts-summary:")
+    _schedule_read_cache_invalidation("alerts-list:")
 
     # Keep behavior identical to direct-ingest: non-blocking best effort.
     auto_sync_discovered_license_types(payload)
@@ -20062,6 +20250,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 country_filter = ""
             limit = parse_int(query, "limit", default=50, min_value=1, max_value=500)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+            session_username = self._web_session_username()
+            cache_key = (
+                f"alerts-list:{session_username}:{status_filter}:{severity_filter}:"
+                f"{acknowledged_filter}:{closed_filter}:{heads_up_suppressed_filter}:{muted_filter}:"
+                f"{hostname_filter}:{host_uid_filter}:{country_filter}:{limit}:{offset}"
+            )
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                _finish_endpoint_timer(endpoint_timer, meta="cache=hit")
+                return
 
             where_parts = []
             args: list[object] = []
@@ -20247,7 +20447,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     for row in all_rows
                     if not is_filesystem_blacklisted_by_patterns(str(row[2] or ""), blacklist_patterns)
                 ]
-                session_username = self._web_session_username()
                 if session_username:
                     allowed_tokens = get_user_alert_visibility_tokens(conn, session_username)
                     if allowed_tokens is not None:
@@ -20257,83 +20456,38 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             if host_matches_alert_visibility_tokens(str(row[1] or ""), str(row[6] or ""), allowed_tokens)
                         ]
 
-                all_host_keys = sorted(
-                    {
-                        alert_host_key(str(row[1] or ""), str(row[6] or ""))
-                        for row in filtered_rows
-                    }
-                )
-                latest_details_by_host_key = _collect_latest_report_details_by_host_keys(conn, all_host_keys)
-                mobile_context_all = _load_alert_mobile_context_map(
-                    conn,
-                    [(str(row[1] or ""), str(row[6] or "")) for row in filtered_rows],
-                )
-                available_countries = sorted(
-                    {
-                        code
-                        for row in filtered_rows
-                        if (
-                            code := _resolve_alert_country_code(
-                                mobile_context_all.get(
-                                    alert_host_key(str(row[1] or ""), str(row[6] or "")),
-                                    {},
-                                ),
-                                latest_details_by_host_key.get(
-                                    alert_host_key(str(row[1] or ""), str(row[6] or "")),
-                                ),
-                            )
-                        )
-                    }
-                )
+                country_by_host_key = _bulk_alert_country_codes(conn, filtered_rows)
+                available_countries = sorted({code for code in country_by_host_key.values() if code})
                 if country_filter:
                     filtered_rows = [
                         row
                         for row in filtered_rows
-                        if _resolve_alert_country_code(
-                            mobile_context_all.get(alert_host_key(str(row[1] or ""), str(row[6] or "")), {}),
-                            latest_details_by_host_key.get(alert_host_key(str(row[1] or ""), str(row[6] or ""))),
-                        )
-                        == country_filter
+                        if country_by_host_key.get(alert_host_key(str(row[1] or ""), str(row[6] or "")), "") == country_filter
                     ]
 
                 total = len(filtered_rows)
                 rows = filtered_rows[offset : offset + limit]
 
+                page_host_keys = sorted(
+                    {
+                        alert_host_key(str(row[1] or ""), str(row[6] or ""))
+                        for row in rows
+                        if alert_host_key(str(row[1] or ""), str(row[6] or ""))
+                    }
+                )
+                latest_details_by_host_key = _collect_latest_report_details_by_host_keys(conn, page_host_keys)
+                mobile_context_all = _load_alert_mobile_context_map(
+                    conn,
+                    [(str(row[1] or ""), str(row[6] or "")) for row in rows],
+                )
+
                 hostnames = sorted({str(row[1]) for row in rows if row[1]})
                 host_uids = sorted({alert_host_key(str(row[1] or ""), str(row[6] or "")) for row in rows})
                 host_settings_by_hostname, host_uid_display_name_map = _load_host_metadata_maps(conn, hostnames, host_uids)
                 display_names: dict[str, str] = {}
-                customer_names: dict[str, str] = {
-                    hostname: str(host_settings_by_hostname.get(hostname, {}).get("customer_name", "") or "").strip()
-                    for hostname in hostnames
-                }
-
-                latest_payload_rows = conn.execute(
-                    f"""
-                    SELECT hostname, payload_json
-                    FROM reports
-                    WHERE id IN (
-                        SELECT MAX(id)
-                        FROM reports
-                        WHERE hostname IN ({','.join('?' for _ in hostnames)})
-                        GROUP BY hostname
-                    )
-                    """,
-                    tuple(hostnames),
-                ).fetchall() if hostnames else []
-                payload_by_hostname = {
-                    str(item[0]): parse_payload_json(str(item[1] or "{}"))
-                    for item in latest_payload_rows
-                }
-
                 for hostname in hostnames:
-                    payload = payload_by_hostname.get(hostname, {})
                     host_settings = host_settings_by_hostname.get(hostname, {})
-                    display_names[hostname] = effective_display_name(
-                        payload,
-                        str(host_settings.get("display_name_override", "") or ""),
-                        hostname,
-                    )
+                    display_names[hostname] = str(host_settings.get("display_name_override", "") or "").strip() or hostname
 
                 mobile_context_by_host_key = {
                     alert_host_key(str(row[1] or ""), str(row[6] or "")): mobile_context_all.get(
@@ -20410,6 +20564,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             "used_percent": row[4],
                             "current_used_percent": current_used_percent,
                             "delta_used_percent": delta_used_percent,
+                            "current_report_at_utc": str(host_details.get("received_at_utc", "") or "").strip()
+                            if isinstance(host_details, dict)
+                            else "",
                             "status": row[5],
                             "latest_report_ip": latest_report_ip,
                             "created_at_utc": row[7],
@@ -20460,6 +20617,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "available_countries": available_countries,
                 "alerts": alerts,
             }
+            _read_cache_set(cache_key, response_data, ttl_seconds=ALERTS_LIST_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(

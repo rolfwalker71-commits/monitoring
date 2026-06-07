@@ -16983,13 +16983,26 @@ async function loadGlobalAlertsOverview(options = {}) {
       return;
     }
 
-    const listResp = listPromise ? await listPromise : null;
-    if (!listResp) return;
-    if (!listResp.ok) throw new Error("List HTTP " + listResp.status);
+    let listData = null;
+    let listLoadFailed = false;
+    let listLoadError = "";
+    if (listPromise) {
+      try {
+        const listResp = await listPromise;
+        if (!listResp.ok) {
+          listLoadFailed = true;
+          listLoadError = "List HTTP " + listResp.status;
+        } else {
+          listData = await listResp.json();
+        }
+      } catch (listError) {
+        listLoadFailed = true;
+        listLoadError = listError?.message || "List request failed";
+      }
+    }
 
-    const listData = await listResp.json();
-    const alerts = listData.alerts || [];
-    if (Array.isArray(listData.available_countries)) {
+    const alerts = listData?.alerts || [];
+    if (Array.isArray(listData?.available_countries)) {
       state.globalAvailableCountries = listData.available_countries;
       renderGlobalCountryFilterOptions();
     }
@@ -16997,17 +17010,29 @@ async function loadGlobalAlertsOverview(options = {}) {
       ? (Array.isArray(state.globalAlertsLoadedItems) ? state.globalAlertsLoadedItems : []).concat(alerts)
       : alerts;
     state.globalAlertsLoadedItems = accumulatedAlerts;
-    const totalForFilter = Number(listData.total || 0);
+    const totalForFilter = Number(listData?.total || 0);
     state.globalAlertsTotal = totalForFilter;
 
-    if (!append && alerts.length === 0) {
+    if (listLoadFailed && !append && rowsEl) {
+      const listHint = /502/.test(listLoadError)
+        ? "Gateway-Fehler (502): Server/DB überlastet. Bitte in 30 Sekunden erneut laden."
+        : `Fehler beim Laden: ${escapeHtml(listLoadError)}`;
+      rowsEl.innerHTML = `<tr><td colspan="8" class="muted">${listHint}</td></tr>`;
+      if (loadMoreButton) loadMoreButton.classList.add("hidden");
+      if (pagingStatus) pagingStatus.textContent = "– / –";
+      if (summaryEl) {
+        summaryEl.textContent = /502/.test(listLoadError)
+          ? "Alert-Liste vorübergehend nicht verfügbar (502)"
+          : `Alert-Liste: ${listLoadError}`;
+      }
+    } else if (!listLoadFailed && !append && alerts.length === 0) {
       const emptyMessage = state.globalShowMutedOnly
         ? "Keine stummgeschalteten Alerts vorhanden."
         : "Keine offenen Alerts für den gesetzten Filter.";
       rowsEl.innerHTML = `<tr><td colspan="8" class="muted">${emptyMessage}</td></tr>`;
       if (loadMoreButton) loadMoreButton.classList.add("hidden");
       if (pagingStatus) pagingStatus.textContent = "0 / 0";
-    } else {
+    } else if (!listLoadFailed) {
       const rowsHtml = alerts
       .map((item) => {
         const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
@@ -17076,15 +17101,17 @@ async function loadGlobalAlertsOverview(options = {}) {
       }
     }
 
-    state.globalAlertsOffset = requestOffset + alerts.length;
-    const shownCount = state.globalAlertsOffset;
-    const hasMore = shownCount < totalForFilter;
-    if (loadMoreButton) {
-      loadMoreButton.classList.toggle("hidden", !hasMore);
-      loadMoreButton.disabled = !hasMore;
-    }
-    if (pagingStatus) {
-      pagingStatus.textContent = `${Math.min(shownCount, totalForFilter)} / ${totalForFilter}`;
+    if (!listLoadFailed) {
+      state.globalAlertsOffset = requestOffset + alerts.length;
+      const shownCount = state.globalAlertsOffset;
+      const hasMore = shownCount < totalForFilter;
+      if (loadMoreButton) {
+        loadMoreButton.classList.toggle("hidden", !hasMore);
+        loadMoreButton.disabled = !hasMore;
+      }
+      if (pagingStatus) {
+        pagingStatus.textContent = `${Math.min(shownCount, totalForFilter)} / ${totalForFilter}`;
+      }
     }
 
     let summaryData = null;
