@@ -106,7 +106,11 @@ WEB_AUTH_BUSY_TIMEOUT_MS = max(
 )
 WEB_AUTH_BUSY_RETRY_ATTEMPTS = max(
     1,
-    min(20, int(os.getenv("MONITORING_WEB_AUTH_BUSY_RETRY_ATTEMPTS", "8") or "8")),
+    min(20, int(os.getenv("MONITORING_WEB_AUTH_BUSY_RETRY_ATTEMPTS", "3") or "3")),
+)
+WEB_AUTH_MAX_WALL_SECONDS = max(
+    2.0,
+    min(30.0, float(os.getenv("MONITORING_WEB_AUTH_MAX_WALL_SECONDS", "10") or "10")),
 )
 SQLITE_CACHE_SIZE_MIB = max(8, min(512, int(os.getenv("MONITORING_SQLITE_CACHE_SIZE_MIB", "64") or "64")))
 SQLITE_MMAP_SIZE_MIB = max(0, min(2048, int(os.getenv("MONITORING_SQLITE_MMAP_SIZE_MIB", "256") or "256")))
@@ -215,6 +219,10 @@ _read_endpoint_cache_lock = threading.Lock()
 _read_endpoint_cache: dict[str, tuple[float, object]] = {}
 _identity_maps_cache_lock = threading.Lock()
 _identity_maps_cache: dict[str, object] = {"expires_at": 0.0}
+_identity_maps_build_lock = threading.Lock()
+_latest_report_rows_semaphore = threading.Semaphore(1)
+_identity_maps_invalidate_lock = threading.Lock()
+_identity_maps_invalidate_scheduled_at = 0.0
 _read_cache_debounce_lock = threading.Lock()
 _read_cache_debounce_pending: dict[str, float] = {}
 _endpoint_timing_file_log_lock = threading.Lock()
@@ -307,6 +315,26 @@ def _flush_due_read_cache_invalidations() -> None:
                 _read_cache_debounce_pending.pop(prefix, None)
     for prefix in due_prefixes:
         _read_cache_invalidate_prefix(prefix)
+
+
+def _schedule_identity_maps_cache_invalidation() -> None:
+    global _identity_maps_invalidate_scheduled_at
+    with _identity_maps_invalidate_lock:
+        _identity_maps_invalidate_scheduled_at = time.monotonic()
+
+
+def _flush_due_identity_maps_cache_invalidation() -> None:
+    global _identity_maps_invalidate_scheduled_at
+    scheduled_at = 0.0
+    with _identity_maps_invalidate_lock:
+        if _identity_maps_invalidate_scheduled_at <= 0.0:
+            return
+        if time.monotonic() - _identity_maps_invalidate_scheduled_at < READ_CACHE_DEBOUNCE_SECONDS:
+            return
+        scheduled_at = _identity_maps_invalidate_scheduled_at
+        _identity_maps_invalidate_scheduled_at = 0.0
+    if scheduled_at > 0.0:
+        _invalidate_identity_maps_cache()
 
 
 def _read_cache_invalidate_prefix(prefix: str) -> None:
@@ -4795,7 +4823,10 @@ def _execute_web_login(
     user_agent: str = "",
 ) -> tuple[dict, str, str]:
     last_exc: sqlite3.OperationalError | None = None
+    deadline = time.monotonic() + WEB_AUTH_MAX_WALL_SECONDS
     for attempt in range(WEB_AUTH_BUSY_RETRY_ATTEMPTS):
+        if time.monotonic() >= deadline:
+            break
         try:
             with sqlite_connect_interactive() as conn:
                 user = get_web_user(conn, username)
@@ -9406,28 +9437,46 @@ def _invalidate_identity_maps_cache() -> None:
         _identity_maps_cache["expires_at"] = 0.0
 
 
+def _peek_identity_maps_cache() -> tuple[
+    list[tuple] | None,
+    dict[str, dict[str, object]] | None,
+    dict[str, dict[str, object]] | None,
+    dict[str, str] | None,
+]:
+    now_ts = datetime.now(timezone.utc).timestamp()
+    with _identity_maps_cache_lock:
+        expires_at = float(_identity_maps_cache.get("expires_at") or 0.0)
+        if expires_at <= now_ts:
+            return None, None, None, None
+        return (
+            list(_identity_maps_cache.get("rows") or []),
+            dict(_identity_maps_cache.get("canonical_by_hostname") or {}),
+            dict(_identity_maps_cache.get("canonical_by_cluster") or {}),
+            dict(_identity_maps_cache.get("last_seen_by_host_uid") or {}),
+        )
+
+
 def _get_latest_identity_context(
     conn: sqlite3.Connection,
     *,
     force_refresh: bool = False,
 ) -> tuple[list[tuple], dict[str, dict[str, object]], dict[str, dict[str, object]], dict[str, str]]:
-    now_ts = datetime.now(timezone.utc).timestamp()
     if not force_refresh:
-        with _identity_maps_cache_lock:
-            expires_at = float(_identity_maps_cache.get("expires_at") or 0.0)
-            if expires_at > now_ts:
-                return (
-                    list(_identity_maps_cache.get("rows") or []),
-                    dict(_identity_maps_cache.get("canonical_by_hostname") or {}),
-                    dict(_identity_maps_cache.get("canonical_by_cluster") or {}),
-                    dict(_identity_maps_cache.get("last_seen_by_host_uid") or {}),
-                )
+        rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _peek_identity_maps_cache()
+        if rows is not None:
+            return rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid
 
-    rows = _latest_report_rows_by_host_key(conn)
-    canonical_by_hostname = _canonical_identities_by_hostname_from_rows(rows)
-    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(rows)
-    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(rows)
-    if not force_refresh:
+    with _identity_maps_build_lock:
+        if not force_refresh:
+            rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _peek_identity_maps_cache()
+            if rows is not None:
+                return rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid
+
+        now_ts = datetime.now(timezone.utc).timestamp()
+        rows = _latest_report_rows_by_host_key(conn)
+        canonical_by_hostname = _canonical_identities_by_hostname_from_rows(rows)
+        canonical_by_cluster = _canonical_identities_by_cluster_from_rows(rows)
+        last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(rows)
         with _identity_maps_cache_lock:
             _identity_maps_cache.clear()
             _identity_maps_cache.update(
@@ -9439,13 +9488,14 @@ def _get_latest_identity_context(
                     "last_seen_by_host_uid": last_seen_by_host_uid,
                 }
             )
-    return rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid
+        return rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid
 
 
 def _latest_report_rows_by_host_key(conn: sqlite3.Connection) -> list[tuple]:
     host_key_expr = reports_host_key_sql()
     host_key_expr_r = reports_host_key_sql("r")
-    return conn.execute(
+    with _latest_report_rows_semaphore:
+        return conn.execute(
         f"""
         WITH grouped AS (
             SELECT
@@ -9478,7 +9528,7 @@ def _latest_report_rows_by_host_key(conn: sqlite3.Connection) -> list[tuple]:
         JOIN reports r ON r.id = latest.latest_id
         ORDER BY latest.last_seen_utc DESC
         """
-    ).fetchall()
+        ).fetchall()
 
 def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: list[str]) -> dict[str, dict[str, object]]:
     if not hostnames:
@@ -9634,8 +9684,8 @@ def collect_open_alerts(
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC, id DESC
         """
     ).fetchall()
-    try:
-        _, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _get_latest_identity_context(conn)
+    _, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _peek_identity_maps_cache()
+    if canonical_by_hostname is not None and canonical_by_cluster is not None and last_seen_by_host_uid is not None:
         rows = [
             row
             for row in rows
@@ -9648,8 +9698,6 @@ def collect_open_alerts(
                 last_seen_by_host_uid,
             )
         ]
-    except sqlite3.OperationalError:
-        pass
     rows = _dedupe_open_alert_rows_by_cluster_mountpoint(rows)
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
     if blacklist_patterns:
@@ -17191,7 +17239,7 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
         received_at_utc=report_received_at_utc,
     )
 
-    _invalidate_identity_maps_cache()
+    _schedule_identity_maps_cache_invalidation()
     _schedule_read_cache_invalidation("hosts:")
     _schedule_read_cache_invalidation("inactive-hosts:")
     _schedule_read_cache_invalidation("alerts-summary:")
@@ -17523,18 +17571,6 @@ def evaluate_severity(used_percent: float) -> str:
 
 def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
     now_utc = utc_now_iso()
-    _, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _get_latest_identity_context(
-        conn,
-        force_refresh=True,
-    )
-    hostname, host_uid = _resolve_canonical_alert_identity_from_maps(
-        conn,
-        hostname,
-        host_uid,
-        canonical_by_hostname,
-        canonical_by_cluster,
-        last_seen_by_host_uid,
-    )
     alert_key = alert_host_key(hostname, host_uid)
     _resolve_cross_identity_open_alerts(
         conn,
@@ -18043,25 +18079,29 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if not token:
             return ""
 
-        with sqlite_connect() as conn:
-            _purge_expired_web_sessions(conn)
-            row = conn.execute(
-                """
-                SELECT s.username
-                FROM web_sessions s
-                JOIN web_users u ON u.username = s.username
-                WHERE s.session_token = ? AND COALESCE(u.is_disabled, 0) = 0
-                """,
-                (token,),
-            ).fetchone()
-            if row:
-                now_iso = utc_now_iso()
-                expires_iso = web_session_expires_iso()
-                conn.execute(
-                    "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
-                    (now_iso, expires_iso, token),
-                )
-            conn.commit()
+        row = None
+        try:
+            with sqlite_connect_interactive() as conn:
+                _purge_expired_web_sessions(conn)
+                row = conn.execute(
+                    """
+                    SELECT s.username
+                    FROM web_sessions s
+                    JOIN web_users u ON u.username = s.username
+                    WHERE s.session_token = ? AND COALESCE(u.is_disabled, 0) = 0
+                    """,
+                    (token,),
+                ).fetchone()
+                if row:
+                    now_iso = utc_now_iso()
+                    expires_iso = web_session_expires_iso()
+                    conn.execute(
+                        "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
+                        (now_iso, expires_iso, token),
+                    )
+                conn.commit()
+        except sqlite3.OperationalError:
+            return ""
 
         if not row:
             return ""
@@ -18120,6 +18160,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         _flush_due_read_cache_invalidations()
+        _flush_due_identity_maps_cache_invalidation()
         parsed = urlparse(self.path)
 
         if parsed.path == "/oauth/microsoft/callback":
@@ -18176,23 +18217,40 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/session":
-            username = self._web_session_username()
+            token = self._cookie_value(WEB_SESSION_COOKIE)
+            username = ""
             is_admin = False
             display_name = ""
             expires_at_utc = ""
-            if username:
-                token = self._cookie_value(WEB_SESSION_COOKIE)
-                with sqlite3.connect(DB_PATH) as conn:
-                    user = get_web_user(conn, username)
-                    is_admin = bool(user and user.get("is_admin"))
-                    display_name = str((user or {}).get("display_name", "") or "")
+            try:
+                with sqlite_connect_interactive() as conn:
+                    _purge_expired_web_sessions(conn)
                     if token:
                         row = conn.execute(
-                            "SELECT expires_at_utc FROM web_sessions WHERE session_token = ? AND username = ?",
-                            (token, username),
+                            """
+                            SELECT s.username, COALESCE(u.is_disabled, 0), COALESCE(u.display_name, ''), s.expires_at_utc
+                            FROM web_sessions s
+                            JOIN web_users u ON u.username = s.username
+                            WHERE s.session_token = ? AND COALESCE(u.is_disabled, 0) = 0
+                            """,
+                            (token,),
                         ).fetchone()
                         if row:
-                            expires_at_utc = str(row[0] or "")
+                            username = str(row[0] or "")
+                            display_name = str(row[2] or "")
+                            expires_at_utc = str(row[3] or "")
+                            user = get_web_user(conn, username)
+                            is_admin = bool(user and user.get("is_admin"))
+                            now_iso = utc_now_iso()
+                            expires_iso = web_session_expires_iso()
+                            conn.execute(
+                                "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
+                                (now_iso, expires_iso, token),
+                            )
+                            expires_at_utc = expires_iso
+                    conn.commit()
+            except sqlite3.OperationalError:
+                username = ""
             self._send_json(
                 HTTPStatus.OK,
                 {
@@ -20999,6 +21057,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         _flush_due_read_cache_invalidations()
+        _flush_due_identity_maps_cache_invalidation()
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
 

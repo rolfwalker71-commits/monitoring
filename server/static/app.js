@@ -3358,11 +3358,20 @@ async function saveHostInterestsPreferences() {
 }
 
 async function fetchSessionState() {
-  const response = await fetch("/api/v1/session", { credentials: "same-origin" });
-  if (!response.ok) {
-    throw new Error("HTTP " + response.status);
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch("/api/v1/session", {
+      credentials: "same-origin",
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+    return response.json();
+  } finally {
+    window.clearTimeout(timeoutId);
   }
-  return response.json();
 }
 
 async function ensureAuthenticatedSession() {
@@ -3388,8 +3397,11 @@ async function ensureAuthenticatedSession() {
       });
     }
     return session.authenticated === true;
-  } catch {
+  } catch (error) {
     setAuthUiState(false);
+    if (error?.name === "AbortError") {
+      setLoginStatus("Sitzungsprüfung Zeitüberschreitung – bitte anmelden.", true);
+    }
     return false;
   }
 }
@@ -3408,7 +3420,7 @@ async function loginWebClient() {
   setLoginBusy(true);
   setLoginStatus("Anmeldung läuft…");
   const loginAbort = new AbortController();
-  const loginTimeoutId = window.setTimeout(() => loginAbort.abort(), 45000);
+  const loginTimeoutId = window.setTimeout(() => loginAbort.abort(), 15000);
   try {
     const response = await fetch("/api/v1/web-login", {
       method: "POST",
@@ -3424,6 +3436,13 @@ async function loginWebClient() {
     if (!response.ok) {
       if (response.status === 503 && data.code === "database_locked") {
         setLoginStatus(data.error || "Datenbank vorübergehend gesperrt. Bitte kurz warten und erneut versuchen.", true);
+        return false;
+      }
+      if (response.status === 502) {
+        setLoginStatus(
+          "Gateway-Fehler (502): Server/DB überlastet. 30 Sekunden warten, dann erneut anmelden.",
+          true
+        );
         return false;
       }
       setLoginStatus(data.error || ("Login fehlgeschlagen (HTTP " + response.status + ")"), true);
@@ -18671,6 +18690,8 @@ async function init() {
   const sapLicenseTypeMapPromise = loadSapLicenseTypeMap();
 
   wireEvents();
+  setAuthUiState(false);
+  setLoginStatus("Sitzung wird geprüft…");
   initLiveReportFeed();
   initHeaderSectionCollapsibles();
   applyInitialHeaderKpiWidth();
