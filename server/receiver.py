@@ -21942,8 +21942,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     tuple(args),
                 ).fetchall()
                 blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
+                heads_up_suppressed_pairs = {
+                    (str(sup_row[0] or ""), str(sup_row[1] or ""))
+                    for sup_row in conn.execute(
+                        "SELECT host_uid, mountpoint FROM heads_up_suppression_rules"
+                    ).fetchall()
+                }
                 visible_rows: list[tuple] = []
                 muted_rows: list[tuple] = []
+                heads_up_rows: list[tuple] = []
                 for row in rows:
                     if not _open_alert_row_is_visible(
                         (0, row[2], row[3], row[1]),
@@ -21960,16 +21967,28 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     ):
                         continue
                     host_key = _alert_visibility_host_key(row[2], row[3])
-                    is_muted = (host_key, str(row[1] or "").strip()) in muted_rules
+                    mountpoint = str(row[1] or "").strip()
+                    is_muted = (host_key, mountpoint) in muted_rules
+                    is_heads_up_suppressed = (host_key, mountpoint) in heads_up_suppressed_pairs
                     if is_muted:
                         muted_rows.append((row[0], row[1], row[2], row[3]))
+                    elif is_heads_up_suppressed:
+                        heads_up_rows.append((row[0], row[1], row[2], row[3]))
                     elif not str(row[4] or "").strip():
                         visible_rows.append((row[0], row[1], row[2], row[3]))
                 visible_rows = _dedupe_alert_summary_rows(visible_rows)
+                heads_up_rows = _dedupe_alert_summary_rows(heads_up_rows)
                 muted_open = len(muted_rows)
+                heads_up_open = len(heads_up_rows)
                 total_open = len(visible_rows)
                 warning_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "warning")
                 critical_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "critical")
+                heads_up_warning_open = sum(
+                    1 for row in heads_up_rows if str(row[0] or "").strip().lower() == "warning"
+                )
+                heads_up_critical_open = sum(
+                    1 for row in heads_up_rows if str(row[0] or "").strip().lower() == "critical"
+                )
             _mark_endpoint_timer(endpoint_timer, "db+compute")
 
             response_data = {
@@ -21987,13 +22006,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "muted": {
                     "total": muted_open,
                 },
+                "heads_up_suppressed": {
+                    "total": heads_up_open,
+                    "warning": heads_up_warning_open,
+                    "critical": heads_up_critical_open,
+                },
             }
             _read_cache_set(cache_key, response_data, ttl_seconds=ALERTS_SUMMARY_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(
                 endpoint_timer,
-                meta=f"cache=miss host={hostname_filter or '-'} uid={host_uid_filter or '-'} open={total_open}",
+                meta=(
+                    f"cache=miss host={hostname_filter or '-'} uid={host_uid_filter or '-'} "
+                    f"open={total_open} heads_up={heads_up_open}"
+                ),
             )
             return
 

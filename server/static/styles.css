@@ -7358,6 +7358,33 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   margin-bottom: 14px;
 }
 
+.global-alerts-baseline-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #dbe4f0;
+}
+
+.global-alerts-baseline-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.global-alerts-baseline-title {
+  font-weight: 700;
+  color: #334155;
+}
+
+.global-alerts-baseline-hint {
+  margin: 0 0 10px;
+  color: #64748b;
+}
+
+.global-alerts-baseline-body.hidden {
+  display: none;
+}
+
 .global-alerts-panel {
   background: linear-gradient(180deg, #f6fbff 0%, #f0f8ff 100%);
 }
@@ -10825,6 +10852,18 @@ body[data-theme="dark"] #overviewFilesystemSection .detail-card {
 body[data-theme="dark"] .alerts-panel {
   background: #111b2f;
   border-color: #2a3c59;
+}
+
+body[data-theme="dark"] .global-alerts-baseline-section {
+  border-top-color: #334155;
+}
+
+body[data-theme="dark"] .global-alerts-baseline-title {
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .global-alerts-baseline-hint {
+  color: #94a3b8;
 }
 
 body[data-theme="dark"] .global-alerts-panel {

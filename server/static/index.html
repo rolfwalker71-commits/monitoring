@@ -261,10 +261,6 @@
                     <input type="checkbox" id="globalShowMutedOnlyCheckbox">
                     Stummgeschaltete anzeigen
                   </label>
-                  <label class="checkbox-label">
-                    <input type="checkbox" id="globalShowHeadsUpSuppressedOnlyCheckbox">
-                    Nur Heads-Up unterdrückt
-                  </label>
                   <button id="exportGlobalAlertsButton" type="button" class="btn-secondary" title="Alerts als CSV exportieren">Export CSV</button>
                   <button id="toggleGlobalAlertsPanelButton" type="button" class="host-group-toggle">▾</button>
                 </div>
@@ -300,6 +296,43 @@
                     <button id="globalAlertsLoadMoreButton" type="button" class="btn-secondary hidden">Mehr laden</button>
                     <p id="globalAlertsPagingStatus" class="count compact"></p>
                   </div>
+                  <section id="globalHeadsUpBaselineSection" class="global-alerts-baseline-section hidden">
+                    <div class="global-alerts-baseline-head">
+                      <span class="global-alerts-baseline-title">⏸️ Dauerzustand (Heads-Up aus)</span>
+                      <span id="globalHeadsUpBaselineCount" class="count compact"></span>
+                      <button id="toggleGlobalHeadsUpBaselineButton" type="button" class="host-group-toggle host-muted-toggle" aria-expanded="true">▾</button>
+                    </div>
+                    <p class="count compact global-alerts-baseline-hint">Bekannte Dauerwarnungen ohne Heads-Up-Benachrichtigung. Zählen nicht zur offenen Gesamtzahl.</p>
+                    <div id="globalHeadsUpBaselineBody" class="global-alerts-baseline-body">
+                      <div class="table-wrap">
+                        <table>
+                          <colgroup>
+                            <col style="width:24%">
+                            <col style="width:10%">
+                            <col style="width:17%">
+                            <col style="width:8%">
+                            <col style="width:8%">
+                            <col style="width:7%">
+                            <col style="width:15%">
+                            <col style="width:192px">
+                          </colgroup>
+                          <thead>
+                            <tr>
+                              <th>Host</th>
+                              <th>Severity</th>
+                              <th>Mountpoint</th>
+                              <th>Initial</th>
+                              <th>Aktuell</th>
+                              <th>Delta</th>
+                              <th title="Zeitpunkt der ersten Auslösung">Aktiv seit</th>
+                              <th>Aktion</th>
+                            </tr>
+                          </thead>
+                          <tbody id="globalHeadsUpBaselineRows"></tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </section>
                 </div>
               </section>
             </div>

@@ -508,7 +508,8 @@ const state = {
   globalShowAcknowledged: true,
   globalShowClosed: false,
   globalShowMutedOnly: false,
-  globalHeadsUpSuppressedOnly: false,
+  globalHeadsUpBaselineCollapsed: false,
+  globalHeadsUpBaselineCount: 0,
   hostAlertsCollapsed: true,
   hostAlertsCollapseHostKey: "",
   hostAlertsUserToggled: false,
@@ -519,6 +520,7 @@ const state = {
   globalCriticalOpenAlertsCount: 0,
   globalAcknowledgedOpenAlertsCount: 0,
   globalMutedOpenAlertsCount: 0,
+  globalHeadsUpSuppressedOpenAlertsCount: 0,
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
   dbReportsTotal: null,
@@ -17226,6 +17228,106 @@ function wireHeaderLicenseCopyButton() {
   });
 }
 
+function globalHeadsUpBaselineToggleLabel(collapsed) {
+  return collapsed ? "▸" : "▾";
+}
+
+function renderGlobalAlertRowHtml(item) {
+  const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
+  const hostDisplayName = asText(item.display_name || item.hostname);
+  const customerName = asText(item.customer_name || "");
+  const hostName = asText(item.hostname);
+  const isMuted = Boolean(item.is_muted);
+  const isAcknowledged = Boolean(item.is_acknowledged);
+  const isClosed = Boolean(item.is_closed);
+  const ackNote = asText(item.ack_note);
+  const ackTitle = isAcknowledged
+    ? `Quittiert von ${resolveWebUserActionLabel(item, "ack_by") || "-"} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
+    : "Alert quittieren";
+  const isHeadsUpSuppressed = Boolean(item.is_heads_up_suppressed);
+  const headsUpTitle = isHeadsUpSuppressed
+    ? "Heads-Up wieder aktivieren"
+    : "Heads-Up für diesen Alert unterdrücken";
+  const closeTitle = isClosed
+    ? `Abgeschlossen von ${resolveWebUserActionLabel(item, "closed_by") || "-"} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
+    : "Alert abschliessen";
+  const hostUid = asText(item.host_uid || hostName);
+  const alertId = Number(item.id || 0);
+  const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔇" : "🔔"}</button>`;
+  const headsUpBtn = `<button class="alert-headsup-btn${isHeadsUpSuppressed ? " suppressed" : ""}" type="button" data-action="toggle-headsup" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-headsup-suppressed="${isHeadsUpSuppressed ? "1" : "0"}" title="${escapeHtml(headsUpTitle)}">${isHeadsUpSuppressed ? "⏸️" : "📣"}</button>`;
+  const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-alert-id="${alertId}" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
+  const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "↺" : "✕"}</button>`;
+  const ackMeta = isAcknowledged
+    ? `<div class="count compact">✅ ${escapeHtml(resolveWebUserActionLabel(item, "ack_by") || "-")} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
+    : "";
+  const closeMeta = isClosed
+    ? `<div class="count compact alert-closed-meta">🔒 ${escapeHtml(resolveWebUserActionLabel(item, "closed_by") || "-")} | ${escapeHtml(formatUtcPlus2(item.closed_at_utc))}</div>`
+    : "";
+  const mutedMeta = isMuted && asText(item.muted_at_utc, "").trim()
+    ? `<div class="count compact alert-muted-meta">🔇 ${escapeHtml(resolveWebUserActionLabel(item, "muted_by") || asText(item.muted_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.muted_at_utc))}</div>`
+    : "";
+  const currentReportStand = asText(item.current_report_at_utc, "").trim();
+  const currentReportStandHtml = currentReportStand
+    ? `<div class="count compact">Stand: ${escapeHtml(formatUtcPlus2(currentReportStand))}</div>`
+    : "";
+  return `
+    <tr class="${isMuted ? "alert-row-muted" : ""}${isClosed ? " alert-row-closed" : ""}">
+      <td>
+        <div class="global-host-cell">
+          ${customerName ? `<span class="global-host-customer">${escapeHtml(customerName)}</span>` : ""}
+          <span class="global-host-label">${escapeHtml(hostDisplayName)}</span>
+          <span class="global-hostname-sub">(${escapeHtml(hostName)})</span>
+          <span class="global-hostname-sub alert-id-sub">#${item.id}</span>
+        </div>
+      </td>
+      <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
+      <td>${renderAlertMountpointLabel(item.mountpoint, 56)}</td>
+      <td>${formatPercent(item.used_percent)}</td>
+      <td>${formatPercent(item.current_used_percent)}${currentReportStandHtml}</td>
+      <td><span class="${deltaSignClass(item.delta_used_percent)}">${formatSignedPercent(item.delta_used_percent)}</span></td>
+      <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${mutedMeta}${ackMeta}${closeMeta}</td>
+      <td><div class="alert-action-buttons">${muteBtn}${headsUpBtn}${ackBtn}${closeBtn}</div></td>
+    </tr>
+  `;
+}
+
+function renderGlobalHeadsUpBaselineSection(baselineAlerts, totalCount) {
+  const sectionEl = document.getElementById("globalHeadsUpBaselineSection");
+  const rowsEl = document.getElementById("globalHeadsUpBaselineRows");
+  const bodyEl = document.getElementById("globalHeadsUpBaselineBody");
+  const countEl = document.getElementById("globalHeadsUpBaselineCount");
+  const toggleButton = document.getElementById("toggleGlobalHeadsUpBaselineButton");
+  if (!sectionEl || !rowsEl || !bodyEl) {
+    return;
+  }
+
+  const count = Math.max(0, Number(totalCount || baselineAlerts.length || 0));
+  state.globalHeadsUpBaselineCount = count;
+  if (state.globalShowMutedOnly || count <= 0) {
+    sectionEl.classList.add("hidden");
+    rowsEl.innerHTML = "";
+    return;
+  }
+
+  sectionEl.classList.remove("hidden");
+  if (countEl) {
+    countEl.textContent = `${count}`;
+  }
+  const collapsed = state.globalHeadsUpBaselineCollapsed === true;
+  bodyEl.classList.toggle("hidden", collapsed);
+  if (toggleButton) {
+    toggleButton.textContent = globalHeadsUpBaselineToggleLabel(collapsed);
+    toggleButton.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  }
+
+  if (!Array.isArray(baselineAlerts) || baselineAlerts.length === 0) {
+    rowsEl.innerHTML = '<tr><td colspan="8" class="muted">Keine Dauerzustands-Alerts für den gesetzten Filter.</td></tr>';
+    return;
+  }
+
+  rowsEl.innerHTML = baselineAlerts.map((item) => renderGlobalAlertRowHtml(item)).join("");
+}
+
 async function loadGlobalAlertsOverview(options = {}) {
   const updateList = options.updateList !== false;
   const append = options.append === true;
@@ -17244,7 +17346,7 @@ async function loadGlobalAlertsOverview(options = {}) {
   const acknowledgedQuery = state.globalShowAcknowledged ? "" : "&acknowledged=no";
   const closedQuery = state.globalShowClosed ? "" : "&closed=no";
   const mutedQuery = state.globalShowMutedOnly ? "&muted=yes" : "";
-  const headsUpSuppressedQuery = state.globalHeadsUpSuppressedOnly ? "&heads_up_suppressed=yes" : "";
+  const headsUpSuppressedQuery = state.globalShowMutedOnly ? "" : "&heads_up_suppressed=no";
   const countryQuery = state.globalCountryFilter && state.globalCountryFilter !== "all"
     ? `&country=${encodeURIComponent(state.globalCountryFilter)}`
     : "";
@@ -17281,6 +17383,12 @@ async function loadGlobalAlertsOverview(options = {}) {
         cache: "no-store",
       })
       : null;
+    const baselinePromise = updateList && rowsEl && !state.globalShowMutedOnly
+      ? fetch(`/api/v1/alerts?status=open&limit=500&offset=0&heads_up_suppressed=yes${severityQuery}${acknowledgedQuery}${closedQuery}${countryQuery}`, {
+        credentials: "same-origin",
+        cache: "no-store",
+      }).catch(() => null)
+      : null;
 
     if (!updateList || !rowsEl || !summaryEl) {
       const summaryResp = await summaryPromise;
@@ -17289,6 +17397,7 @@ async function loadGlobalAlertsOverview(options = {}) {
       state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
       state.globalCriticalOpenAlertsCount = Number(summaryData?.open?.critical || 0);
       state.globalMutedOpenAlertsCount = Number(summaryData?.muted?.total || 0);
+      state.globalHeadsUpSuppressedOpenAlertsCount = Number(summaryData?.heads_up_suppressed?.total || 0);
       const acknowledgedResp = await acknowledgedPromise;
       if (acknowledgedResp && acknowledgedResp.ok) {
         const acknowledgedData = await acknowledgedResp.json();
@@ -17352,71 +17461,24 @@ async function loadGlobalAlertsOverview(options = {}) {
       if (loadMoreButton) loadMoreButton.classList.add("hidden");
       if (pagingStatus) pagingStatus.textContent = "0 / 0";
     } else if (!listLoadFailed) {
-      const rowsHtml = alerts
-      .map((item) => {
-        const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
-        const hostDisplayName = asText(item.display_name || item.hostname);
-        const customerName = asText(item.customer_name || "");
-        const hostName = asText(item.hostname);
-        const isMuted = Boolean(item.is_muted);
-        const isAcknowledged = Boolean(item.is_acknowledged);
-        const isClosed = Boolean(item.is_closed);
-        const ackNote = asText(item.ack_note);
-        const ackTitle = isAcknowledged
-          ? `Quittiert von ${resolveWebUserActionLabel(item, "ack_by") || "-"} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
-          : "Alert quittieren";
-        const isHeadsUpSuppressed = Boolean(item.is_heads_up_suppressed);
-        const headsUpTitle = isHeadsUpSuppressed
-          ? "Heads-Up wieder aktivieren"
-          : "Heads-Up für diesen Alert unterdrücken";
-        const closeTitle = isClosed
-          ? `Abgeschlossen von ${resolveWebUserActionLabel(item, "closed_by") || "-"} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
-          : "Alert abschliessen";
-        const hostUid = asText(item.host_uid || hostName);
-        const alertId = Number(item.id || 0);
-        const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔇" : "🔔"}</button>`;
-        const headsUpBtn = `<button class="alert-headsup-btn${isHeadsUpSuppressed ? " suppressed" : ""}" type="button" data-action="toggle-headsup" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-headsup-suppressed="${isHeadsUpSuppressed ? "1" : "0"}" title="${escapeHtml(headsUpTitle)}">${isHeadsUpSuppressed ? "⏸️" : "📣"}</button>`;
-        const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-alert-id="${alertId}" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
-        const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "↺" : "✕"}</button>`;
-        const ackMeta = isAcknowledged
-          ? `<div class="count compact">✅ ${escapeHtml(resolveWebUserActionLabel(item, "ack_by") || "-")} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
-          : "";
-        const closeMeta = isClosed
-          ? `<div class="count compact alert-closed-meta">🔒 ${escapeHtml(resolveWebUserActionLabel(item, "closed_by") || "-")} | ${escapeHtml(formatUtcPlus2(item.closed_at_utc))}</div>`
-          : "";
-        const mutedMeta = isMuted && asText(item.muted_at_utc, "").trim()
-          ? `<div class="count compact alert-muted-meta">🔇 ${escapeHtml(resolveWebUserActionLabel(item, "muted_by") || asText(item.muted_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.muted_at_utc))}</div>`
-          : "";
-        const currentReportStand = asText(item.current_report_at_utc, "").trim();
-        const currentReportStandHtml = currentReportStand
-          ? `<div class="count compact">Stand: ${escapeHtml(formatUtcPlus2(currentReportStand))}</div>`
-          : "";
-        return `
-          <tr class="${isMuted ? "alert-row-muted" : ""}${isClosed ? " alert-row-closed" : ""}">
-            <td>
-              <div class="global-host-cell">
-                ${customerName ? `<span class="global-host-customer">${escapeHtml(customerName)}</span>` : ""}
-                <span class="global-host-label">${escapeHtml(hostDisplayName)}</span>
-                <span class="global-hostname-sub">(${escapeHtml(hostName)})</span>
-                <span class="global-hostname-sub alert-id-sub">#${item.id}</span>
-              </div>
-            </td>
-            <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
-            <td>${renderAlertMountpointLabel(item.mountpoint, 56)}</td>
-            <td>${formatPercent(item.used_percent)}</td>
-            <td>${formatPercent(item.current_used_percent)}${currentReportStandHtml}</td>
-            <td><span class="${deltaSignClass(item.delta_used_percent)}">${formatSignedPercent(item.delta_used_percent)}</span></td>
-            <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${mutedMeta}${ackMeta}${closeMeta}</td>
-            <td><div class="alert-action-buttons">${muteBtn}${headsUpBtn}${ackBtn}${closeBtn}</div></td>
-          </tr>
-        `;
-      })
-      .join("");
+      const rowsHtml = alerts.map((item) => renderGlobalAlertRowHtml(item)).join("");
 
       if (append && requestOffset > 0) {
         rowsEl.insertAdjacentHTML("beforeend", rowsHtml);
       } else {
         rowsEl.innerHTML = rowsHtml;
+      }
+    }
+
+    let baselineData = null;
+    if (baselinePromise) {
+      try {
+        const baselineResp = await baselinePromise;
+        if (baselineResp && baselineResp.ok) {
+          baselineData = await baselineResp.json();
+        }
+      } catch (baselineError) {
+        console.warn("heads-up baseline alerts load failed:", baselineError);
       }
     }
 
@@ -17449,8 +17511,21 @@ async function loadGlobalAlertsOverview(options = {}) {
       state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
       state.globalCriticalOpenAlertsCount = Number(summaryData?.open?.critical || 0);
       state.globalMutedOpenAlertsCount = Number(summaryData?.muted?.total || 0);
+      state.globalHeadsUpSuppressedOpenAlertsCount = Number(summaryData?.heads_up_suppressed?.total || 0);
     } else if (!state.globalShowMutedOnly) {
       state.globalOpenAlertsCount = Math.max(Number(state.globalOpenAlertsCount || 0), totalForFilter);
+    }
+
+    if (updateList && rowsEl) {
+      renderGlobalHeadsUpBaselineSection(
+        baselineData?.alerts || [],
+        Number(
+          baselineData?.total
+          || summaryData?.heads_up_suppressed?.total
+          || state.globalHeadsUpSuppressedOpenAlertsCount
+          || 0,
+        ),
+      );
     }
 
     const acknowledgedResp = await acknowledgedPromise;
@@ -17465,14 +17540,16 @@ async function loadGlobalAlertsOverview(options = {}) {
     globalAlertsTabButton.classList.toggle("alert-active", state.globalOpenAlertsCount > 0);
     updateHeaderStatChips();
     const mutedScope = state.globalShowMutedOnly ? " · Stummgeschaltete" : "";
-    const headsUpScope = state.globalHeadsUpSuppressedOnly ? " · Heads-Up: nur unterdrückt" : "";
+    const baselineScope = !state.globalShowMutedOnly && state.globalHeadsUpSuppressedOpenAlertsCount > 0
+      ? ` · Dauerzustand: ${state.globalHeadsUpSuppressedOpenAlertsCount}`
+      : "";
     const countryScope = state.globalCountryFilter && state.globalCountryFilter !== "all"
       ? ` | Land: ${state.globalCountryFilter}`
       : "";
     if (summaryData) {
       summaryEl.textContent = state.globalShowMutedOnly
-        ? `Stummgeschaltet: ${totalForFilter} | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${countryScope}${headsUpScope}`
-        : `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${countryScope}${mutedScope}${headsUpScope}`;
+        ? `Stummgeschaltet: ${totalForFilter} | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${countryScope}`
+        : `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning})${baselineScope} | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${countryScope}${mutedScope}`;
     } else if (summaryEl) {
       summaryEl.textContent = state.globalShowMutedOnly
         ? `Stummgeschaltet: ${totalForFilter} | Summary vorübergehend nicht verfügbar`
@@ -17485,6 +17562,7 @@ async function loadGlobalAlertsOverview(options = {}) {
     globalAlertsTabButton.classList.remove("alert-active");
     if (updateList && rowsEl) {
       rowsEl.innerHTML = `<tr><td colspan="8" class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
+      renderGlobalHeadsUpBaselineSection([], 0);
     }
     if (summaryEl) {
       summaryEl.textContent = `Fehler: ${error.message}`;
@@ -17531,7 +17609,7 @@ function wireAlertRowActions() {
   if (state.alertRowActionsDelegated) {
     return;
   }
-  ["globalAlertsRows", "alertsRows"].forEach((elementId) => {
+  ["globalAlertsRows", "globalHeadsUpBaselineRows", "alertsRows"].forEach((elementId) => {
     const root = document.getElementById(elementId);
     if (!root) {
       return;
@@ -18647,13 +18725,19 @@ function wireEvents() {
     });
   }
 
-  const globalShowHeadsUpSuppressedOnlyCheckbox = document.getElementById("globalShowHeadsUpSuppressedOnlyCheckbox");
-  if (globalShowHeadsUpSuppressedOnlyCheckbox) {
-    globalShowHeadsUpSuppressedOnlyCheckbox.checked = state.globalHeadsUpSuppressedOnly;
-    globalShowHeadsUpSuppressedOnlyCheckbox.addEventListener("change", async (event) => {
-      state.globalHeadsUpSuppressedOnly = event.target.checked;
-      state.globalAlertsOffset = 0;
-      await loadGlobalAlertsOverview({ append: false });
+  const toggleGlobalHeadsUpBaselineButton = document.getElementById("toggleGlobalHeadsUpBaselineButton");
+  if (toggleGlobalHeadsUpBaselineButton) {
+    toggleGlobalHeadsUpBaselineButton.addEventListener("click", () => {
+      state.globalHeadsUpBaselineCollapsed = !state.globalHeadsUpBaselineCollapsed;
+      const bodyEl = document.getElementById("globalHeadsUpBaselineBody");
+      if (bodyEl) {
+        bodyEl.classList.toggle("hidden", state.globalHeadsUpBaselineCollapsed);
+      }
+      toggleGlobalHeadsUpBaselineButton.textContent = globalHeadsUpBaselineToggleLabel(state.globalHeadsUpBaselineCollapsed);
+      toggleGlobalHeadsUpBaselineButton.setAttribute(
+        "aria-expanded",
+        state.globalHeadsUpBaselineCollapsed ? "false" : "true",
+      );
     });
   }
 
@@ -19126,10 +19210,6 @@ async function init() {
   const globalShowMutedOnlyCheckbox = document.getElementById("globalShowMutedOnlyCheckbox");
   if (globalShowMutedOnlyCheckbox) {
     globalShowMutedOnlyCheckbox.checked = state.globalShowMutedOnly;
-  }
-  const globalShowHeadsUpSuppressedOnlyCheckbox = document.getElementById("globalShowHeadsUpSuppressedOnlyCheckbox");
-  if (globalShowHeadsUpSuppressedOnlyCheckbox) {
-    globalShowHeadsUpSuppressedOnlyCheckbox.checked = state.globalHeadsUpSuppressedOnly;
   }
   document.getElementById("hostSearchInput").value = state.hostSearchQuery;
   document.getElementById("loginUsernameInput").value = "";
