@@ -1585,6 +1585,71 @@ body[data-theme="dark"] .changelog-maintenance-panel-body {
   stroke-linejoin: round;
 }
 
+.db-maintenance-chart-trend {
+  fill: none;
+  stroke: #d97706;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+.db-maintenance-chart-projection {
+  fill: none;
+  stroke: #0ea5a8;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.db-maintenance-chart-target {
+  fill: none;
+  stroke: #7c3aed;
+  stroke-width: 1;
+  stroke-dasharray: 6 5;
+  opacity: 0.7;
+}
+
+.db-maintenance-chart-target-label {
+  fill: #7c3aed;
+  font-size: 8px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.db-maintenance-chart-legend {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.2;
+}
+
+.db-maintenance-legend-trend::before,
+.db-maintenance-legend-projection::before,
+.db-maintenance-legend-target::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  margin-right: 4px;
+  vertical-align: middle;
+  border-top-width: 2px;
+  border-top-style: dashed;
+}
+
+.db-maintenance-legend-trend::before {
+  border-top-color: #d97706;
+}
+
+.db-maintenance-legend-projection::before {
+  border-top-color: #0ea5a8;
+}
+
+.db-maintenance-legend-target::before {
+  border-top-color: #7c3aed;
+}
+
 .db-maintenance-history-wrap {
   margin-top: 10px;
   max-height: 320px;
@@ -1972,6 +2037,36 @@ body[data-theme="dark"] .db-maintenance-chart-grid {
 
 body[data-theme="dark"] .db-maintenance-chart-label {
   fill: #8ba4c1;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-trend {
+  stroke: #fbbf24;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-projection {
+  stroke: #2dd4bf;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-target,
+body[data-theme="dark"] .db-maintenance-chart-target-label {
+  stroke: #a78bfa;
+  fill: #a78bfa;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-legend {
+  color: #94a3b8;
+}
+
+body[data-theme="dark"] .db-maintenance-legend-trend::before {
+  border-top-color: #fbbf24;
+}
+
+body[data-theme="dark"] .db-maintenance-legend-projection::before {
+  border-top-color: #2dd4bf;
+}
+
+body[data-theme="dark"] .db-maintenance-legend-target::before {
+  border-top-color: #a78bfa;
 }
 
 body[data-theme="dark"] .db-maintenance-chart-line {

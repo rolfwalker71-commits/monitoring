@@ -12168,6 +12168,125 @@ function deltaSignClass(value) {
   return num > 0 ? "delta-positive" : "delta-negative";
 }
 
+function buildDbMaintenanceChartScale(values, forecast) {
+  const nums = values.map((v) => Number(v || 0));
+  let min = Math.min(...nums);
+  let max = Math.max(...nums);
+  if (forecast && Number.isFinite(Number(forecast.projected_14d))) {
+    const projected = Number(forecast.projected_14d);
+    min = Math.min(min, projected);
+    max = Math.max(max, projected);
+  }
+  if (max <= min) {
+    max = min + 1;
+  }
+  return { min, max, span: max - min };
+}
+
+function buildDbMaintenanceLineLayout(values, forecast, options = {}) {
+  const width = options.width ?? 360;
+  const height = options.height ?? 132;
+  const padLeft = options.padLeft ?? 44;
+  const padRight = options.padRight ?? 12;
+  const padTop = options.padTop ?? 8;
+  const padBottom = options.padBottom ?? 24;
+  const { min, max, span } = buildDbMaintenanceChartScale(values, forecast);
+  const toY = (v) => height - padBottom - (((Number(v) - min) / span) * (height - padTop - padBottom));
+  const n = values.length;
+  const xAt = (i) => padLeft + (i * ((width - padLeft - padRight) / Math.max(1, n - 1)));
+  const points = values.map((v, i) => `${xAt(i).toFixed(2)},${toY(v).toFixed(2)}`).join(" ");
+  return { width, height, padLeft, padRight, padTop, padBottom, min, max, span, toY, xAt, points };
+}
+
+function dbMaintenanceLast14dStartIndex(rows) {
+  if (!Array.isArray(rows) || rows.length < 2) {
+    return 0;
+  }
+  const lastIso = String(rows[rows.length - 1]?.bucket_start_utc || "").trim();
+  const lastMs = Date.parse(lastIso.replace("Z", "+00:00"));
+  if (!Number.isFinite(lastMs)) {
+    return 0;
+  }
+  const cutoffMs = lastMs - (14 * 24 * 60 * 60 * 1000);
+  for (let i = 0; i < rows.length; i += 1) {
+    const bucketIso = String(rows[i]?.bucket_start_utc || "").trim();
+    const bucketMs = Date.parse(bucketIso.replace("Z", "+00:00"));
+    if (Number.isFinite(bucketMs) && bucketMs >= cutoffMs) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+function computeIndexedLinearRegression(series) {
+  if (!Array.isArray(series) || series.length < 2) {
+    return null;
+  }
+  const n = series.length;
+  let sumX = 0;
+  let sumY = 0;
+  let sumXX = 0;
+  let sumXY = 0;
+  for (let i = 0; i < n; i += 1) {
+    const y = Number(series[i] || 0);
+    sumX += i;
+    sumY += y;
+    sumXX += i * i;
+    sumXY += i * y;
+  }
+  const denom = (n * sumXX) - (sumX * sumX);
+  if (Math.abs(denom) < 1e-9) {
+    return null;
+  }
+  const slope = ((n * sumXY) - (sumX * sumY)) / denom;
+  const intercept = (sumY - (slope * sumX)) / n;
+  return { slope, intercept };
+}
+
+function buildDbMaintenanceForecastSvg(values, forecast, line, intervalHours, rows) {
+  if (!forecast || typeof forecast !== "object" || values.length < 2) {
+    return "";
+  }
+
+  const n = values.length;
+  const windowStart = dbMaintenanceLast14dStartIndex(rows);
+  const windowValues = values.slice(windowStart);
+  const regression = computeIndexedLinearRegression(windowValues);
+  const parts = [];
+  if (regression) {
+    const yStart = line.toY(regression.intercept);
+    const yEnd = line.toY(regression.slope * (windowValues.length - 1) + regression.intercept);
+    parts.push(
+      `<line class="db-maintenance-chart-trend" x1="${line.xAt(windowStart).toFixed(2)}" y1="${yStart.toFixed(2)}" x2="${line.xAt(n - 1).toFixed(2)}" y2="${yEnd.toFixed(2)}" />`,
+    );
+  }
+
+  const lastValue = Number(values[n - 1] || 0);
+
+  const projected = Number(forecast.projected_14d);
+  if (Number.isFinite(projected)) {
+    const lastX = line.xAt(n - 1);
+    const extWidth = (line.width - line.padLeft - line.padRight) * 0.22;
+    const extX = Math.min(line.width - line.padRight, lastX + extWidth);
+    const lastY = line.toY(lastValue);
+    const targetY = line.toY(projected);
+    parts.push(
+      `<line class="db-maintenance-chart-projection" x1="${lastX.toFixed(2)}" y1="${lastY.toFixed(2)}" x2="${extX.toFixed(2)}" y2="${targetY.toFixed(2)}" />`,
+      `<line class="db-maintenance-chart-target" x1="${line.padLeft}" y1="${targetY.toFixed(2)}" x2="${(line.width - line.padRight).toFixed(2)}" y2="${targetY.toFixed(2)}" />`,
+      `<text x="${(line.width - line.padRight - 2).toFixed(2)}" y="${Math.max(line.padTop + 8, targetY - 4).toFixed(2)}" text-anchor="end" class="db-maintenance-chart-target-label">Ziel</text>`,
+    );
+  }
+
+  return parts.join("");
+}
+
+function dbMaintenanceChartLegendHtml(hasForecast) {
+  if (!hasForecast) {
+    return "";
+  }
+  return `<p class="db-maintenance-chart-legend"><span class="db-maintenance-legend-trend">Trend (14d)</span> · <span class="db-maintenance-legend-projection">Prognose</span> · <span class="db-maintenance-legend-target">Ziel</span></p>`;
+}
+
 function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
   const el = document.getElementById("dbMaintenanceCharts");
   if (!el) return;
@@ -12201,29 +12320,22 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
     const padRight = 18;
     const padTop = 14;
     const padBottom = 40;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const span = Math.max(1, max - min);
-    const toY = (v) => height - padBottom - (((v - min) / span) * (height - padTop - padBottom));
-    const points = values.map((v, i) => {
-      const x = padLeft + (i * ((width - padLeft - padRight) / Math.max(1, values.length - 1)));
-      const y = toY(v);
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    }).join(" ");
+    const forecast = forecasts && typeof forecasts === "object" ? forecasts[def.key] : null;
+    const line = buildDbMaintenanceLineLayout(values, forecast, { width, height, padLeft, padRight, padTop, padBottom });
+    const forecastSvg = buildDbMaintenanceForecastSvg(values, forecast, line, intervalHours, rows);
 
     const latest = values[values.length - 1];
     const prev = values.length > 1 ? values[values.length - 2] : latest;
     const deltaWindow = latest - prev;
-    const forecast = forecasts && typeof forecasts === "object" ? forecasts[def.key] : null;
     const forecastText = forecast && typeof forecast === "object"
       ? `14d: ${def.deltaFormatter ? def.deltaFormatter(forecast.delta_14d) : formatSignedInteger(forecast.delta_14d)} · Ziel: ${def.formatter(forecast.projected_14d || 0)}`
       : "14d Trend: n/a";
     const ticks = [0, 0.25, 0.5, 0.75, 1];
     const gridMarkup = ticks.map((t) => {
-      const y = padTop + ((height - padTop - padBottom) * t);
-      const value = max - ((max - min) * t);
+      const y = line.padTop + ((line.height - line.padTop - line.padBottom) * t);
+      const value = line.max - ((line.max - line.min) * t);
       const label = def.formatter(value);
-      return `<line x1="${padLeft}" y1="${y.toFixed(2)}" x2="${(width - padRight).toFixed(2)}" y2="${y.toFixed(2)}" class="db-maintenance-chart-grid"></line><text x="8" y="${(y + 4).toFixed(2)}" class="db-maintenance-chart-label">${escapeHtml(String(label))}</text>`;
+      return `<line x1="${line.padLeft}" y1="${y.toFixed(2)}" x2="${(line.width - line.padRight).toFixed(2)}" y2="${y.toFixed(2)}" class="db-maintenance-chart-grid"></line><text x="8" y="${(y + 4).toFixed(2)}" class="db-maintenance-chart-label">${escapeHtml(String(label))}</text>`;
     }).join("");
 
     const firstBucketLabel = formatUtcPlus2Short(rows[0]?.bucket_start_utc || "") || "-";
@@ -12232,43 +12344,26 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
     titleEl.textContent = `${asText(def.title)} (vergrößert)`;
     bodyEl.innerHTML = `
       <div class="chart-drill-svg-wrap db-chart-drill-wrap">
-        <svg viewBox="0 0 ${width} ${height}" class="db-maintenance-chart-svg db-maintenance-chart-svg-drill" role="img" aria-label="${escapeHtml(def.title)} Verlauf (groß)">
+        <svg viewBox="0 0 ${line.width} ${line.height}" class="db-maintenance-chart-svg db-maintenance-chart-svg-drill" role="img" aria-label="${escapeHtml(def.title)} Verlauf (groß)">
           ${gridMarkup}
-          <line x1="${padLeft}" y1="${height - padBottom}" x2="${width - padRight}" y2="${height - padBottom}" class="db-maintenance-chart-axis"></line>
-          <polyline points="${points}" class="db-maintenance-chart-line"></polyline>
-          <text x="${padLeft}" y="${height - 8}" text-anchor="start" class="db-maintenance-chart-label db-maintenance-chart-label-x">${escapeHtml(firstBucketLabel)}</text>
-          <text x="${width - padRight}" y="${height - 8}" text-anchor="end" class="db-maintenance-chart-label db-maintenance-chart-label-x">${escapeHtml(lastBucketLabel)}</text>
+          <line x1="${line.padLeft}" y1="${line.height - line.padBottom}" x2="${line.width - line.padRight}" y2="${line.height - line.padBottom}" class="db-maintenance-chart-axis"></line>
+          ${forecastSvg}
+          <polyline points="${line.points}" class="db-maintenance-chart-line"></polyline>
+          <text x="${line.padLeft}" y="${line.height - 8}" text-anchor="start" class="db-maintenance-chart-label db-maintenance-chart-label-x">${escapeHtml(firstBucketLabel)}</text>
+          <text x="${line.width - line.padRight}" y="${line.height - 8}" text-anchor="end" class="db-maintenance-chart-label db-maintenance-chart-label-x">${escapeHtml(lastBucketLabel)}</text>
         </svg>
       </div>
+      ${dbMaintenanceChartLegendHtml(Boolean(forecast))}
       <div class="chart-drill-stats">
         <span class="stat-chip">Aktuell: ${escapeHtml(def.formatter(latest || 0))}</span>
         <span class="stat-chip">Δ${escapeHtml(String(intervalHours))}h: ${escapeHtml(def.deltaFormatter ? def.deltaFormatter(deltaWindow) : formatSignedInteger(deltaWindow))}</span>
-        <span class="stat-chip">Min: ${escapeHtml(def.formatter(min))}</span>
-        <span class="stat-chip">Max: ${escapeHtml(def.formatter(max))}</span>
+        <span class="stat-chip">Min: ${escapeHtml(def.formatter(line.min))}</span>
+        <span class="stat-chip">Max: ${escapeHtml(def.formatter(line.max))}</span>
         <span class="stat-chip">${escapeHtml(forecastText)}</span>
       </div>
     `;
 
     modal.classList.remove("hidden");
-  };
-
-  const renderLine = (values) => {
-    const width = 360;
-    const height = 132;
-    const padLeft = 44;
-    const padRight = 12;
-    const padTop = 8;
-    const padBottom = 24;
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const span = Math.max(1, max - min);
-    const toY = (v) => height - padBottom - (((v - min) / span) * (height - padTop - padBottom));
-    const points = values.map((v, i) => {
-      const x = padLeft + (i * ((width - padLeft - padRight) / Math.max(1, values.length - 1)));
-      const y = toY(v);
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    }).join(" ");
-    return { width, height, points, min, max, padLeft, padRight, padTop, padBottom, toY };
   };
 
   const trendIndicator = (deltaValue) => {
@@ -12284,13 +12379,14 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
 
   el.innerHTML = chartDefs.map((def, index) => {
     const values = rows.map((row) => Number(row?.[def.key] || 0));
-    const line = renderLine(values);
+    const forecast = forecasts && typeof forecasts === "object" ? forecasts[def.key] : null;
+    const line = buildDbMaintenanceLineLayout(values, forecast);
+    const forecastSvg = buildDbMaintenanceForecastSvg(values, forecast, line, intervalHours, rows);
     const firstBucketLabel = formatUtcPlus2Short(rows[0]?.bucket_start_utc || "") || "-";
     const lastBucketLabel = formatUtcPlus2Short(rows[rows.length - 1]?.bucket_start_utc || "") || "-";
     const latest = values[values.length - 1];
     const prev = values.length > 1 ? values[values.length - 2] : latest;
     const deltaWindow = latest - prev;
-    const forecast = forecasts && typeof forecasts === "object" ? forecasts[def.key] : null;
     const trend = trendIndicator(forecast?.delta_14d ?? deltaWindow);
     const forecastText = forecast && typeof forecast === "object"
       ? `14d: ${def.deltaFormatter ? def.deltaFormatter(forecast.delta_14d) : formatSignedInteger(forecast.delta_14d)} · Ziel: ${def.formatter(forecast.projected_14d || 0)}`
@@ -12313,10 +12409,12 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
       <svg viewBox="0 0 ${line.width} ${line.height}" class="db-maintenance-chart-svg" role="img" aria-label="${escapeHtml(def.title)} Verlauf">
         ${gridMarkup}
         <line x1="${line.padLeft}" y1="${line.height - line.padBottom}" x2="${line.width - line.padRight}" y2="${line.height - line.padBottom}" class="db-maintenance-chart-axis"></line>
+        ${forecastSvg}
         <polyline points="${line.points}" class="db-maintenance-chart-line"></polyline>
         <text x="${line.padLeft}" y="${line.height - 4}" text-anchor="start" class="db-maintenance-chart-label db-maintenance-chart-label-x">${escapeHtml(firstBucketLabel)}</text>
         <text x="${line.width - line.padRight}" y="${line.height - 4}" text-anchor="end" class="db-maintenance-chart-label db-maintenance-chart-label-x">${escapeHtml(lastBucketLabel)}</text>
       </svg>
+      ${dbMaintenanceChartLegendHtml(Boolean(forecast))}
       <p class="count compact">Min: ${escapeHtml(def.formatter(line.min))} · Max: ${escapeHtml(def.formatter(line.max))}</p>
       <p class="count compact">${escapeHtml(forecastText)}</p>
     </div>`;

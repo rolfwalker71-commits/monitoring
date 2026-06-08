@@ -5192,25 +5192,31 @@ def _forecast_linear_14d(history: list[dict], key: str) -> dict[str, object] | N
     if len(history) < 2:
         return None
 
-    points: list[tuple[float, float]] = []
-    first_dt: datetime | None = None
-    last_dt: datetime | None = None
-    last_value = 0.0
+    parsed_rows: list[tuple[datetime, float]] = []
     for row in history:
         bucket_iso = str(row.get("bucket_start_utc", "") or "")
         try:
             dt = datetime.fromisoformat(bucket_iso.replace("Z", "+00:00"))
         except ValueError:
             continue
-        if first_dt is None:
-            first_dt = dt
-        last_dt = dt
+        parsed_rows.append((dt, _coerce_number(row.get(key, 0))))
+
+    if len(parsed_rows) < 2:
+        return None
+
+    last_dt, last_value = parsed_rows[-1]
+    cutoff_dt = last_dt - timedelta(days=14)
+    window_rows = [(dt, y) for dt, y in parsed_rows if dt >= cutoff_dt]
+    if len(window_rows) < 2:
+        window_rows = parsed_rows[-2:]
+
+    first_dt = window_rows[0][0]
+    points: list[tuple[float, float]] = []
+    for dt, y in window_rows:
         x_hours = (dt - first_dt).total_seconds() / 3600.0
-        y = _coerce_number(row.get(key, 0))
-        last_value = y
         points.append((x_hours, y))
 
-    if len(points) < 2 or first_dt is None or last_dt is None:
+    if len(points) < 2:
         return None
 
     n = float(len(points))
