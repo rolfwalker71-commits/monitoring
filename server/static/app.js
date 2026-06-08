@@ -13275,7 +13275,7 @@ function animateHeaderLiveReportReplacement(stack, item) {
     }
   };
   oldCard.addEventListener("transitionend", removeOldCard, { once: true });
-  window.setTimeout(removeOldCard, 960);
+  window.setTimeout(removeOldCard, 1440);
 }
 
 function renderLiveReportFeed(options = {}) {
