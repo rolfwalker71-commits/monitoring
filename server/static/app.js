@@ -109,15 +109,11 @@ const CHANGELOG_REBUILD_DAYS = 7;
 const CHANGELOG_MAINTENANCE_PANEL_OPEN_KEY = "monitoring.changelogMaintenancePanelOpen";
 let headerKpiWidthSyncFrameId = null;
 let headerKpiTrendPreviousValues = null;
-const LIVE_REPORT_FEED_MAX_ITEMS = 5;
-const LIVE_REPORT_FEED_POSITION_KEY = "monitoring.liveReportFeedPosition";
 const LIVE_REPORT_FEED_ENABLED_KEY = "monitoring.liveReportFeedEnabled";
 const LIVE_REPORT_POLL_INTERVAL_MS = 25000;
 let liveReportFeedItems = [];
-let liveReportFeedMinimized = false;
 let liveReportFeedEnabled = true;
 let liveReportFeedWired = false;
-let liveReportFeedDragState = null;
 let liveReportPollTimerId = null;
 let liveReportPollCursorId = 0;
 let liveReportPollInFlight = false;
@@ -13230,215 +13226,103 @@ function buildLiveReportFeedItemInnerHtml(item) {
   `;
 }
 
-function buildLiveReportFeedItemClassName(item, extraClasses = []) {
-  const classes = ["live-report-feed-item"];
+function createHeaderLiveReportCardElement(item) {
+  const button = document.createElement("button");
+  button.type = "button";
+  const classes = ["live-report-feed-item", "header-live-report-card"];
   if (item.isNew) {
     classes.push("is-new");
   }
-  for (const extraClass of extraClasses) {
-    if (extraClass) {
-      classes.push(extraClass);
-    }
-  }
-  return classes.join(" ");
-}
-
-function createLiveReportFeedItemElement(item, extraClasses = []) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = buildLiveReportFeedItemClassName(item, extraClasses);
+  button.className = classes.join(" ");
   button.dataset.liveFeedId = item.id;
   button.dataset.liveFeedHost = item.hostname;
   button.dataset.liveFeedUid = item.hostIdentity;
+  button.title = "Zum Host wechseln";
   button.innerHTML = buildLiveReportFeedItemInnerHtml(item);
   return button;
 }
 
-function renderLiveReportFeedStatic(body) {
-  body.innerHTML = liveReportFeedItems.map((item) => {
-    const extraClass = item.isNew ? " is-new" : "";
-    return `
-    <button type="button" class="live-report-feed-item${extraClass}" data-live-feed-id="${escapeHtml(item.id)}" data-live-feed-host="${escapeHtml(item.hostname)}" data-live-feed-uid="${escapeHtml(item.hostIdentity)}">
-      ${buildLiveReportFeedItemInnerHtml(item)}
-    </button>
-  `;
-  }).join("");
-  for (const item of liveReportFeedItems) {
-    item.isNew = false;
-  }
-}
-
-function animateLiveReportFeedDom(body) {
+function animateHeaderLiveReportReplacement(stack, item) {
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (prefersReducedMotion) {
-    renderLiveReportFeedStatic(body);
+  const oldCard = stack.querySelector(".header-live-report-card");
+  const newCard = createHeaderLiveReportCardElement(item);
+
+  if (!oldCard || prefersReducedMotion) {
+    stack.innerHTML = "";
+    stack.classList.remove("is-animating");
+    stack.appendChild(newCard);
     return;
   }
 
-  const previousRects = new Map();
-  body.querySelectorAll(".live-report-feed-item").forEach((element) => {
-    const itemId = String(element.dataset.liveFeedId || "");
-    if (itemId) {
-      previousRects.set(itemId, element.getBoundingClientRect());
-    }
-  });
-
-  const desiredIds = liveReportFeedItems.map((item) => item.id);
-  const existingElements = new Map();
-  body.querySelectorAll(".live-report-feed-item").forEach((element) => {
-    const itemId = String(element.dataset.liveFeedId || "");
-    if (itemId) {
-      existingElements.set(itemId, element);
-    }
-  });
-
-  for (const [itemId, element] of existingElements.entries()) {
-    if (!desiredIds.includes(itemId)) {
-      element.remove();
-    }
-  }
-
-  body.classList.add("is-animating");
-  for (let index = 0; index < liveReportFeedItems.length; index += 1) {
-    const item = liveReportFeedItems[index];
-    let element = existingElements.get(item.id);
-    const extraClasses = [];
-    if (!element) {
-      if (item.isNew) {
-        extraClasses.push("is-entering");
-      }
-      element = createLiveReportFeedItemElement(item, extraClasses);
-      body.insertBefore(element, body.children[index] || null);
-      continue;
-    }
-    if (item.isNew) {
-      element.classList.add("is-new");
-    }
-    if (body.children[index] !== element) {
-      body.insertBefore(element, body.children[index] || null);
-    }
-  }
+  stack.classList.add("is-animating");
+  newCard.classList.add("is-entering");
+  stack.appendChild(newCard);
+  oldCard.classList.add("is-exiting");
 
   window.requestAnimationFrame(() => {
-    body.querySelectorAll(".live-report-feed-item:not(.is-exiting)").forEach((element) => {
-      const itemId = String(element.dataset.liveFeedId || "");
-      const previousRect = previousRects.get(itemId);
-      if (!previousRect) {
-        return;
-      }
-      const nextRect = element.getBoundingClientRect();
-      const deltaY = previousRect.top - nextRect.top;
-      if (Math.abs(deltaY) < 1) {
-        return;
-      }
-      element.style.transform = `translateY(${deltaY}px)`;
-      element.style.transition = "none";
-      window.requestAnimationFrame(() => {
-        element.style.transition = "transform 0.38s cubic-bezier(0.22, 1, 0.36, 1)";
-        element.style.transform = "";
-      });
+    window.requestAnimationFrame(() => {
+      oldCard.classList.add("is-exiting-active");
+      newCard.classList.remove("is-entering");
     });
-
-    body.querySelectorAll(".live-report-feed-item.is-entering").forEach((element) => {
-      window.requestAnimationFrame(() => {
-        element.classList.remove("is-entering");
-      });
-    });
-
-    window.setTimeout(() => {
-      body.classList.remove("is-animating");
-      body.querySelectorAll(".live-report-feed-item").forEach((element) => {
-        element.style.transition = "";
-        element.style.transform = "";
-      });
-    }, 420);
   });
 
-  for (const item of liveReportFeedItems) {
-    item.isNew = false;
-  }
+  const removeOldCard = () => {
+    if (oldCard.isConnected) {
+      oldCard.remove();
+    }
+    if (!stack.querySelector(".is-exiting")) {
+      stack.classList.remove("is-animating");
+    }
+  };
+  oldCard.addEventListener("transitionend", removeOldCard, { once: true });
+  window.setTimeout(removeOldCard, 480);
 }
 
 function renderLiveReportFeed(options = {}) {
   wireLiveReportFeed();
-  const panel = document.getElementById("liveReportFeed");
-  const body = document.getElementById("liveReportFeedBody");
-  const countEl = document.getElementById("liveReportFeedCount");
-  if (!panel || !body) {
+  const slot = document.getElementById("headerLiveReportSlot");
+  const stack = document.getElementById("headerLiveReportStack");
+  if (!slot || !stack) {
     return;
   }
   if (!liveReportFeedEnabled || liveReportFeedItems.length === 0) {
-    panel.classList.add("hidden");
+    slot.classList.add("hidden");
+    stack.innerHTML = "";
+    stack.classList.remove("is-animating");
     return;
   }
-  panel.classList.remove("hidden");
-  panel.classList.toggle("is-minimized", liveReportFeedMinimized);
-  if (countEl) {
-    countEl.textContent = `${liveReportFeedItems.length}`;
-  }
+  slot.classList.remove("hidden");
   hydrateLiveReportFeedItemLogos();
 
-  const shouldAnimate = Boolean(options.animate) && body.childElementCount > 0;
+  const item = liveReportFeedItems[0];
+  const shouldAnimate = Boolean(options.animate) && Boolean(stack.querySelector(".header-live-report-card"));
   if (shouldAnimate) {
-    animateLiveReportFeedDom(body);
-    return;
+    animateHeaderLiveReportReplacement(stack, item);
+  } else {
+    stack.classList.remove("is-animating");
+    stack.innerHTML = "";
+    stack.appendChild(createHeaderLiveReportCardElement(item));
   }
-  renderLiveReportFeedStatic(body);
-}
-
-function applyLiveReportFeedPosition() {
-  const panel = document.getElementById("liveReportFeed");
-  if (!panel) {
-    return;
-  }
-  try {
-    const raw = window.localStorage.getItem(LIVE_REPORT_FEED_POSITION_KEY);
-    if (!raw) {
-      return;
-    }
-    const parsed = JSON.parse(raw);
-    const left = Number(parsed?.left);
-    const top = Number(parsed?.top);
-    if (!Number.isFinite(left) || !Number.isFinite(top)) {
-      return;
-    }
-    panel.style.left = `${left}px`;
-    panel.style.top = `${top}px`;
-    panel.style.transform = "none";
-  } catch (_error) {
-    // Ignore invalid persisted position.
-  }
-}
-
-function persistLiveReportFeedPosition(panel) {
-  if (!panel) {
-    return;
-  }
-  const rect = panel.getBoundingClientRect();
-  try {
-    window.localStorage.setItem(LIVE_REPORT_FEED_POSITION_KEY, JSON.stringify({
-      left: Math.round(rect.left),
-      top: Math.round(rect.top),
-    }));
-  } catch (_error) {
-    // Ignore storage failures.
-  }
+  item.isNew = false;
 }
 
 function enqueueLiveReportFeedFromEvents(events) {
   if (!Array.isArray(events) || events.length === 0) {
     return;
   }
-  const sortedEvents = [...events].sort(
+  const visibleEvents = events.filter(isLiveReportEventVisible);
+  if (visibleEvents.length === 0) {
+    return;
+  }
+  const sortedEvents = [...visibleEvents].sort(
     (left, right) => (Number(right?.report_id) || 0) - (Number(left?.report_id) || 0),
   );
-  for (const event of sortedEvents) {
-    const preview = buildLiveReportFeedPreviewFromEvent(event);
-    preview.isNew = true;
-    liveReportFeedItems = [preview, ...liveReportFeedItems.filter((item) => item.id !== preview.id)];
-  }
-  liveReportFeedItems = liveReportFeedItems.slice(0, LIVE_REPORT_FEED_MAX_ITEMS);
-  renderLiveReportFeed({ animate: true });
+  const preview = buildLiveReportFeedPreviewFromEvent(sortedEvents[0]);
+  const previousId = liveReportFeedItems[0]?.id || "";
+  const shouldAnimate = Boolean(previousId) && previousId !== preview.id;
+  preview.isNew = shouldAnimate || !previousId;
+  liveReportFeedItems = [preview];
+  renderLiveReportFeed({ animate: shouldAnimate });
 }
 
 function stopLiveReportPoll() {
@@ -13535,38 +13419,14 @@ function wireLiveReportFeed() {
   if (liveReportFeedWired) {
     return;
   }
-  const panel = document.getElementById("liveReportFeed");
-  const body = document.getElementById("liveReportFeedBody");
-  const minimizeBtn = document.getElementById("liveReportFeedMinimizeBtn");
-  const closeBtn = document.getElementById("liveReportFeedCloseBtn");
-  const dragHandle = panel ? panel.querySelector("[data-live-feed-drag-handle]") : null;
-  if (!panel || !body || !dragHandle) {
+  const stack = document.getElementById("headerLiveReportStack");
+  if (!stack) {
     return;
   }
   liveReportFeedWired = true;
 
-  applyLiveReportFeedPosition();
-
-  if (minimizeBtn) {
-    minimizeBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      liveReportFeedMinimized = !liveReportFeedMinimized;
-      panel.classList.toggle("is-minimized", liveReportFeedMinimized);
-      minimizeBtn.setAttribute("aria-expanded", liveReportFeedMinimized ? "false" : "true");
-      minimizeBtn.textContent = liveReportFeedMinimized ? "+" : "−";
-      minimizeBtn.title = liveReportFeedMinimized ? "Ausklappen" : "Einklappen";
-    });
-  }
-
-  if (closeBtn) {
-    closeBtn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      setLiveReportFeedEnabled(false);
-    });
-  }
-
-  body.addEventListener("click", (event) => {
-    const button = event.target instanceof Element ? event.target.closest(".live-report-feed-item") : null;
+  stack.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest(".header-live-report-card") : null;
     if (!button) {
       return;
     }
@@ -13576,52 +13436,6 @@ function wireLiveReportFeed() {
       return;
     }
     selectHostFromLiveReportFeed(hostname, hostUid);
-  });
-
-  const onDragPointerMove = (event) => {
-    if (!liveReportFeedDragState || liveReportFeedDragState.pointerId !== event.pointerId) {
-      return;
-    }
-    const nextLeft = Math.max(8, Math.min(window.innerWidth - panel.offsetWidth - 8, event.clientX - liveReportFeedDragState.offsetX));
-    const nextTop = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - liveReportFeedDragState.offsetY));
-    panel.style.left = `${nextLeft}px`;
-    panel.style.top = `${nextTop}px`;
-  };
-
-  const endDrag = (event) => {
-    if (!liveReportFeedDragState || liveReportFeedDragState.pointerId !== event.pointerId) {
-      return;
-    }
-    liveReportFeedDragState = null;
-    panel.classList.remove("is-dragging");
-    persistLiveReportFeedPosition(panel);
-    document.removeEventListener("pointermove", onDragPointerMove);
-    document.removeEventListener("pointerup", endDrag);
-    document.removeEventListener("pointercancel", endDrag);
-  };
-
-  dragHandle.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) {
-      return;
-    }
-    const target = event.target instanceof Element ? event.target : null;
-    if (target && target.closest("button")) {
-      return;
-    }
-    event.preventDefault();
-    const rect = panel.getBoundingClientRect();
-    panel.style.left = `${rect.left}px`;
-    panel.style.top = `${rect.top}px`;
-    panel.style.transform = "none";
-    liveReportFeedDragState = {
-      pointerId: event.pointerId,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-    };
-    panel.classList.add("is-dragging");
-    document.addEventListener("pointermove", onDragPointerMove);
-    document.addEventListener("pointerup", endDrag);
-    document.addEventListener("pointercancel", endDrag);
   });
 }
 

@@ -1339,7 +1339,81 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   opacity: 0.55;
 }
 
-/* Live report feed (floating, draggable) */
+/* Live report card embedded in brand header */
+.header-live-report {
+  flex: 1 1 260px;
+  min-width: 0;
+  max-width: min(440px, 46vw);
+  margin: 0 auto;
+  align-self: center;
+}
+
+.header-live-report-viewport {
+  width: 100%;
+  height: 68px;
+  overflow: hidden;
+  position: relative;
+}
+
+.header-live-report-stack {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+}
+
+.header-live-report-card {
+  width: 100%;
+  flex: 0 0 68px !important;
+  height: 68px !important;
+  min-height: 68px !important;
+  max-height: 68px !important;
+  border-radius: 10px !important;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 4px 10px rgba(15, 23, 42, 0.08) !important;
+}
+
+.header-live-report-stack.is-animating .header-live-report-card.is-exiting {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: none;
+  transition:
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.34s ease;
+}
+
+.header-live-report-card.is-exiting.is-exiting-active {
+  transform: translateY(calc(100% + 8px));
+  opacity: 0;
+}
+
+.header-live-report-card.is-entering {
+  opacity: 0;
+  transform: translateY(calc(-100% - 8px));
+  transition:
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.34s ease;
+}
+
+.header-live-report-card:hover {
+  transform: translateY(-1px);
+}
+
+.header-live-report-stack.is-animating .header-live-report-card.is-exiting:hover,
+.header-live-report-card.is-entering:hover {
+  transform: none;
+}
+
+@media (max-width: 1080px) {
+  .header-live-report {
+    display: none !important;
+  }
+}
+
+/* Legacy floating feed (mobile-alerts) */
 .live-report-feed {
   position: fixed;
   top: 72px;
@@ -1697,6 +1771,19 @@ body[data-theme="dark"] .host-card-country-code {
   border-color: #475569;
   background: #1e293b;
   color: #94a3b8;
+}
+
+body[data-theme="dark"] .header-live-report-card {
+  border-color: #334155 !important;
+  background: linear-gradient(180deg, #152238 0%, #111b2f 100%) !important;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(51, 65, 85, 0.65) !important;
+}
+
+body[data-theme="dark"] .header-live-report-card:hover {
+  border-color: #3b82f6 !important;
+  background: linear-gradient(180deg, #1a2d4a 0%, #14233a 100%) !important;
 }
 
 body[data-theme="dark"] .live-report-feed {

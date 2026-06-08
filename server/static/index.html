@@ -66,6 +66,11 @@
             </span>
           </p>
         </div>
+        <div id="headerLiveReportSlot" class="header-live-report hidden" aria-live="polite" aria-label="Letzte Live-Meldung">
+          <div class="header-live-report-viewport">
+            <div id="headerLiveReportStack" class="header-live-report-stack"></div>
+          </div>
+        </div>
         <div class="brand-user">
           <div class="brand-user-controls">
             <div id="brandAccountShell" class="brand-account-shell hidden">
@@ -1706,21 +1711,6 @@
             <p id="ackModalStatus" class="count compact"></p>
           </div>
         </div>
-      </div>
-
-      <div id="liveReportFeed" class="live-report-feed hidden" aria-live="polite">
-        <header class="live-report-feed-head">
-          <div class="live-report-feed-drag-zone" data-live-feed-drag-handle title="Verschieben">
-            <span class="live-report-feed-grip" aria-hidden="true">⋮⋮</span>
-            <strong>Live Meldungen</strong>
-            <span id="liveReportFeedCount" class="live-report-feed-count"></span>
-          </div>
-          <div class="live-report-feed-actions">
-            <button id="liveReportFeedMinimizeBtn" class="btn-icon live-report-feed-icon-btn" type="button" title="Einklappen" aria-expanded="true">−</button>
-            <button id="liveReportFeedCloseBtn" class="btn-icon live-report-feed-icon-btn" type="button" title="Ausblenden (Header-Toggle zum Einblenden)">✕</button>
-          </div>
-        </header>
-        <div id="liveReportFeedBody" class="live-report-feed-body"></div>
       </div>
 
   <script>
