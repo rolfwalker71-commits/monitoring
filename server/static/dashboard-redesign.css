@@ -1341,14 +1341,17 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
 
 /* Live report card embedded in brand header */
 .header-live-report {
-  flex: 1 1 260px;
+  flex: 0 0 auto;
+  width: min(268px, calc(100vw - 560px));
   min-width: 0;
-  max-width: min(440px, 46vw);
+  max-width: 268px;
   margin: 0 auto;
   align-self: center;
 }
 
 .header-live-report-viewport {
+  --header-live-scroll-duration: 0.8s;
+  --header-live-scroll-fade-duration: 0.68s;
   width: 100%;
   height: 68px;
   overflow: hidden;
@@ -1367,6 +1370,7 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   height: 68px !important;
   min-height: 68px !important;
   max-height: 68px !important;
+  padding: 6px 8px !important;
   border-radius: 10px !important;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.06),
@@ -1381,8 +1385,8 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   z-index: 1;
   pointer-events: none;
   transition:
-    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.34s ease;
+    transform var(--header-live-scroll-duration) cubic-bezier(0.22, 1, 0.36, 1),
+    opacity var(--header-live-scroll-fade-duration) ease;
 }
 
 .header-live-report-card.is-exiting.is-exiting-active {
@@ -1394,8 +1398,8 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   opacity: 0;
   transform: translateY(calc(-100% - 8px));
   transition:
-    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.34s ease;
+    transform var(--header-live-scroll-duration) cubic-bezier(0.22, 1, 0.36, 1),
+    opacity var(--header-live-scroll-fade-duration) ease;
 }
 
 .header-live-report-card:hover {
