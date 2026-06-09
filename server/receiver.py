@@ -4296,6 +4296,27 @@ def _read_sqlite_file_byte_sizes() -> dict[str, int]:
     }
 
 
+def _count_reports_last_hour(conn: sqlite3.Connection) -> int:
+    cutoff_1h = utc_hours_ago_iso(1)
+    reports_last_hour_row = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM agent_ingest_audit_log
+        WHERE status = 'written'
+          AND db_written_at_utc >= ?
+        """,
+        (cutoff_1h,),
+    ).fetchone()
+    reports_last_hour = int((reports_last_hour_row[0] or 0) if reports_last_hour_row else 0)
+    if reports_last_hour > 0:
+        return reports_last_hour
+    fallback_row = conn.execute(
+        "SELECT COUNT(*) FROM reports WHERE received_at_utc >= ?",
+        (cutoff_1h,),
+    ).fetchone()
+    return int((fallback_row[0] or 0) if fallback_row else 0)
+
+
 def collect_dashboard_db_kpis(conn: sqlite3.Connection) -> dict[str, object]:
     """Lightweight header KPIs: snapshot + indexed 1h count, no full reports scan."""
     cache_key = "dashboard-db-kpis:v1"
@@ -4310,6 +4331,7 @@ def collect_dashboard_db_kpis(conn: sqlite3.Connection) -> dict[str, object]:
             except (TypeError, ValueError):
                 pass
         payload["total_file_bytes"] = int(payload.get("total_file_bytes", 0) or 0)
+        payload["reports_last_hour"] = _count_reports_last_hour(conn)
         payload.pop("db_size_baseline_1h_bytes", None)
         return payload
 
@@ -4327,25 +4349,10 @@ def collect_dashboard_db_kpis(conn: sqlite3.Connection) -> dict[str, object]:
     reports_total = int(latest_row[0] or 0) if latest_row else None
     reports_total_computed_at = str(latest_row[1] or "") if latest_row else ""
 
-    cutoff_1h = utc_hours_ago_iso(1)
-    reports_last_hour_row = conn.execute(
-        """
-        SELECT COUNT(*)
-        FROM agent_ingest_audit_log
-        WHERE status = 'written'
-          AND db_written_at_utc >= ?
-        """,
-        (cutoff_1h,),
-    ).fetchone()
-    reports_last_hour = int((reports_last_hour_row[0] or 0) if reports_last_hour_row else 0)
-    if reports_last_hour <= 0:
-        fallback_row = conn.execute(
-            "SELECT COUNT(*) FROM reports WHERE received_at_utc >= ?",
-            (cutoff_1h,),
-        ).fetchone()
-        reports_last_hour = int((fallback_row[0] or 0) if fallback_row else 0)
+    reports_last_hour = _count_reports_last_hour(conn)
 
     db_file_bytes = int(file_stats["db_file_bytes"])
+    cutoff_1h = utc_hours_ago_iso(1)
     delta_1h_row = conn.execute(
         """
         SELECT db_file_bytes
@@ -17637,6 +17644,7 @@ def collect_live_report_events(conn: sqlite3.Connection, since_report_id: int = 
             "events": [],
             "cursor_id": max_report_id,
             "server_now_utc": utc_now_iso(),
+            "reports_last_hour": _count_reports_last_hour(conn),
         }
 
     host_key_expr = reports_host_key_sql()
@@ -17693,6 +17701,7 @@ def collect_live_report_events(conn: sqlite3.Connection, since_report_id: int = 
         "events": events,
         "cursor_id": cursor_id,
         "server_now_utc": utc_now_iso(),
+        "reports_last_hour": _count_reports_last_hour(conn),
     }
 
 
@@ -20220,6 +20229,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "status": "ok",
                     "cursor_id": int(payload.get("cursor_id", 0) or 0),
                     "server_now_utc": str(payload.get("server_now_utc", "") or ""),
+                    "reports_last_hour": int(payload.get("reports_last_hour", 0) or 0),
                     "events": payload.get("events", []),
                 },
                 extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},

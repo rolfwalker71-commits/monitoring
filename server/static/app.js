@@ -12983,6 +12983,28 @@ async function loadAdminDatabaseStats(retryCount = 0) {
   return applyAdminDatabaseStatsPayload(data);
 }
 
+function applyHeaderDbReportsLastHour(value) {
+  const reportsLastHour = Number(value || 0);
+  if (!Number.isFinite(reportsLastHour) || reportsLastHour < 0) {
+    return;
+  }
+  state.dbReportsLastHour = reportsLastHour;
+  updateHeaderStatChips();
+}
+
+function bumpHeaderDbReportsTotal(delta) {
+  const increment = Number(delta || 0);
+  if (!Number.isFinite(increment) || increment <= 0 || state.dbReportsTotal === null) {
+    return;
+  }
+  state.dbReportsTotal += increment;
+  const dbReportsChip = document.getElementById("headerDbReportsChip");
+  if (dbReportsChip) {
+    dbReportsChip.title = "Berichte in der Datenbank (live mit jedem neuen Report)";
+  }
+  updateHeaderStatChips();
+}
+
 async function loadHeaderDatabaseKpis() {
   const response = await fetch("/api/v1/dashboard-db-kpis", {
     method: "GET",
@@ -13636,8 +13658,9 @@ async function pollLiveReportEvents() {
     return;
   }
   liveReportPollInFlight = true;
+  const hadCursor = liveReportPollCursorId > 0;
   try {
-    const query = liveReportPollCursorId > 0
+    const query = hadCursor
       ? `since_id=${encodeURIComponent(String(liveReportPollCursorId))}&limit=20`
       : "limit=20";
     const response = await fetch(`/api/v1/live-report-events?${query}`, {
@@ -13652,6 +13675,9 @@ async function pollLiveReportEvents() {
       return;
     }
     const data = await response.json().catch(() => ({}));
+    if (Number.isFinite(Number(data?.reports_last_hour))) {
+      applyHeaderDbReportsLastHour(data.reports_last_hour);
+    }
     const cursorId = Number(data?.cursor_id);
     if (Number.isFinite(cursorId) && cursorId >= 0) {
       liveReportPollCursorId = cursorId;
@@ -13660,6 +13686,9 @@ async function pollLiveReportEvents() {
     const visibleEvents = events.filter(isLiveReportEventVisible);
     if (visibleEvents.length > 0) {
       enqueueLiveReportFeedFromEvents(visibleEvents);
+      if (hadCursor && events.length > 0) {
+        bumpHeaderDbReportsTotal(events.length);
+      }
       const selectedIdentity = asText(state.selectedHostUid, "").trim() || asText(state.selectedHost, "").trim();
       const shouldRefreshSelectedReport = visibleEvents.some((event) => {
         const eventIdentity = asText(event?.host_uid, "").trim() || asText(event?.hostname, "").trim();
