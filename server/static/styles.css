@@ -16300,6 +16300,34 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
   word-break: break-all;
 }
 
+/* Usersessions: compact report table */
+.reports-column #reportsView .user-sessions-table {
+  table-layout: fixed;
+}
+
+.reports-column #reportsView .user-sessions-table th:nth-child(1),
+.reports-column #reportsView .user-sessions-table td:nth-child(1) { width: 16%; }
+
+.reports-column #reportsView .user-sessions-table th:nth-child(2),
+.reports-column #reportsView .user-sessions-table td:nth-child(2) { width: 8%; }
+
+.reports-column #reportsView .user-sessions-table th:nth-child(3),
+.reports-column #reportsView .user-sessions-table td:nth-child(3) { width: 12%; }
+
+.reports-column #reportsView .user-sessions-table th:nth-child(4),
+.reports-column #reportsView .user-sessions-table td:nth-child(4),
+.reports-column #reportsView .user-sessions-table th:nth-child(5),
+.reports-column #reportsView .user-sessions-table td:nth-child(5) { width: 9%; }
+
+.reports-column #reportsView .user-sessions-table th:nth-child(6),
+.reports-column #reportsView .user-sessions-table td:nth-child(6) { width: 8%; }
+
+.reports-column #reportsView .user-sessions-table th:nth-child(7),
+.reports-column #reportsView .user-sessions-table td:nth-child(7) { width: 14%; }
+
+.reports-column #reportsView .user-sessions-table th:nth-child(8),
+.reports-column #reportsView .user-sessions-table td:nth-child(8) { width: 12%; }
+
 /* Prozesse: narrow columns, compact command with hover full value via title */
 .reports-column #reportsView .top-processes-table {
   table-layout: fixed;

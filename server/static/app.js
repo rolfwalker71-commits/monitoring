@@ -8707,6 +8707,47 @@ function formatUtcPlus2Short(isoUtc) {
   });
 }
 
+function formatReportDateTime(value) {
+  const text = asText(value, "");
+  if (!text) {
+    return "-";
+  }
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    return text;
+  }
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("de-CH", {
+      timeZone: "Europe/Zurich",
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+      .formatToParts(parsed)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.day}.${parts.month}.${parts.year} ${parts.hour}:${parts.minute}`;
+}
+
+function formatIdleDuration(seconds) {
+  const total = Number(seconds);
+  if (!Number.isFinite(total) || total <= 0) {
+    return "-";
+  }
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m`;
+  }
+  return "<1m";
+}
+
 function toLocalDateTimeInputValue(value) {
   const text = asText(value, "");
   if (!text) {
@@ -9169,6 +9210,65 @@ function renderTopProcessesTable(topProcesses) {
             <th>RAM</th>
             <th>RSS</th>
             <th>Command</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderUserSessionsTable(userSessions, osFamily = "") {
+  const block = userSessions && typeof userSessions === "object" ? userSessions : {};
+  const entries = Array.isArray(block.entries) ? block.entries : [];
+  const normalizedOs = asText(osFamily, "").toLowerCase();
+
+  if (entries.length === 0) {
+    if (normalizedOs.includes("windows")) {
+      return "<p class=\"muted\">Keine angemeldeten Benutzer-Sessions im letzten Report.</p>";
+    }
+    return "<p class=\"muted\">User-Sessions werden aktuell nur vom Windows-Agent erfasst.</p>";
+  }
+
+  const rows = entries
+    .map((entry) => {
+      const username = asText(entry.username, "-");
+      const sessionId = Number(entry.session_id);
+      const sessionName = asText(entry.session_name, "-");
+      const state = asText(entry.state, "-");
+      const sessionType = asText(entry.session_type, "-");
+      const clientAddress = asText(entry.client_address, "-");
+      const logonTime = formatReportDateTime(entry.logon_time_utc);
+      const idle = formatIdleDuration(entry.idle_seconds);
+      return `
+        <tr>
+          <td>${escapeHtml(username)}</td>
+          <td>${Number.isFinite(sessionId) && sessionId > 0 ? sessionId : "-"}</td>
+          <td>${escapeHtml(sessionName)}</td>
+          <td>${escapeHtml(state)}</td>
+          <td>${escapeHtml(sessionType)}</td>
+          <td>${escapeHtml(idle)}</td>
+          <td>${escapeHtml(logonTime)}</td>
+          <td>${escapeHtml(clientAddress)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <p class="count compact">${entries.length} angemeldete Session${entries.length === 1 ? "" : "s"}</p>
+    <div class="table-wrap">
+      <table class="report-subtable user-sessions-table">
+        <thead>
+          <tr>
+            <th>Benutzer</th>
+            <th>Session-ID</th>
+            <th>Session</th>
+            <th>Status</th>
+            <th>Typ</th>
+            <th>Idle</th>
+            <th>Anmeldung</th>
+            <th>Client</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -9811,6 +9911,10 @@ function renderReportCard(report) {
       <section class="detail-card">
         <h4>🏎️ Prozesse</h4>
         ${renderTopProcessesTable(payload.top_processes)}
+      </section>
+      <section class="detail-card">
+        <h4>👤 Usersessions</h4>
+        ${renderUserSessionsTable(payload.user_sessions, payload.os)}
       </section>
     `;
   } else if (section === "logfiles") {

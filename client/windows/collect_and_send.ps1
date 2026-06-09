@@ -218,7 +218,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.386'
+$EmbeddedAgentVersion = '1.7.486'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -2635,6 +2635,262 @@ function Get-TopProcessEntries {
     return ($entries -join ',')
 }
 
+function Convert-IdleTextToSeconds {
+    param([string]$Text)
+
+    $value = ($Text -replace '^\s+|\s+$', '').ToLowerInvariant()
+    if (-not $value) { return 0 }
+    if ($value -in '.', 'none', 'kein', '-', 'n/a') { return 0 }
+
+    if ($value -match '^(\d+):(\d{1,2})$') {
+        return ([int]$matches[1] * 3600) + ([int]$matches[2] * 60)
+    }
+    if ($value -match '^(\d+):(\d{1,2}):(\d{1,2})$') {
+        return ([int]$matches[1] * 3600) + ([int]$matches[2] * 60) + [int]$matches[3]
+    }
+    if ($value -match '^\d+$') {
+        return [int]$value * 60
+    }
+    return $null
+}
+
+function Get-QuerySessionMetaMap {
+    $map = @{}
+    try {
+        $lines = @(query session 2>$null)
+        foreach ($line in $lines) {
+            if ($line -match '(SESSIONNAME|SESSNAME).*(USERNAME|BENUTZER)') { continue }
+            $normalized = ($line -replace '^[\s>]+', '').Trim()
+            if (-not $normalized) { continue }
+
+            if ($normalized -match '^(?<name>\S+)\s+(?<user>\S+)\s+(?<id>\d+)\s+(?<state>\S+)(?:\s+(?<rest>.+))?$') {
+                $sessionId = [int]$matches.id
+                $sessionName = [string]$matches.name
+                $sessionType = 'Other'
+                if ($sessionName -match '^console') { $sessionType = 'Console' }
+                elseif ($sessionName -match '^rdp-') { $sessionType = 'RDP' }
+
+                $clientAddress = ''
+                $rest = [string]$matches.rest
+                if ($rest -match '^(?:rdpwd|wdcon|net)\s+(.+)$') {
+                    $clientAddress = ($matches[1] -replace '^\s+|\s+$', '')
+                }
+
+                $map[$sessionId] = @{
+                    session_name = $sessionName
+                    username = [string]$matches.user
+                    state = [string]$matches.state
+                    session_type = $sessionType
+                    client_address = $clientAddress
+                }
+            }
+        }
+    } catch { }
+    return $map
+}
+
+function Get-QueryUserMetaMap {
+    $map = @{}
+    try {
+        $lines = @(query user 2>$null)
+        foreach ($line in $lines) {
+            if ($line -match '(USERNAME|BENUTZERNAME).*(SESSION|SESS)') { continue }
+            $normalized = ($line -replace '^[\s>]+', '').Trim()
+            if (-not $normalized) { continue }
+
+            if ($normalized -match '^(?<prefix>.+?)\s+(?<logon>\d{1,2}[./]\d{1,2}[./]\d{2,4}\s+\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)\s*$') {
+                $rest = [string]$matches.prefix
+                if ($rest -match '^(?<user>.+?)\s+(?<sess>\S+)\s+(?<id>\d+)\s+(?<state>\S+)\s+(?<idle>.+)$') {
+                    $sessionId = [int]$matches.id
+                    $map[$sessionId] = @{
+                        username = ([string]$matches.user).Trim()
+                        session_name = [string]$matches.sess
+                        state = [string]$matches.state
+                        idle_seconds = Convert-IdleTextToSeconds -Text ([string]$matches.idle)
+                        logon_local = ([string]$matches.logon).Trim()
+                    }
+                }
+            }
+        }
+    } catch { }
+    return $map
+}
+
+function Convert-LogonLocalTextToUtcIso {
+    param([string]$Text)
+
+    $value = ($Text -replace '^\s+|\s+$', '')
+    if (-not $value) { return '' }
+
+    $formats = @(
+        'dd.MM.yyyy H:mm',
+        'dd.MM.yyyy HH:mm',
+        'dd.MM.yy H:mm',
+        'dd.MM.yy HH:mm',
+        'M/d/yyyy h:mm tt',
+        'M/d/yyyy H:mm',
+        'MM/dd/yyyy h:mm tt',
+        'MM/dd/yyyy H:mm'
+    )
+    foreach ($fmt in $formats) {
+        try {
+            $parsed = [datetime]::ParseExact($value, $fmt, $IC)
+            if ($parsed.Year -gt 1970) {
+                return $parsed.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
+            }
+        } catch { }
+    }
+
+    try {
+        $parsed = [datetime]::Parse($value, $IC)
+        if ($parsed.Year -gt 1970) {
+            return $parsed.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
+        }
+    } catch { }
+    return ''
+}
+
+function New-UserSessionEntryJson {
+    param(
+        [string]$Username,
+        [int]$SessionId,
+        [string]$SessionName,
+        [string]$State,
+        [object]$IdleSeconds,
+        [string]$LogonTimeUtc,
+        [string]$SessionType,
+        [string]$ClientAddress
+    )
+
+    $idleJson = 'null'
+    if ($null -ne $IdleSeconds) {
+        $idleJson = [string]([int]$IdleSeconds)
+    }
+
+    return (
+        '{"username":"' + (ConvertTo-JsonString $Username) + '",' +
+        '"session_id":' + $SessionId + ',' +
+        '"session_name":"' + (ConvertTo-JsonString $SessionName) + '",' +
+        '"state":"' + (ConvertTo-JsonString $State) + '",' +
+        '"idle_seconds":' + $idleJson + ',' +
+        '"logon_time_utc":"' + (ConvertTo-JsonString $LogonTimeUtc) + '",' +
+        '"session_type":"' + (ConvertTo-JsonString $SessionType) + '",' +
+        '"client_address":"' + (ConvertTo-JsonString $ClientAddress) + '"}'
+    )
+}
+
+function Get-UserSessionEntries {
+    $entries = @()
+    $seen = @{}
+    $sessionMeta = Get-QuerySessionMetaMap
+    $quserMeta = Get-QueryUserMetaMap
+
+    try {
+        $logonSessions = @(Get-CimInstance -ClassName Win32_LogonSession -ErrorAction Stop)
+        foreach ($logonSession in $logonSessions) {
+            $sessionId = [int]$logonSession.LogonId
+            if ($sessionId -le 0 -or $seen.ContainsKey($sessionId)) { continue }
+
+            $logonType = [uint32]$logonSession.LogonType
+            if ($logonType -notin @(2, 10, 11)) { continue }
+
+            $username = ''
+            $assocUsers = @(Get-CimAssociatedInstance -InputObject $logonSession -ResultClassName Win32_LoggedOnUser -ErrorAction SilentlyContinue)
+            foreach ($assoc in $assocUsers) {
+                $antecedent = [string]$assoc.Antecedent
+                if ($antecedent -match 'Name="([^"]+)"') {
+                    $username = $matches[1]
+                    break
+                }
+            }
+
+            $meta = $sessionMeta[$sessionId]
+            $qmeta = $quserMeta[$sessionId]
+            if (-not $username -and $meta) { $username = [string]$meta.username }
+            if (-not $username -and $qmeta) { $username = [string]$qmeta.username }
+            if (-not $username) { continue }
+
+            $logonUtc = ''
+            try {
+                $logonLocal = [Management.ManagementDateTimeConverter]::ToDateTime($logonSession.StartTime)
+                if ($logonLocal -and $logonLocal.Year -gt 1970) {
+                    $logonUtc = $logonLocal.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
+                }
+            } catch { }
+            if (-not $logonUtc -and $qmeta) {
+                $logonUtc = Convert-LogonLocalTextToUtcIso -Text $qmeta.logon_local
+            }
+
+            $sessionName = ''
+            if ($meta) { $sessionName = [string]$meta.session_name }
+            elseif ($qmeta) { $sessionName = [string]$qmeta.session_name }
+
+            $state = 'Unknown'
+            if ($qmeta -and $qmeta.state) { $state = [string]$qmeta.state }
+            elseif ($meta -and $meta.state) { $state = [string]$meta.state }
+
+            $sessionType = 'Other'
+            if ($meta -and $meta.session_type) {
+                $sessionType = [string]$meta.session_type
+            } elseif ($sessionName -match '^console') {
+                $sessionType = 'Console'
+            } elseif ($sessionName -match '^rdp-') {
+                $sessionType = 'RDP'
+            } elseif ($logonType -eq 10) {
+                $sessionType = 'RDP'
+            } elseif ($logonType -eq 2) {
+                $sessionType = 'Console'
+            }
+
+            $idleSeconds = $null
+            if ($qmeta) { $idleSeconds = $qmeta.idle_seconds }
+
+            $clientAddress = ''
+            if ($meta) { $clientAddress = [string]$meta.client_address }
+
+            $seen[$sessionId] = $true
+            $entries += (New-UserSessionEntryJson `
+                -Username $username `
+                -SessionId $sessionId `
+                -SessionName $sessionName `
+                -State $state `
+                -IdleSeconds $idleSeconds `
+                -LogonTimeUtc $logonUtc `
+                -SessionType $sessionType `
+                -ClientAddress $clientAddress)
+        }
+    } catch { }
+
+    foreach ($sessionId in $quserMeta.Keys) {
+        if ($seen.ContainsKey([int]$sessionId)) { continue }
+        $qmeta = $quserMeta[$sessionId]
+        if (-not $qmeta -or -not $qmeta.username) { continue }
+
+        $meta = $sessionMeta[[int]$sessionId]
+        $sessionName = if ($qmeta.session_name) { [string]$qmeta.session_name } elseif ($meta) { [string]$meta.session_name } else { '' }
+        $state = if ($qmeta.state) { [string]$qmeta.state } elseif ($meta) { [string]$meta.state } else { 'Unknown' }
+        $sessionType = if ($meta -and $meta.session_type) { [string]$meta.session_type }
+            elseif ($sessionName -match '^console') { 'Console' }
+            elseif ($sessionName -match '^rdp-') { 'RDP' }
+            else { 'Other' }
+        $clientAddress = if ($meta) { [string]$meta.client_address } else { '' }
+        $logonUtc = Convert-LogonLocalTextToUtcIso -Text $qmeta.logon_local
+
+        $seen[[int]$sessionId] = $true
+        $entries += (New-UserSessionEntryJson `
+            -Username $qmeta.username `
+            -SessionId ([int]$sessionId) `
+            -SessionName $sessionName `
+            -State $state `
+            -IdleSeconds $qmeta.idle_seconds `
+            -LogonTimeUtc $logonUtc `
+            -SessionType $sessionType `
+            -ClientAddress $clientAddress)
+    }
+
+    return ($entries -join ',')
+}
+
 function Get-SapLicenseInfo {
     $licenseInfo = @{
         available = $false
@@ -2968,6 +3224,7 @@ $fsStr = $fsEntries -join ','
 
 $eventErrorsStr = Get-SystemEventErrors
 $topProcStr = Get-TopProcessEntries
+$userSessionsStr = Get-UserSessionEntries
 $containerData = Get-ContainerEntries
 $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
@@ -3098,6 +3355,9 @@ $payload = @"
     },
     "top_processes": {
         "entries": [$topProcStr]
+    },
+    "user_sessions": {
+        "entries": [$userSessionsStr]
     },
     "ang_logs": $angLogsJson,
     "containers": {

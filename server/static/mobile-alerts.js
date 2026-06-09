@@ -439,7 +439,7 @@ function openMobileHostListSheet(host, variant) {
 const HOST_INSIGHT_SLIDE_DEFS = [
   { id: "system", icon: "🖥️", title: "System", short: "System" },
   { id: "journal", icon: "📰", title: "Journal", short: "Journal" },
-  { id: "processes", icon: "⚡", title: "Prozesse", short: "Prozesse" },
+  { id: "processes", icon: "⚡", title: "Prozesse / User", short: "Prozesse" },
   { id: "logfiles", icon: "📜", title: "Logfiles", short: "Logfiles" },
   { id: "sap-b1", icon: "📦", title: "SAP B1", short: "SAP B1" },
   { id: "containers", icon: "🐳", title: "Container", short: "Container" },
@@ -1006,36 +1006,80 @@ function buildInsightFilesystemsBody(payload) {
   return rows + more;
 }
 
+function mobileFormatReportDateTime(value) {
+  const text = String(value || "").trim();
+  if (!text) return "—";
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return text;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("de-CH", {
+      timeZone: "Europe/Zurich",
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+      .formatToParts(parsed)
+      .map((part) => [part.type, part.value]),
+  );
+  return parts.day + "." + parts.month + "." + parts.year + " " + parts.hour + ":" + parts.minute;
+}
+
 function buildInsightProcessesBody(payload) {
   const block = payload?.top_processes && typeof payload.top_processes === "object" ? payload.top_processes : {};
   const entries = Array.isArray(block.entries) ? block.entries.slice(0, 15) : [];
+  const sessionBlock = payload?.user_sessions && typeof payload.user_sessions === "object" ? payload.user_sessions : {};
+  const sessionEntries = Array.isArray(sessionBlock.entries) ? sessionBlock.entries.slice(0, 10) : [];
+  let html = "";
   if (!entries.length) {
-    return '<p class="insight-empty">Keine Prozessdaten im letzten Report.</p>';
+    html += '<p class="insight-empty">Keine Prozessdaten im letzten Report.</p>';
+  } else {
+    const rows = entries.map((entry) => {
+      const cmd = String(entry.command || entry.name || "—").trim();
+      const pid = Number(entry.pid);
+      const user = String(entry.user || "—").trim();
+      const cpu = Number(entry.cpu_percent);
+      const mem = Number(entry.memory_percent);
+      const rssKb = Number(entry.rss_kb);
+      const left = (Number.isFinite(pid) && pid > 0 ? String(pid) : "—") + " · " + user;
+      const right =
+        (Number.isFinite(cpu) ? cpu.toFixed(1) + "% CPU" : "—") +
+        " · " +
+        (Number.isFinite(mem) ? mem.toFixed(1) + "% RAM" : "—") +
+        (Number.isFinite(rssKb) ? " · " + mobileFormatKb(rssKb) : "");
+      return (
+        '<li class="insight-process-item">' +
+        '<div class="insight-process-head">' +
+        '<span class="insight-process-stats">' + mobileEsc(left) + "</span>" +
+        '<span class="insight-process-stats">' + mobileEsc(right) + "</span>" +
+        "</div>" +
+        '<span class="insight-process-cmd" title="' + mobileEsc(cmd) + '">' + mobileEsc(cmd) + "</span>" +
+        "</li>"
+      );
+    });
+    html += '<p class="insight-hint">Sortiert nach CPU-Auslastung</p><ul class="insight-process-list">' + rows.join("") + "</ul>";
   }
-  const rows = entries.map((entry) => {
-    const cmd = String(entry.command || entry.name || "—").trim();
-    const pid = Number(entry.pid);
-    const user = String(entry.user || "—").trim();
-    const cpu = Number(entry.cpu_percent);
-    const mem = Number(entry.memory_percent);
-    const rssKb = Number(entry.rss_kb);
-    const left = (Number.isFinite(pid) && pid > 0 ? String(pid) : "—") + " · " + user;
-    const right =
-      (Number.isFinite(cpu) ? cpu.toFixed(1) + "% CPU" : "—") +
-      " · " +
-      (Number.isFinite(mem) ? mem.toFixed(1) + "% RAM" : "—") +
-      (Number.isFinite(rssKb) ? " · " + mobileFormatKb(rssKb) : "");
-    return (
-      '<li class="insight-process-item">' +
-      '<div class="insight-process-head">' +
-      '<span class="insight-process-stats">' + mobileEsc(left) + "</span>" +
-      '<span class="insight-process-stats">' + mobileEsc(right) + "</span>" +
-      "</div>" +
-      '<span class="insight-process-cmd" title="' + mobileEsc(cmd) + '">' + mobileEsc(cmd) + "</span>" +
-      "</li>"
-    );
-  });
-  return '<p class="insight-hint">Sortiert nach CPU-Auslastung</p><ul class="insight-process-list">' + rows.join("") + "</ul>";
+  if (sessionEntries.length) {
+    const sessionRows = sessionEntries.map((entry) => {
+      const username = String(entry.username || "—").trim();
+      const state = String(entry.state || "—").trim();
+      const sessionType = String(entry.session_type || "—").trim();
+      const logon = mobileFormatReportDateTime(entry.logon_time_utc);
+      return (
+        '<li class="insight-process-item">' +
+        '<div class="insight-process-head">' +
+        '<span class="insight-process-stats">' + mobileEsc(username) + "</span>" +
+        '<span class="insight-process-stats">' + mobileEsc(state) + " · " + mobileEsc(sessionType) + "</span>" +
+        "</div>" +
+        '<span class="insight-process-cmd">' + mobileEsc(logon) + "</span>" +
+        "</li>"
+      );
+    });
+    html += '<p class="insight-hint">Usersessions</p><ul class="insight-process-list">' + sessionRows.join("") + "</ul>";
+  }
+  return html;
 }
 
 function buildInsightLogsBody(payload) {
