@@ -5134,7 +5134,6 @@ function renderMobileLiveReportFeed(options = {}) {
   wireMobileLiveReportFeed();
   const panel = document.getElementById("liveReportFeed");
   const body = document.getElementById("liveReportFeedBody");
-  const countEl = document.getElementById("liveReportFeedCount");
   if (!panel || !body) return;
   if (!liveReportFeedEnabled || liveReportFeedItems.length === 0) {
     panel.classList.add("hidden");
@@ -5143,7 +5142,6 @@ function renderMobileLiveReportFeed(options = {}) {
   panel.classList.remove("hidden");
   panel.classList.toggle("is-minimized", liveReportFeedMinimized);
   renderMobileLiveReportFeedReportsTotal();
-  if (countEl) countEl.textContent = String(liveReportFeedItems.length);
 
   const shouldAnimate = Boolean(options.animate) && body.childElementCount > 0;
   if (shouldAnimate) {

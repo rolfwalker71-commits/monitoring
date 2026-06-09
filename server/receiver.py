@@ -5813,16 +5813,74 @@ def build_customer_logo_url(customer_id: object, logo_filename: object, updated_
     return f"/api/v1/customers/{cid}/logo?v={parse.quote(stamp, safe='')}"
 
 
+CUSTOMER_LOGO_ALLOWED_EXTENSIONS = {
+    ".png",
+    ".jpg",
+    ".webp",
+    ".gif",
+    ".bmp",
+    ".avif",
+    ".ico",
+    ".tif",
+    ".tiff",
+    ".svg",
+}
+
+
 def _customer_logo_extension_from_name_or_mime(file_name: object, mime_type: object) -> str:
     name_suffix = Path(str(file_name or "")).suffix.lower()
-    if name_suffix in {".png", ".jpg", ".jpeg", ".webp"}:
-        return ".jpg" if name_suffix == ".jpeg" else name_suffix
+    if name_suffix == ".jpeg":
+        name_suffix = ".jpg"
+    elif name_suffix == ".jpe" or name_suffix == ".jfif":
+        name_suffix = ".jpg"
+    elif name_suffix == ".tiff":
+        name_suffix = ".tif"
+    if name_suffix in CUSTOMER_LOGO_ALLOWED_EXTENSIONS:
+        return name_suffix
     mime = str(mime_type or "").strip().lower()
     return {
         "image/png": ".png",
+        "image/x-png": ".png",
         "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/pjpeg": ".jpg",
         "image/webp": ".webp",
+        "image/gif": ".gif",
+        "image/bmp": ".bmp",
+        "image/x-bmp": ".bmp",
+        "image/x-windows-bmp": ".bmp",
+        "image/avif": ".avif",
+        "image/x-icon": ".ico",
+        "image/vnd.microsoft.icon": ".ico",
+        "image/tiff": ".tif",
+        "image/tif": ".tif",
+        "image/svg+xml": ".svg",
     }.get(mime, "")
+
+
+def _detect_customer_logo_extension_from_bytes(data: bytes) -> str:
+    if len(data) >= 8 and data[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if len(data) >= 3 and data[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    if len(data) >= 6 and data[:6] in (b"GIF87a", b"GIF89a"):
+        return ".gif"
+    if len(data) >= 2 and data[:2] == b"BM":
+        return ".bmp"
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        brand = data[8:12]
+        if brand in (b"avif", b"avis"):
+            return ".avif"
+    if len(data) >= 4 and data[:4] in (b"II*\x00", b"MM\x00*"):
+        return ".tif"
+    if len(data) >= 4 and data[:4] == b"\x00\x00\x01\x00":
+        return ".ico"
+    head = data[:512].lstrip()
+    if head.startswith(b"<svg") or head.startswith(b"<?xml"):
+        return ".svg"
+    return ""
 
 
 def _parse_customer_logo_upload_data(image_data: object, file_name: object) -> tuple[bytes, str]:
@@ -5839,10 +5897,6 @@ def _parse_customer_logo_upload_data(image_data: object, file_name: object) -> t
         mime_type = str(match.group(1) or "").strip().lower()
         b64_payload = str(match.group(2) or "").strip()
 
-    file_ext = _customer_logo_extension_from_name_or_mime(file_name, mime_type)
-    if file_ext not in {".png", ".jpg", ".webp"}:
-        raise ValueError("Nur PNG, JPG oder WebP sind erlaubt.")
-
     try:
         decoded = base64.b64decode(b64_payload, validate=True)
     except Exception as exc:
@@ -5850,7 +5904,16 @@ def _parse_customer_logo_upload_data(image_data: object, file_name: object) -> t
     if not decoded:
         raise ValueError("Leere Bilddaten.")
     if len(decoded) > CUSTOMER_LOGO_MAX_BYTES:
-        raise ValueError(f"Logo ist zu groß (max. {CUSTOMER_LOGO_MAX_BYTES // 1024} KB).")
+        raise ValueError(f"Logo ist zu gross (max. {CUSTOMER_LOGO_MAX_BYTES // 1024} KB).")
+
+    file_ext = _customer_logo_extension_from_name_or_mime(file_name, mime_type)
+    if file_ext not in CUSTOMER_LOGO_ALLOWED_EXTENSIONS:
+        file_ext = _detect_customer_logo_extension_from_bytes(decoded)
+    if file_ext not in CUSTOMER_LOGO_ALLOWED_EXTENSIONS:
+        label = Path(str(file_name or "")).suffix.lower() or mime_type or "unbekannt"
+        raise ValueError(
+            f"Dateityp nicht unterstützt ({label}). Erlaubt sind gängige Bildformate wie PNG, JPG, WebP, GIF, SVG, BMP, AVIF, ICO und TIFF."
+        )
     return decoded, file_ext
 
 
@@ -20077,14 +20140,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "logo file missing"})
                 return
             suffix = logo_path.suffix.lower()
-            if suffix == ".png":
-                mime = "image/png"
-            elif suffix in {".jpg", ".jpeg"}:
-                mime = "image/jpeg"
-            elif suffix == ".webp":
-                mime = "image/webp"
-            else:
-                mime = "application/octet-stream"
+            if suffix == ".jpeg":
+                suffix = ".jpg"
+            mime = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".webp": "image/webp",
+                ".gif": "image/gif",
+                ".bmp": "image/bmp",
+                ".avif": "image/avif",
+                ".ico": "image/x-icon",
+                ".tif": "image/tiff",
+                ".tiff": "image/tiff",
+                ".svg": "image/svg+xml",
+            }.get(suffix, "application/octet-stream")
             self._send_file(logo_path, mime)
             return
 
