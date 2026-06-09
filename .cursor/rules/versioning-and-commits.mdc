@@ -7,14 +7,19 @@ alwaysApply: true
 
 ## Version files
 
-On every release-worthy change, bump **both** in the same commit:
+On every release-worthy change, bump `BUILD_VERSION` (server/UI).
 
-- `BUILD_VERSION` (server/UI)
-- `AGENT_VERSION` (agents under `client/` and `/updates`)
+Bump `AGENT_VERSION` **only** when the **Linux or Windows agent** changes:
 
-Keep them on the **same** semantic version (e.g. both `1.7.344`). Do not bump only one unless the user explicitly asks for a server-only or agent-only exception.
+- `client/linux/` (e.g. `collect_and_send.sh`, `self_update.sh`, …)
+- `client/windows/` (e.g. `collect_and_send.ps1`, `collect_and_scan_sap_tables.ps1`, …)
+- mirrored agent payloads under `/updates` when those files change
 
-Also sync Windows embedded fallback when agent scripts change:
+Server/UI-only changes, other `client/` tooling, or docs: leave `AGENT_VERSION` unchanged.
+
+`BUILD_VERSION` and `AGENT_VERSION` may diverge (e.g. BUILD `1.7.491`, AGENT `1.7.490`). Do not bump `AGENT_VERSION` just to keep them in sync.
+
+When Windows agent scripts change, also sync embedded fallback:
 
 - `client/windows/collect_and_send.ps1` → `$EmbeddedAgentVersion`
 - `client/windows/collect_and_scan_sap_tables.ps1` → `$EmbeddedAgentVersion`

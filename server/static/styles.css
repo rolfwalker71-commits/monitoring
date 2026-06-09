@@ -5805,17 +5805,21 @@ body[data-theme="dark"] .trend-progress-bar {
   right: 12px;
   top: 8px;
   bottom: 8px;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  opacity: 0.08;
+  opacity: 0.07;
   z-index: 0;
   overflow: hidden;
 }
 
 .host-item.selected .host-customer-bg-watermark {
-  display: flex;
+  opacity: 0.09;
+}
+
+.host-item:hover .host-customer-bg-watermark {
+  opacity: 0.085;
 }
 
 .host-customer-bg-watermark-logo {

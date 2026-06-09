@@ -10702,7 +10702,18 @@ function renderSingleHostCard(host) {
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span></span></div>`
     : "";
-  const customerCardWatermark = "";
+  const customerCardWatermark = customerLogoUrl
+    ? `<div class="host-customer-bg-watermark" aria-hidden="true">
+        <img
+          src="${escapeHtml(customerLogoUrl)}"
+          alt=""
+          class="host-customer-bg-watermark-logo"
+          loading="lazy"
+          decoding="async"
+          onerror="this.closest('.host-customer-bg-watermark')?.remove()"
+        >
+      </div>`
+    : "";
   const designationBadgeLine = `<div class="host-designation-row"><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span><span class="host-detail-clock" title="${escapeHtml(lastReportClock.title)}">${escapeHtml(lastReportClock.label)}</span></div>`;
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
