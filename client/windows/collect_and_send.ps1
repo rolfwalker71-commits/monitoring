@@ -218,7 +218,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.488'
+$EmbeddedAgentVersion = '1.7.490'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -2655,12 +2655,34 @@ function Convert-IdleTextToSeconds {
 }
 
 function Resolve-UserSessionType {
-    param([string]$SessionName)
+    param(
+        [string]$SessionName,
+        [string]$State = ''
+    )
 
     $name = [string]$SessionName
     if ($name -match '^console') { return 'Console' }
     if ($name -match '^rdp-') { return 'RDP' }
+    if ($State -match '^(?i)(Getr\.?|Disc\.?|Getrennt|Trennen)$') { return 'RDP' }
     return 'Other'
+}
+
+function Test-ShouldSkipQuerySessionState {
+    param([string]$State)
+
+    return ([string]$State -match '^(?i)(Listen|Anhör\.?|Anhoer\.?|Abhör\.?|Abhoer\.?)$')
+}
+
+function Normalize-UserSessionState {
+    param([string]$State)
+
+    $value = ([string]$State).Trim()
+    if (-not $value) { return 'Unknown' }
+    if ($value -match '^(?i)Getr\.?$') { return 'Getrennt' }
+    if ($value -match '^(?i)Disc\.?$') { return 'Getrennt' }
+    if ($value -match '^(?i)Aktiv\.?$') { return 'Aktiv' }
+    if ($value -match '^(?i)Active\.?$') { return 'Aktiv' }
+    return $value
 }
 
 function Test-QueryUserHeaderLine {
@@ -2689,7 +2711,7 @@ function Get-QuerySessionMetaMap {
             if ($normalized -match '^(?<name>\S+)\s+(?<user>\S+)\s+(?<id>\d+)\s+(?<state>\S+)(?:\s+(?<rest>.+))?$') {
                 $sessionId = [int]$matches.id
                 $state = [string]$matches.state
-                if ($state -match '^(?i)Listen|Anhören$') { continue }
+                if (Test-ShouldSkipQuerySessionState -State $state) { continue }
 
                 $sessionName = [string]$matches.name
                 $clientAddress = ''
@@ -2701,9 +2723,24 @@ function Get-QuerySessionMetaMap {
                 $map[$sessionId] = @{
                     session_name = $sessionName
                     username = [string]$matches.user
-                    state = $state
-                    session_type = (Resolve-UserSessionType -SessionName $sessionName)
+                    state = (Normalize-UserSessionState -State $state)
+                    session_type = (Resolve-UserSessionType -SessionName $sessionName -State $state)
                     client_address = $clientAddress
+                }
+                continue
+            }
+
+            if ($normalized -match '^(?<user>\S+)\s+(?<id>\d+)\s+(?<state>\S+)(?:\s+(?<rest>.+))?$') {
+                $sessionId = [int]$matches.id
+                $state = [string]$matches.state
+                if (Test-ShouldSkipQuerySessionState -State $state) { continue }
+
+                $map[$sessionId] = @{
+                    session_name = ''
+                    username = [string]$matches.user
+                    state = (Normalize-UserSessionState -State $state)
+                    session_type = (Resolve-UserSessionType -SessionName '' -State $state)
+                    client_address = ''
                 }
                 continue
             }
@@ -2712,13 +2749,26 @@ function Get-QuerySessionMetaMap {
             if ($parts.Count -ge 4 -and $parts[2] -match '^\d+$') {
                 $sessionId = [int]$parts[2]
                 $state = [string]$parts[3]
-                if ($state -match '^(?i)Listen|Anhören$') { continue }
+                if (Test-ShouldSkipQuerySessionState -State $state) { continue }
                 if ($parts.Count -ge 5 -and $parts[1] -notmatch '^\d+$') {
                     $map[$sessionId] = @{
                         session_name = [string]$parts[0]
                         username = [string]$parts[1]
-                        state = $state
-                        session_type = (Resolve-UserSessionType -SessionName ([string]$parts[0]))
+                        state = (Normalize-UserSessionState -State $state)
+                        session_type = (Resolve-UserSessionType -SessionName ([string]$parts[0]) -State $state)
+                        client_address = ''
+                    }
+                }
+            } elseif ($parts.Count -ge 3 -and $parts[1] -match '^\d+$') {
+                $sessionId = [int]$parts[1]
+                $state = [string]$parts[2]
+                if (Test-ShouldSkipQuerySessionState -State $state) { continue }
+                if ($parts[0] -notmatch '^\d+$') {
+                    $map[$sessionId] = @{
+                        session_name = ''
+                        username = [string]$parts[0]
+                        state = (Normalize-UserSessionState -State $state)
+                        session_type = (Resolve-UserSessionType -SessionName '' -State $state)
                         client_address = ''
                     }
                 }
@@ -2755,25 +2805,39 @@ function Parse-QueryUserLine {
         $sessionId = [int]$matches.id
         $state = [string]$matches.state
         $idleText = ([string]$matches.idle).Trim()
+    } elseif ($remainder -match '^(?<user>\S+)\s+(?<id>\d+)\s+(?<state>\S+)\s+(?<idle>.+)$') {
+        $user = ([string]$matches.user).Trim()
+        $sessionName = ''
+        $sessionId = [int]$matches.id
+        $state = [string]$matches.state
+        $idleText = ([string]$matches.idle).Trim()
     } else {
         $parts = @($remainder -split '\s{2,}' | Where-Object { $_ -match '\S' })
-        if ($parts.Count -lt 5 -or $parts[2] -notmatch '^\d+$') {
+        if ($parts.Count -ge 5 -and $parts[2] -match '^\d+$') {
+            $user = ([string]$parts[0]).Trim()
+            $sessionName = [string]$parts[1]
+            $sessionId = [int]$parts[2]
+            $state = [string]$parts[3]
+            $idleText = ([string]($parts[4..($parts.Count - 1)] -join ' ')).Trim()
+        } elseif ($parts.Count -ge 4 -and $parts[1] -match '^\d+$') {
+            $user = ([string]$parts[0]).Trim()
+            $sessionName = ''
+            $sessionId = [int]$parts[1]
+            $state = [string]$parts[2]
+            $idleText = ([string]($parts[3..($parts.Count - 1)] -join ' ')).Trim()
+        } else {
             return $null
         }
-        $user = ([string]$parts[0]).Trim()
-        $sessionName = [string]$parts[1]
-        $sessionId = [int]$parts[2]
-        $state = [string]$parts[3]
-        $idleText = ([string]($parts[4..($parts.Count - 1)] -join ' ')).Trim()
     }
 
     if (-not $user -or $sessionId -le 0) { return $null }
+    if (Test-ShouldSkipQuerySessionState -State $state) { return $null }
 
     return [pscustomobject]@{
         Username = $user
         SessionName = $sessionName
         SessionId = $sessionId
-        State = $state
+        State = (Normalize-UserSessionState -State $state)
         IdleText = $idleText
         LogonLocal = $logonLocal.Trim()
     }
@@ -2952,12 +3016,13 @@ function Get-UserSessionEntries {
         $state = 'Unknown'
         if ($qmeta -and $qmeta.state) { $state = [string]$qmeta.state }
         elseif ($meta -and $meta.state) { $state = [string]$meta.state }
+        $state = Normalize-UserSessionState -State $state
 
         $sessionType = 'Other'
         if ($meta -and $meta.session_type) {
             $sessionType = [string]$meta.session_type
         } else {
-            $sessionType = Resolve-UserSessionType -SessionName $sessionName
+            $sessionType = Resolve-UserSessionType -SessionName $sessionName -State $state
             if ($sessionType -eq 'Other' -and $cim -and $null -ne $cim.logon_type) {
                 if ([uint32]$cim.logon_type -eq 10) { $sessionType = 'RDP' }
                 elseif ([uint32]$cim.logon_type -eq 2) { $sessionType = 'Console' }
