@@ -3325,7 +3325,7 @@ function buildCustomerLogoHtml(item) {
   const logoUrl = String(item.customer_logo_url || "").trim();
   if (!logoUrl) return "";
   return (
-    '<img class="customer-logo customer-logo-right" data-src="' + mobileEsc(logoUrl) + '" alt="" width="32" height="32" '
+    '<img class="customer-logo customer-logo-right" data-src="' + mobileEsc(logoUrl) + '" alt="" width="64" height="64" '
     + 'data-load-state="loading" decoding="async" />'
   );
 }
@@ -5364,8 +5364,8 @@ function wireMobileLiveReportFeed() {
   const body = document.getElementById("liveReportFeedBody");
   const minimizeBtn = document.getElementById("liveReportFeedMinimizeBtn");
   const closeBtn = document.getElementById("liveReportFeedCloseBtn");
-  const dragHandle = panel ? panel.querySelector("[data-live-feed-drag-handle]") : null;
-  if (!panel || !body || !dragHandle) return;
+  const dragHandles = panel ? panel.querySelectorAll("[data-live-feed-drag-handle]") : [];
+  if (!panel || !body || !dragHandles.length) return;
   liveReportFeedWired = true;
 
   applyMobileLiveReportFeedPosition();
@@ -5426,7 +5426,7 @@ function wireMobileLiveReportFeed() {
     document.removeEventListener("pointercancel", endDrag);
   };
 
-  dragHandle.addEventListener("pointerdown", (event) => {
+  const onDragPointerDown = (event) => {
     if (event.button !== 0) return;
     const target = event.target instanceof Element ? event.target : null;
     if (target && target.closest("button")) return;
@@ -5444,6 +5444,10 @@ function wireMobileLiveReportFeed() {
     document.addEventListener("pointermove", onDragPointerMove);
     document.addEventListener("pointerup", endDrag);
     document.addEventListener("pointercancel", endDrag);
+  };
+
+  dragHandles.forEach((dragHandle) => {
+    dragHandle.addEventListener("pointerdown", onDragPointerDown);
   });
 }
 

@@ -1021,9 +1021,9 @@ body {
 }
 
 .customer-logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
   object-fit: contain;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -2347,7 +2347,8 @@ body.host-insight-open {
 }
 
 .live-report-feed-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 6px;
   padding: 8px 10px 8px 8px;
@@ -2359,7 +2360,9 @@ body.host-insight-open {
   display: flex;
   align-items: center;
   gap: 5px;
-  flex: 1 1 auto;
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 2;
   min-width: 0;
   padding: 2px 4px;
   border-radius: 5px;
@@ -2368,8 +2371,25 @@ body.host-insight-open {
   user-select: none;
 }
 
+.live-report-feed-head-center {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: calc(100% - 132px);
+  padding: 0 4px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
 .live-report-feed-drag-zone:active,
-.live-report-feed.is-dragging .live-report-feed-drag-zone {
+.live-report-feed-head-center:active,
+.live-report-feed.is-dragging .live-report-feed-drag-zone,
+.live-report-feed.is-dragging .live-report-feed-head-center {
   cursor: grabbing;
 }
 
@@ -2394,7 +2414,6 @@ body.host-insight-open {
   display: inline-flex;
   align-items: center;
   min-width: 0;
-  margin-left: 2px;
   line-height: 1;
 }
 
@@ -2403,28 +2422,28 @@ body.host-insight-open {
   align-items: baseline;
   gap: 0;
   font-family: "IBM Plex Mono", "Consolas", "Menlo", monospace;
-  font-size: 15px;
+  font-size: 26px;
   font-weight: 800;
   color: var(--ink);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
 }
 
 .live-report-feed-flip-sep {
-  font-size: 12px;
+  font-size: 19px;
   font-weight: 700;
   color: var(--muted);
   padding: 0 1px;
-  transform: translateY(-0.5px);
+  transform: translateY(-1px);
 }
 
 .live-report-feed-flip-digit {
   display: inline-block;
   position: relative;
-  min-width: 0.58em;
-  height: 1.05em;
+  min-width: 0.56em;
+  height: 1.08em;
   text-align: center;
-  perspective: 140px;
+  perspective: 180px;
 }
 
 .live-report-feed-flip-digit-face {
@@ -2460,20 +2479,22 @@ body.host-insight-open {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1;
   color: #fff;
   background: #2563eb;
-  margin-left: 2px;
+  flex-shrink: 0;
 }
 
 .live-report-feed-actions {
-  margin-left: auto;
+  grid-column: 3;
+  grid-row: 1;
+  z-index: 2;
   display: inline-flex;
   gap: 2px;
 }
