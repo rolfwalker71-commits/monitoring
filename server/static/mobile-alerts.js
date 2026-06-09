@@ -2744,6 +2744,7 @@ async function loadInactiveHostsList(options = {}) {
 function mobileForceLogout(message) {
   stopMobileSessionKeepAlive();
   stopMobileLiveReportPoll();
+  resetMobileReportsTotalLive();
   state.authenticated = false;
   showAlertsHomeView();
   showLoginOverlay(true);
@@ -2879,6 +2880,9 @@ let liveReportFeedDragState = null;
 let liveReportPollTimerId = null;
 let liveReportPollInFlight = false;
 let liveReportPollCursorId = 0;
+let mobileDbReportsTotal = null;
+let mobileDbReportsTotalSeeded = false;
+let mobileDbReportsTotalRendered = "";
 const USAGE_BAR_ANIMATION_MS = 1500;
 let lastUsageBarCarouselIndex = -1;
 const usageBarAnimStates = new WeakMap();
@@ -5037,6 +5041,95 @@ function animateMobileLiveReportFeedDom(body) {
   });
 }
 
+function formatMobileReportsTotalDisplay(value) {
+  const total = Number(value);
+  if (!Number.isFinite(total) || total < 0) {
+    return "-";
+  }
+  return total.toLocaleString("de-CH");
+}
+
+function renderMobileLiveReportFeedReportsTotal(options = {}) {
+  const root = document.getElementById("liveReportFeedReportsTotal");
+  if (!root) {
+    return;
+  }
+  const formatted = mobileDbReportsTotalSeeded
+    ? formatMobileReportsTotalDisplay(mobileDbReportsTotal)
+    : "-";
+  const previous = mobileDbReportsTotalRendered || "";
+  const shouldAnimate = Boolean(options.animate)
+    && previous !== "-"
+    && formatted !== "-"
+    && previous !== formatted;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const chars = formatted.split("");
+  const previousChars = previous.split("");
+  let html = '<span class="live-report-feed-reports-flip">';
+  chars.forEach((char, index) => {
+    if (char === "'") {
+      html += '<span class="live-report-feed-flip-sep" aria-hidden="true">\'</span>';
+      return;
+    }
+    const previousChar = previousChars[index];
+    const flip = shouldAnimate && !reducedMotion && previousChar !== char && /\d/.test(char);
+    html += (
+      '<span class="live-report-feed-flip-digit' + (flip ? " is-flipping" : "") + '">' +
+        '<span class="live-report-feed-flip-digit-face">' + mobileEsc(char) + "</span>" +
+      "</span>"
+    );
+  });
+  html += "</span>";
+  root.innerHTML = html;
+  root.title = "Berichte in der Datenbank (live)";
+  root.setAttribute("aria-label", "Berichte gesamt: " + formatted);
+  mobileDbReportsTotalRendered = formatted;
+}
+
+function applyMobileReportsTotalLive(total) {
+  const safeTotal = Number(total);
+  if (!Number.isFinite(safeTotal) || safeTotal < 0) {
+    return false;
+  }
+  const previous = mobileDbReportsTotal;
+  mobileDbReportsTotal = safeTotal;
+  mobileDbReportsTotalSeeded = true;
+  renderMobileLiveReportFeedReportsTotal({
+    animate: previous !== null && previous !== safeTotal,
+  });
+  return true;
+}
+
+async function refreshMobileReportsTotalLive() {
+  const response = await fetch("/api/v1/dashboard-reports-total", {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || data.message || ("HTTP " + response.status));
+  }
+  applyMobileReportsTotalLive(data.reports_total);
+  return data;
+}
+
+function bumpMobileReportsTotal(delta) {
+  const increment = Number(delta || 0);
+  if (!Number.isFinite(increment) || increment <= 0 || !mobileDbReportsTotalSeeded) {
+    return;
+  }
+  mobileDbReportsTotal = Number(mobileDbReportsTotal || 0) + increment;
+  renderMobileLiveReportFeedReportsTotal({ animate: true });
+}
+
+function resetMobileReportsTotalLive() {
+  mobileDbReportsTotal = null;
+  mobileDbReportsTotalSeeded = false;
+  mobileDbReportsTotalRendered = "";
+  renderMobileLiveReportFeedReportsTotal();
+}
+
 function renderMobileLiveReportFeed(options = {}) {
   wireMobileLiveReportFeed();
   const panel = document.getElementById("liveReportFeed");
@@ -5049,6 +5142,7 @@ function renderMobileLiveReportFeed(options = {}) {
   }
   panel.classList.remove("hidden");
   panel.classList.toggle("is-minimized", liveReportFeedMinimized);
+  renderMobileLiveReportFeedReportsTotal();
   if (countEl) countEl.textContent = String(liveReportFeedItems.length);
 
   const shouldAnimate = Boolean(options.animate) && body.childElementCount > 0;
@@ -5116,6 +5210,7 @@ function resetMobileLiveReportFeed() {
   stopMobileLiveReportPoll();
   liveReportFeedItems = [];
   liveReportPollCursorId = 0;
+  resetMobileReportsTotalLive();
   renderMobileLiveReportFeed();
 }
 
@@ -5226,11 +5321,11 @@ function startMobileLiveReportPoll() {
 async function pollMobileLiveReportEvents() {
   if (!state.authenticated || liveReportPollInFlight) return;
   liveReportPollInFlight = true;
+  const hadCursor = liveReportPollCursorId > 0;
   try {
-    const query =
-      liveReportPollCursorId > 0
-        ? "since_id=" + encodeURIComponent(String(liveReportPollCursorId)) + "&limit=20"
-        : "limit=20";
+    const query = hadCursor
+      ? "since_id=" + encodeURIComponent(String(liveReportPollCursorId)) + "&limit=20"
+      : "limit=20";
     const response = await fetch("/api/v1/live-report-events?" + query, {
       credentials: "same-origin",
       cache: "no-store",
@@ -5247,6 +5342,9 @@ async function pollMobileLiveReportEvents() {
     }
     const events = Array.isArray(data?.events) ? data.events : [];
     const visibleEvents = events.filter(isMobileLiveReportEventVisible);
+    if (hadCursor && events.length > 0) {
+      bumpMobileReportsTotal(events.length);
+    }
     if (visibleEvents.length > 0) {
       enqueueMobileLiveReportFeedFromEvents(visibleEvents);
       if (state.pushEnabled && document.visibilityState !== "visible") {
@@ -5354,6 +5452,9 @@ function initMobileLiveReportFeed() {
   updateMobileLiveReportFeedToggleUi();
   wireMobileLiveReportFeed();
   renderMobileLiveReportFeed();
+  void refreshMobileReportsTotalLive().catch((error) => {
+    console.warn("refreshMobileReportsTotalLive failed:", error);
+  });
   startMobileLiveReportPoll();
 }
 
@@ -5588,6 +5689,11 @@ function wire() {
       }
       await refreshPushState();
       await refreshMobileData();
+      try {
+        await refreshMobileReportsTotalLive();
+      } catch (error) {
+        console.warn("refreshMobileReportsTotalLive on resume failed:", error);
+      }
     })().catch((error) => setStatus("Fehler: " + (error?.message || String(error)), true));
   });
 

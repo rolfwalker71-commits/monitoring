@@ -2390,6 +2390,72 @@ body.host-insight-open {
   color: var(--ink);
 }
 
+.live-report-feed-reports-total {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  margin-left: 2px;
+  line-height: 1;
+}
+
+.live-report-feed-reports-flip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  font-family: "IBM Plex Mono", "Consolas", "Menlo", monospace;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-report-feed-flip-sep {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 0 1px;
+  transform: translateY(-0.5px);
+}
+
+.live-report-feed-flip-digit {
+  display: inline-block;
+  position: relative;
+  min-width: 0.58em;
+  height: 1.05em;
+  text-align: center;
+  perspective: 140px;
+}
+
+.live-report-feed-flip-digit-face {
+  display: inline-block;
+  transform-origin: center bottom;
+  backface-visibility: hidden;
+}
+
+.live-report-feed-flip-digit.is-flipping .live-report-feed-flip-digit-face {
+  animation: live-report-feed-flip-digit 0.44s cubic-bezier(0.33, 1, 0.38, 1);
+}
+
+@keyframes live-report-feed-flip-digit {
+  0% {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+  42% {
+    transform: rotateX(-86deg);
+    opacity: 0.12;
+  }
+  58% {
+    transform: rotateX(86deg);
+    opacity: 0.12;
+  }
+  100% {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+}
+
 .live-report-feed-count {
   display: inline-flex;
   align-items: center;
@@ -2403,6 +2469,7 @@ body.host-insight-open {
   line-height: 1;
   color: #fff;
   background: #2563eb;
+  margin-left: 2px;
 }
 
 .live-report-feed-actions {
@@ -2514,6 +2581,10 @@ body.host-insight-open {
     transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease !important;
     animation: none !important;
     will-change: auto;
+  }
+
+  .live-report-feed-flip-digit.is-flipping .live-report-feed-flip-digit-face {
+    animation: none !important;
   }
 }
 
@@ -2718,6 +2789,14 @@ body.host-insight-open {
 
   .live-report-feed-customer-bg-watermark {
     opacity: 0.065;
+  }
+
+  .live-report-feed-reports-flip {
+    color: #e2e8f0;
+  }
+
+  .live-report-feed-flip-sep {
+    color: #94a3b8;
   }
 
   .live-report-feed-customer {
