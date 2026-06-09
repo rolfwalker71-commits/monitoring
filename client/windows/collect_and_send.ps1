@@ -218,7 +218,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.486'
+$EmbeddedAgentVersion = '1.7.488'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -2654,22 +2654,44 @@ function Convert-IdleTextToSeconds {
     return $null
 }
 
+function Resolve-UserSessionType {
+    param([string]$SessionName)
+
+    $name = [string]$SessionName
+    if ($name -match '^console') { return 'Console' }
+    if ($name -match '^rdp-') { return 'RDP' }
+    return 'Other'
+}
+
+function Test-QueryUserHeaderLine {
+    param([string]$Line)
+
+    return ($Line -match '(USERNAME|BENUTZERNAME|BENUTZER)' -and
+        $Line -match '(SESSIONNAME|SITZUNGSNAME|SESSNAME|SESSION|SESS|ID|KENNUNG)')
+}
+
+function Test-QuerySessionHeaderLine {
+    param([string]$Line)
+
+    return ($Line -match '(SESSIONNAME|SITZUNGSNAME|SESSNAME|SESSION|SESS)' -and
+        $Line -match '(USERNAME|BENUTZERNAME|BENUTZER|ID|KENNUNG)')
+}
+
 function Get-QuerySessionMetaMap {
     $map = @{}
     try {
         $lines = @(query session 2>$null)
         foreach ($line in $lines) {
-            if ($line -match '(SESSIONNAME|SESSNAME).*(USERNAME|BENUTZER)') { continue }
+            if (Test-QuerySessionHeaderLine -Line $line) { continue }
             $normalized = ($line -replace '^[\s>]+', '').Trim()
             if (-not $normalized) { continue }
 
             if ($normalized -match '^(?<name>\S+)\s+(?<user>\S+)\s+(?<id>\d+)\s+(?<state>\S+)(?:\s+(?<rest>.+))?$') {
                 $sessionId = [int]$matches.id
-                $sessionName = [string]$matches.name
-                $sessionType = 'Other'
-                if ($sessionName -match '^console') { $sessionType = 'Console' }
-                elseif ($sessionName -match '^rdp-') { $sessionType = 'RDP' }
+                $state = [string]$matches.state
+                if ($state -match '^(?i)Listen|Anhören$') { continue }
 
+                $sessionName = [string]$matches.name
                 $clientAddress = ''
                 $rest = [string]$matches.rest
                 if ($rest -match '^(?:rdpwd|wdcon|net)\s+(.+)$') {
@@ -2679,9 +2701,26 @@ function Get-QuerySessionMetaMap {
                 $map[$sessionId] = @{
                     session_name = $sessionName
                     username = [string]$matches.user
-                    state = [string]$matches.state
-                    session_type = $sessionType
+                    state = $state
+                    session_type = (Resolve-UserSessionType -SessionName $sessionName)
                     client_address = $clientAddress
+                }
+                continue
+            }
+
+            $parts = @($normalized -split '\s{2,}' | Where-Object { $_ -match '\S' })
+            if ($parts.Count -ge 4 -and $parts[2] -match '^\d+$') {
+                $sessionId = [int]$parts[2]
+                $state = [string]$parts[3]
+                if ($state -match '^(?i)Listen|Anhören$') { continue }
+                if ($parts.Count -ge 5 -and $parts[1] -notmatch '^\d+$') {
+                    $map[$sessionId] = @{
+                        session_name = [string]$parts[0]
+                        username = [string]$parts[1]
+                        state = $state
+                        session_type = (Resolve-UserSessionType -SessionName ([string]$parts[0]))
+                        client_address = ''
+                    }
                 }
             }
         }
@@ -2689,27 +2728,129 @@ function Get-QuerySessionMetaMap {
     return $map
 }
 
+function Parse-QueryUserLine {
+    param([string]$Line)
+
+    $normalized = ($Line -replace '^[\s>]+', '').Trim()
+    if (-not $normalized) { return $null }
+    if (Test-QueryUserHeaderLine -Line $normalized) { return $null }
+
+    if ($normalized -notmatch '(?<logon>(?:\d{1,2}[./]\d{1,2}[./]\d{2,4}|\d{1,2}/\d{1,2}/\d{2,4})\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:AM|PM))?)\s*$') {
+        return $null
+    }
+
+    $logonLocal = [string]$matches.logon
+    $remainder = $normalized.Substring(0, $normalized.Length - $matches.logon.Length).TrimEnd()
+    if (-not $remainder) { return $null }
+
+    $user = ''
+    $sessionName = ''
+    $sessionId = 0
+    $state = ''
+    $idleText = ''
+
+    if ($remainder -match '^(?<user>.+?)\s+(?<sess>\S+)\s+(?<id>\d+)\s+(?<state>\S+)\s+(?<idle>.+)$') {
+        $user = ([string]$matches.user).Trim()
+        $sessionName = [string]$matches.sess
+        $sessionId = [int]$matches.id
+        $state = [string]$matches.state
+        $idleText = ([string]$matches.idle).Trim()
+    } else {
+        $parts = @($remainder -split '\s{2,}' | Where-Object { $_ -match '\S' })
+        if ($parts.Count -lt 5 -or $parts[2] -notmatch '^\d+$') {
+            return $null
+        }
+        $user = ([string]$parts[0]).Trim()
+        $sessionName = [string]$parts[1]
+        $sessionId = [int]$parts[2]
+        $state = [string]$parts[3]
+        $idleText = ([string]($parts[4..($parts.Count - 1)] -join ' ')).Trim()
+    }
+
+    if (-not $user -or $sessionId -le 0) { return $null }
+
+    return [pscustomobject]@{
+        Username = $user
+        SessionName = $sessionName
+        SessionId = $sessionId
+        State = $state
+        IdleText = $idleText
+        LogonLocal = $logonLocal.Trim()
+    }
+}
+
 function Get-QueryUserMetaMap {
     $map = @{}
     try {
         $lines = @(query user 2>$null)
         foreach ($line in $lines) {
-            if ($line -match '(USERNAME|BENUTZERNAME).*(SESSION|SESS)') { continue }
-            $normalized = ($line -replace '^[\s>]+', '').Trim()
-            if (-not $normalized) { continue }
+            $parsed = Parse-QueryUserLine -Line $line
+            if (-not $parsed) { continue }
+            $map[[int]$parsed.SessionId] = @{
+                username = [string]$parsed.Username
+                session_name = [string]$parsed.SessionName
+                state = [string]$parsed.State
+                idle_seconds = Convert-IdleTextToSeconds -Text ([string]$parsed.IdleText)
+                logon_local = [string]$parsed.LogonLocal
+            }
+        }
+    } catch { }
+    return $map
+}
 
-            if ($normalized -match '^(?<prefix>.+?)\s+(?<logon>\d{1,2}[./]\d{1,2}[./]\d{2,4}\s+\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)\s*$') {
-                $rest = [string]$matches.prefix
-                if ($rest -match '^(?<user>.+?)\s+(?<sess>\S+)\s+(?<id>\d+)\s+(?<state>\S+)\s+(?<idle>.+)$') {
-                    $sessionId = [int]$matches.id
-                    $map[$sessionId] = @{
-                        username = ([string]$matches.user).Trim()
-                        session_name = [string]$matches.sess
-                        state = [string]$matches.state
-                        idle_seconds = Convert-IdleTextToSeconds -Text ([string]$matches.idle)
-                        logon_local = ([string]$matches.logon).Trim()
-                    }
+function Get-CimLogonSessionMap {
+    $map = @{}
+    try {
+        foreach ($logonSession in (Get-CimInstance -ClassName Win32_LogonSession -ErrorAction Stop)) {
+            $sessionId = [int]$logonSession.LogonId
+            if ($sessionId -le 0) { continue }
+            $logonUtc = ''
+            try {
+                $logonLocal = [Management.ManagementDateTimeConverter]::ToDateTime($logonSession.StartTime)
+                if ($logonLocal -and $logonLocal.Year -gt 1970) {
+                    $logonUtc = $logonLocal.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
                 }
+            } catch { }
+            $map[$sessionId] = @{
+                logon_type = [uint32]$logonSession.LogonType
+                logon_time_utc = $logonUtc
+            }
+        }
+    } catch { }
+    return $map
+}
+
+function Get-CimLoggedOnUserMap {
+    param([hashtable]$LogonSessionMap)
+
+    $map = @{}
+    try {
+        foreach ($loggedOn in (Get-CimInstance -ClassName Win32_LoggedOnUser -ErrorAction Stop)) {
+            $dependent = [string]$loggedOn.Dependent
+            $antecedent = [string]$loggedOn.Antecedent
+            if ($dependent -notmatch 'LogonId="(\d+)"') { continue }
+
+            $sessionId = [int]$matches[1]
+            if ($sessionId -le 0) { continue }
+
+            $username = ''
+            if ($antecedent -match 'Name="([^"]+)"') {
+                $username = [string]$matches[1]
+            }
+            if (-not $username) { continue }
+
+            $logonType = $null
+            $logonUtc = ''
+            if ($LogonSessionMap.ContainsKey($sessionId)) {
+                $logonType = [uint32]$LogonSessionMap[$sessionId].logon_type
+                $logonUtc = [string]$LogonSessionMap[$sessionId].logon_time_utc
+            }
+            if ($null -ne $logonType -and $logonType -notin @(2, 10, 11)) { continue }
+
+            $map[$sessionId] = @{
+                username = $username
+                logon_time_utc = $logonUtc
+                logon_type = $logonType
             }
         }
     } catch { }
@@ -2781,111 +2922,82 @@ function New-UserSessionEntryJson {
 
 function Get-UserSessionEntries {
     $entries = @()
-    $seen = @{}
     $sessionMeta = Get-QuerySessionMetaMap
     $quserMeta = Get-QueryUserMetaMap
+    $logonSessionMap = Get-CimLogonSessionMap
+    $cimUserMap = Get-CimLoggedOnUserMap -LogonSessionMap $logonSessionMap
 
-    try {
-        $logonSessions = @(Get-CimInstance -ClassName Win32_LogonSession -ErrorAction Stop)
-        foreach ($logonSession in $logonSessions) {
-            $sessionId = [int]$logonSession.LogonId
-            if ($sessionId -le 0 -or $seen.ContainsKey($sessionId)) { continue }
+    $sessionIds = New-Object 'System.Collections.Generic.HashSet[int]'
+    foreach ($sessionId in $quserMeta.Keys) { [void]$sessionIds.Add([int]$sessionId) }
+    foreach ($sessionId in $sessionMeta.Keys) { [void]$sessionIds.Add([int]$sessionId) }
+    foreach ($sessionId in $cimUserMap.Keys) { [void]$sessionIds.Add([int]$sessionId) }
 
-            $logonType = [uint32]$logonSession.LogonType
-            if ($logonType -notin @(2, 10, 11)) { continue }
+    foreach ($sessionId in ($sessionIds | Sort-Object)) {
+        if ($sessionId -le 0) { continue }
 
-            $username = ''
-            $assocUsers = @(Get-CimAssociatedInstance -InputObject $logonSession -ResultClassName Win32_LoggedOnUser -ErrorAction SilentlyContinue)
-            foreach ($assoc in $assocUsers) {
-                $antecedent = [string]$assoc.Antecedent
-                if ($antecedent -match 'Name="([^"]+)"') {
-                    $username = $matches[1]
-                    break
-                }
-            }
-
-            $meta = $sessionMeta[$sessionId]
-            $qmeta = $quserMeta[$sessionId]
-            if (-not $username -and $meta) { $username = [string]$meta.username }
-            if (-not $username -and $qmeta) { $username = [string]$qmeta.username }
-            if (-not $username) { continue }
-
-            $logonUtc = ''
-            try {
-                $logonLocal = [Management.ManagementDateTimeConverter]::ToDateTime($logonSession.StartTime)
-                if ($logonLocal -and $logonLocal.Year -gt 1970) {
-                    $logonUtc = $logonLocal.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
-                }
-            } catch { }
-            if (-not $logonUtc -and $qmeta) {
-                $logonUtc = Convert-LogonLocalTextToUtcIso -Text $qmeta.logon_local
-            }
-
-            $sessionName = ''
-            if ($meta) { $sessionName = [string]$meta.session_name }
-            elseif ($qmeta) { $sessionName = [string]$qmeta.session_name }
-
-            $state = 'Unknown'
-            if ($qmeta -and $qmeta.state) { $state = [string]$qmeta.state }
-            elseif ($meta -and $meta.state) { $state = [string]$meta.state }
-
-            $sessionType = 'Other'
-            if ($meta -and $meta.session_type) {
-                $sessionType = [string]$meta.session_type
-            } elseif ($sessionName -match '^console') {
-                $sessionType = 'Console'
-            } elseif ($sessionName -match '^rdp-') {
-                $sessionType = 'RDP'
-            } elseif ($logonType -eq 10) {
-                $sessionType = 'RDP'
-            } elseif ($logonType -eq 2) {
-                $sessionType = 'Console'
-            }
-
-            $idleSeconds = $null
-            if ($qmeta) { $idleSeconds = $qmeta.idle_seconds }
-
-            $clientAddress = ''
-            if ($meta) { $clientAddress = [string]$meta.client_address }
-
-            $seen[$sessionId] = $true
-            $entries += (New-UserSessionEntryJson `
-                -Username $username `
-                -SessionId $sessionId `
-                -SessionName $sessionName `
-                -State $state `
-                -IdleSeconds $idleSeconds `
-                -LogonTimeUtc $logonUtc `
-                -SessionType $sessionType `
-                -ClientAddress $clientAddress)
-        }
-    } catch { }
-
-    foreach ($sessionId in $quserMeta.Keys) {
-        if ($seen.ContainsKey([int]$sessionId)) { continue }
         $qmeta = $quserMeta[$sessionId]
-        if (-not $qmeta -or -not $qmeta.username) { continue }
+        $meta = $sessionMeta[$sessionId]
+        $cim = $cimUserMap[$sessionId]
 
-        $meta = $sessionMeta[[int]$sessionId]
-        $sessionName = if ($qmeta.session_name) { [string]$qmeta.session_name } elseif ($meta) { [string]$meta.session_name } else { '' }
-        $state = if ($qmeta.state) { [string]$qmeta.state } elseif ($meta) { [string]$meta.state } else { 'Unknown' }
-        $sessionType = if ($meta -and $meta.session_type) { [string]$meta.session_type }
-            elseif ($sessionName -match '^console') { 'Console' }
-            elseif ($sessionName -match '^rdp-') { 'RDP' }
-            else { 'Other' }
-        $clientAddress = if ($meta) { [string]$meta.client_address } else { '' }
-        $logonUtc = Convert-LogonLocalTextToUtcIso -Text $qmeta.logon_local
+        $username = ''
+        if ($qmeta -and $qmeta.username) { $username = [string]$qmeta.username }
+        elseif ($meta -and $meta.username) { $username = [string]$meta.username }
+        elseif ($cim -and $cim.username) { $username = [string]$cim.username }
+        if (-not $username) { continue }
 
-        $seen[[int]$sessionId] = $true
+        $sessionName = ''
+        if ($qmeta -and $qmeta.session_name) { $sessionName = [string]$qmeta.session_name }
+        elseif ($meta -and $meta.session_name) { $sessionName = [string]$meta.session_name }
+
+        $state = 'Unknown'
+        if ($qmeta -and $qmeta.state) { $state = [string]$qmeta.state }
+        elseif ($meta -and $meta.state) { $state = [string]$meta.state }
+
+        $sessionType = 'Other'
+        if ($meta -and $meta.session_type) {
+            $sessionType = [string]$meta.session_type
+        } else {
+            $sessionType = Resolve-UserSessionType -SessionName $sessionName
+            if ($sessionType -eq 'Other' -and $cim -and $null -ne $cim.logon_type) {
+                if ([uint32]$cim.logon_type -eq 10) { $sessionType = 'RDP' }
+                elseif ([uint32]$cim.logon_type -eq 2) { $sessionType = 'Console' }
+            }
+        }
+
+        $logonUtc = ''
+        if ($cim -and $cim.logon_time_utc) { $logonUtc = [string]$cim.logon_time_utc }
+        if (-not $logonUtc -and $qmeta -and $qmeta.logon_local) {
+            $logonUtc = Convert-LogonLocalTextToUtcIso -Text $qmeta.logon_local
+        }
+
+        $idleSeconds = $null
+        if ($qmeta) { $idleSeconds = $qmeta.idle_seconds }
+
+        $clientAddress = ''
+        if ($meta) { $clientAddress = [string]$meta.client_address }
+
         $entries += (New-UserSessionEntryJson `
-            -Username $qmeta.username `
-            -SessionId ([int]$sessionId) `
+            -Username $username `
+            -SessionId $sessionId `
             -SessionName $sessionName `
             -State $state `
-            -IdleSeconds $qmeta.idle_seconds `
+            -IdleSeconds $idleSeconds `
             -LogonTimeUtc $logonUtc `
             -SessionType $sessionType `
             -ClientAddress $clientAddress)
+    }
+
+    if ($entries.Count -eq 0) {
+        $quserLineCount = 0
+        try {
+            $quserLineCount = @((query user 2>$null) | Where-Object {
+                $_ -and -not (Test-QueryUserHeaderLine -Line $_) -and ($_ -replace '^[\s>]+', '').Trim()
+            }).Count
+        } catch { }
+
+        if ($quserLineCount -gt 0 -or $cimUserMap.Count -gt 0) {
+            Add-CollectWarning ("USER_SESSIONS_PARSE_EMPTY: quser_lines=$quserLineCount cim_users=$($cimUserMap.Count)")
+        }
     }
 
     return ($entries -join ',')
