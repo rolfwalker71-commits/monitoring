@@ -97,6 +97,7 @@ let autoRefreshLastRefreshAt = null;
 let autoRefreshCountdownTimerId = null;
 let sessionRefreshTimerId = null;
 let sessionCountdownTimerId = null;
+let dashboardResumeRefreshTimerId = null;
 let hostSearchFilterDebounceTimerId = null;
 let systemOverviewSearchDebounceTimerId = null;
 let hostLicenseHoverPopupEl = null;
@@ -1653,21 +1654,29 @@ function updateSessionExpiry(expiresAtUtc, inactivityTimeoutMinutes = null) {
 async function refreshDashboard(options = {}) {
   const automatic = options.automatic === true;
   const preserveScroll = options.preserveScroll === true;
+  const force = options.force === true;
 
-  if (!state.isAuthenticated || autoRefreshInProgress) {
+  if (!state.isAuthenticated) {
     return;
+  }
+  if (autoRefreshInProgress) {
+    if (!force) {
+      return;
+    }
+    autoRefreshInProgress = false;
+    state.deferredDashboardTasksInFlight = false;
   }
 
   autoRefreshInProgress = true;
   try {
     const shouldRefreshGlobalAlertsList = state.viewMode === "global" && state.globalSubMode === "global-alerts";
 
-    const hostsPromise = loadHosts({ preserveScroll });
+    const hostsPromise = loadHosts({ preserveScroll, bustCache: force });
     void loadHeaderDatabaseKpis().catch((error) => {
       console.warn("loadHeaderDatabaseKpis failed:", error);
     });
     let kpiPromise = Promise.resolve();
-    if (!state.deferredDashboardTasksInFlight) {
+    if (force || !state.deferredDashboardTasksInFlight) {
       state.deferredDashboardTasksInFlight = true;
       kpiPromise = Promise.allSettled([
         loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
@@ -1688,12 +1697,20 @@ async function refreshDashboard(options = {}) {
 
     await hostsPromise;
     if (state.selectedHost || state.selectedHostUid) {
-      void loadReportsForHost().then(() => {
-        void Promise.allSettled([
-          loadAnalysisForHost(),
-          loadAlertsForHost(),
-        ]);
-      });
+      if (force) {
+        try {
+          await refreshSelectedHostPanels();
+        } catch (error) {
+          console.warn("refreshSelectedHostPanels failed:", error);
+        }
+      } else {
+        void loadReportsForHost().then(() => {
+          void Promise.allSettled([
+            loadAnalysisForHost(),
+            loadAlertsForHost(),
+          ]);
+        });
+      }
     }
     void kpiPromise;
 
@@ -3101,6 +3118,47 @@ async function toggleMobilePush() {
     renderMobilePushButton();
     void refreshMobilePushState();
   }
+}
+
+function setAuthUiChecking() {
+  const loginOverlay = document.getElementById("loginOverlay");
+  const appPanel = document.getElementById("appPanel");
+  const headerFiltersCollapsible = document.getElementById("headerFiltersCollapsible");
+  const brandAccountShell = document.getElementById("brandAccountShell");
+  const brandUserBadge = document.getElementById("brandUserBadge");
+  const logoutButton = document.getElementById("logoutButton");
+  if (loginOverlay) {
+    loginOverlay.classList.add("hidden");
+  }
+  if (appPanel) {
+    appPanel.classList.add("hidden");
+  }
+  if (headerFiltersCollapsible) {
+    headerFiltersCollapsible.classList.add("hidden");
+  }
+  if (brandAccountShell) {
+    brandAccountShell.classList.add("hidden");
+  }
+  if (brandUserBadge) {
+    brandUserBadge.classList.add("hidden");
+  }
+  if (logoutButton) {
+    logoutButton.classList.add("hidden");
+  }
+  state.isAuthenticated = false;
+}
+
+function scheduleDashboardResumeRefresh() {
+  if (!state.isAuthenticated) {
+    return;
+  }
+  if (dashboardResumeRefreshTimerId !== null) {
+    window.clearTimeout(dashboardResumeRefreshTimerId);
+  }
+  dashboardResumeRefreshTimerId = window.setTimeout(() => {
+    dashboardResumeRefreshTimerId = null;
+    void refreshDashboard({ preserveScroll: true, force: true, automatic: true });
+  }, 250);
 }
 
 function setAuthUiState(authenticated) {
@@ -5727,8 +5785,14 @@ async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
           throw new Error(d.error || "HTTP " + r.status);
         }
         if (status) { status.textContent = "✅ Gespeichert"; setTimeout(() => { status.textContent = ""; }, 2500); }
+        const patchData = await r.json().catch(() => ({}));
+        applyCustomerDataToLocalHosts(customerId, patchData?.customer || {
+          customer_name: customerName,
+          maringo_project_number: customerProject,
+        });
         state.selectedDisplayName = state.selectedDisplayName || normalizedHostname;
-        await loadHosts({ preserveScroll: true });
+        await loadHosts({ preserveScroll: true, bustCache: true });
+        updateReportCustomerChip();
         await loadAndRenderCustomerNotificationPanel(normalizedHostname, normalizedHostUid);
       } catch (err) {
         if (status) { status.textContent = `❌ ${err.message}`; setTimeout(() => { status.textContent = ""; }, 3000); }
@@ -5764,7 +5828,7 @@ async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
         if (status) {
           status.textContent = "✅ Logo gespeichert";
         }
-        await loadHosts({ preserveScroll: true });
+        await loadHosts({ preserveScroll: true, bustCache: true });
         updateReportCustomerChip();
         await loadAndRenderCustomerNotificationPanel(normalizedHostname, normalizedHostUid);
       } catch (err) {
@@ -11548,7 +11612,7 @@ function wireHostActionButtons(root) {
           await saveHostSettings(hostname, { is_hidden: !current }, hostUid);
         }
 
-        await loadHosts();
+        await loadHosts({ preserveScroll: true, bustCache: true });
         await refreshSelectedHostPanels();
       } catch (error) {
         window.alert(`Host-Einstellung konnte nicht gespeichert werden: ${error.message}`);
@@ -11631,6 +11695,109 @@ function updateSelectedHostControls() {
   updateReportJumpHostUidChip(selectedHost);
 }
 
+function hostMatchesIdentity(host, hostname, hostUid = "") {
+  const normalizedHostUid = asText(hostUid, "").trim();
+  const normalizedHostname = asText(hostname, "").trim();
+  const identity = resolveHostIdentity(host);
+  return (normalizedHostUid && identity === normalizedHostUid)
+    || (normalizedHostname && asText(host?.hostname, "").trim() === normalizedHostname);
+}
+
+function applyCustomerDataToLocalHosts(customerId, customer) {
+  const cid = Number(customerId || 0);
+  if (!Number.isFinite(cid) || cid <= 0 || !Array.isArray(state.hosts)) {
+    return false;
+  }
+  const customerName = asText(customer?.customer_name, "");
+  const logoUrl = asText(customer?.logo_url, "");
+  const projectNo = asText(customer?.maringo_project_number, "");
+  let changed = false;
+  state.hosts = state.hosts.map((host) => {
+    if (Number(host?.customer_id || 0) !== cid) {
+      return host;
+    }
+    changed = true;
+    return {
+      ...host,
+      customer_name: customerName,
+      customer_logo_url: logoUrl,
+      customer_maringo_project_number: projectNo,
+    };
+  });
+  if (!changed) {
+    return false;
+  }
+  renderHosts(state.hosts);
+  updateSelectedHostControls();
+  updateReportCustomerChip();
+  return true;
+}
+
+function applyHostSettingsResponseToLocalState(hostname, hostUid, response) {
+  if (!response || !Array.isArray(state.hosts)) {
+    return false;
+  }
+  const patch = {};
+  if ("display_name_override" in response) {
+    const override = asText(response.display_name_override, "").trim();
+    patch.display_name = override || asText(hostname, "").trim();
+  }
+  if ("country_code_override" in response) {
+    const countryCode = asText(response.country_code_override, "").trim().toUpperCase();
+    if (countryCode) {
+      patch.country_code = countryCode;
+      patch.country_code_override = countryCode;
+    }
+  }
+  if ("is_favorite" in response) {
+    patch.is_favorite = Boolean(response.is_favorite);
+  }
+  if ("is_hidden" in response) {
+    patch.is_hidden = Boolean(response.is_hidden);
+  }
+  if ("customer_id" in response) {
+    patch.customer_id = response.customer_id;
+  }
+  if ("customer_name" in response) {
+    patch.customer_name = asText(response.customer_name, "");
+  }
+  if ("customer_maringo_project_number" in response) {
+    patch.customer_maringo_project_number = asText(response.customer_maringo_project_number, "");
+  }
+  if ("customer_logo_url" in response) {
+    patch.customer_logo_url = asText(response.customer_logo_url, "");
+  }
+  if ("environment_type" in response) {
+    patch.environment_type = asText(response.environment_type, "");
+  }
+  if (Object.keys(patch).length === 0) {
+    return false;
+  }
+
+  let changed = false;
+  state.hosts = state.hosts.map((host) => {
+    if (!hostMatchesIdentity(host, hostname, hostUid)) {
+      return host;
+    }
+    changed = true;
+    return { ...host, ...patch };
+  });
+  if (!changed) {
+    return false;
+  }
+
+  const selectedIdentity = asText(state.selectedHostUid, "").trim() || asText(state.selectedHost, "").trim();
+  const updatedHost = state.hosts.find((host) => resolveHostIdentity(host) === selectedIdentity);
+  if (updatedHost && asText(patch.display_name, "")) {
+    state.selectedDisplayName = asText(patch.display_name, "");
+  }
+
+  renderHosts(state.hosts);
+  updateSelectedHostControls();
+  updateReportCustomerChip();
+  return true;
+}
+
 async function saveHostSettings(hostname, partialSettings, hostUid = "") {
   const response = await fetch("/api/v1/host-settings", {
     method: "POST",
@@ -11648,7 +11815,9 @@ async function saveHostSettings(hostname, partialSettings, hostUid = "") {
     throw new Error("HTTP " + response.status);
   }
 
-  return response.json();
+  const data = await response.json();
+  applyHostSettingsResponseToLocalState(hostname, hostUid, data);
+  return data;
 }
 
 async function deleteHostCard(hostname, hostUid = "") {
@@ -13060,7 +13229,7 @@ function wireHostListInteractions() {
         } else if (action === "hidden") {
           await saveHostSettings(hostname, { is_hidden: !current }, hostUid);
         }
-        await loadHosts();
+        await loadHosts({ preserveScroll: true, bustCache: true });
         await refreshSelectedHostPanels();
       } catch (error) {
         window.alert(`Host-Einstellung konnte nicht gespeichert werden: ${error.message}`);
@@ -13563,7 +13732,9 @@ async function loadHosts(options = {}) {
   }
 
   try {
-    const url = `/api/v1/hosts?limit=${state.hostLimit}&offset=${state.hostOffset}`;
+    const bustCache = Boolean(options && options.bustCache);
+    const cacheBust = bustCache ? `&_=${Date.now()}` : "";
+    const url = `/api/v1/hosts?limit=${state.hostLimit}&offset=${state.hostOffset}${cacheBust}`;
     const response = await fetch(url, { credentials: "same-origin", cache: "no-store" });
     if (!response.ok) {
       throw new Error("HTTP " + response.status);
@@ -13958,8 +14129,9 @@ async function editDisplayName() {
     }
   }
 
-  await loadHosts();
-  await loadReportsForHost();
+  await loadHosts({ preserveScroll: true, bustCache: true });
+  updateReportCustomerChip();
+  await refreshSelectedHostPanels();
   if (logoUploadError) {
     window.alert(`Kundenlogo konnte nicht gespeichert werden: ${logoUploadError}`);
   }
@@ -14003,6 +14175,7 @@ async function uploadCustomerLogo(customerId, file) {
   if (!response.ok) {
     throw new Error(payload?.error || ("HTTP " + response.status));
   }
+  applyCustomerDataToLocalHosts(cid, payload?.customer || {});
   return payload;
 }
 
@@ -19060,7 +19233,9 @@ function wireEvents() {
     if (sessionRefreshTimerId === null) {
       startSessionRefreshTimer();
     }
-    void refreshSession();
+    void refreshSession().then(() => {
+      scheduleDashboardResumeRefresh();
+    });
   });
 
   window.addEventListener("focus", () => {
@@ -19070,14 +19245,16 @@ function wireEvents() {
     if (sessionRefreshTimerId === null) {
       startSessionRefreshTimer();
     }
-    void refreshSession();
+    void refreshSession().then(() => {
+      scheduleDashboardResumeRefresh();
+    });
   });
 
 }
 
 async function init() {
   window.__monitoringAppBooted = true;
-  setAuthUiState(false);
+  setAuthUiChecking();
   setLoginStatus("Sitzung wird geprüft…");
   wireEvents();
 

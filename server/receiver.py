@@ -356,6 +356,19 @@ def _invalidate_alert_mutation_caches() -> None:
     _read_cache_invalidate_prefix("alerts-summary:")
 
 
+def _invalidate_hosts_related_read_cache() -> None:
+    global _identity_maps_invalidate_scheduled_at
+    with _identity_maps_invalidate_lock:
+        _identity_maps_invalidate_scheduled_at = 0.0
+    _invalidate_identity_maps_cache()
+    _read_cache_invalidate_prefix("hosts:")
+    _read_cache_invalidate_prefix("inactive-hosts:")
+    _read_cache_invalidate_prefix("system-overview:")
+    _read_cache_invalidate_prefix("customer-overview:")
+    _read_cache_invalidate_prefix("host-reports:")
+    _read_cache_invalidate_prefix("host-reports-meta:")
+
+
 def _schedule_read_cache_invalidation(prefix: str) -> None:
     safe_prefix = str(prefix or "").strip()
     if not safe_prefix:
@@ -23724,6 +23737,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         provider_fields["it_provider_phone_3"],
                     )
                     conn.commit()
+                _invalidate_hosts_related_read_cache()
                 self._send_json(HTTPStatus.OK, {"status": "stored", "customer": customer})
             except (ValueError, sqlite3.DatabaseError) as exc:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
@@ -23754,6 +23768,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         payload.get("image_data", ""),
                     )
                     conn.commit()
+                _invalidate_hosts_related_read_cache()
                 self._send_json(HTTPStatus.OK, {"status": "stored", "customer": customer})
             except ValueError as exc:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
@@ -24013,6 +24028,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 conn.commit()
 
+            _invalidate_hosts_related_read_cache()
+
             self._send_json(
                 HTTPStatus.OK,
                 {
@@ -24072,6 +24089,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 deleted = delete_host_card_data(conn, resolved_hostname, host_uid)
                 conn.commit()
+
+            _invalidate_hosts_related_read_cache()
 
             self._send_json(
                 HTTPStatus.OK,
@@ -25306,6 +25325,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         provider_fields["it_provider_phone_3"],
                     )
                     conn.commit()
+                _invalidate_hosts_related_read_cache()
                 self._send_json(HTTPStatus.OK, {"status": "updated", "customer": customer})
             except (ValueError, sqlite3.DatabaseError) as exc:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
