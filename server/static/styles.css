@@ -16300,6 +16300,11 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
   word-break: break-all;
 }
 
+.reports-column #reportsView .detail-cards--processes {
+  display: grid;
+  gap: 18px;
+}
+
 /* Usersessions: compact report table */
 .reports-column #reportsView .user-sessions-table {
   table-layout: fixed;
