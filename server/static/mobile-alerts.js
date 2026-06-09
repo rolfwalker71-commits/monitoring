@@ -4888,34 +4888,44 @@ function openLatestMobileLiveReportDetailsFromMenu() {
   void openHostInsightFromLiveFeedItem(latest);
 }
 
+function buildMobileLiveReportFeedCustomerWatermarkHtml(customerLogoUrl) {
+  const url = String(customerLogoUrl || "").trim();
+  if (!url) {
+    return "";
+  }
+  return (
+    '<div class="live-report-feed-customer-bg-watermark" aria-hidden="true">' +
+      '<img src="' + mobileEsc(url) + '" alt="" class="live-report-feed-customer-bg-watermark-logo" loading="lazy" decoding="async" onerror="this.closest(\'.live-report-feed-customer-bg-watermark\')?.remove()">' +
+    "</div>"
+  );
+}
+
 function buildMobileLiveReportFeedItemInnerHtml(item) {
   const statsHtml = item.metricsText
     ? '<span class="live-report-feed-stats">' + mobileEsc(item.metricsText) + "</span>"
     : '<span class="live-report-feed-stats live-report-feed-stats--empty" aria-hidden="true"></span>';
-  const customerLogoHtml = item.customerLogoUrl
-    ? '<span class="live-report-feed-customer-logo-wrap" aria-hidden="true">' +
-      '<img src="' + mobileEsc(item.customerLogoUrl) + '" alt="" class="live-report-feed-customer-logo" loading="lazy" decoding="async" onerror="this.closest(\'.live-report-feed-customer-logo-wrap\').style.display=\'none\'">' +
-      "</span>"
-    : "";
+  const customerWatermarkHtml = buildMobileLiveReportFeedCustomerWatermarkHtml(item.customerLogoUrl);
   return (
-    '<div class="live-report-feed-item-head">' +
-      '<span class="live-report-feed-customer-row">' +
-        customerLogoHtml +
-        '<span class="live-report-feed-customer" title="' + mobileEsc(item.customerName) + '">' + mobileEsc(item.customerName) + "</span>" +
-      "</span>" +
-      '<time class="live-report-feed-time" datetime="' + mobileEsc(item.receivedAtUtc) + '" title="' + mobileEsc(item.clockTitle) + '">' + mobileEsc(item.clockLabel) + "</time>" +
-    "</div>" +
-    '<p class="live-report-feed-designation" title="' + mobileEsc(item.designation) + '">' + mobileEsc(item.designation) + "</p>" +
-    '<p class="live-report-feed-hostline">' +
-      '<span class="live-report-feed-host-meta">' +
-        '<span class="live-report-feed-hostname" title="' + mobileEsc(item.shortHostname) + '">' + mobileEsc(item.shortHostname) + "</span>" +
-        '<span class="live-report-feed-sep" aria-hidden="true">·</span>' +
-        '<span class="live-report-feed-ip" title="' + mobileEsc(item.ip) + '">' + mobileEsc(item.ip) + "</span>" +
-      "</span>" +
-      '<span class="' + mobileEsc(item.deliveryClass) + '">' + mobileEsc(item.deliveryLabel) + "</span>" +
-    "</p>" +
-    '<div class="live-report-feed-item-foot">' +
-      statsHtml +
+    customerWatermarkHtml +
+    '<div class="live-report-feed-item-grid">' +
+      '<div class="live-report-feed-item-head">' +
+        '<span class="live-report-feed-customer-row">' +
+          '<span class="live-report-feed-customer" title="' + mobileEsc(item.customerName) + '">' + mobileEsc(item.customerName) + "</span>" +
+        "</span>" +
+        '<time class="live-report-feed-time" datetime="' + mobileEsc(item.receivedAtUtc) + '" title="' + mobileEsc(item.clockTitle) + '">' + mobileEsc(item.clockLabel) + "</time>" +
+      "</div>" +
+      '<p class="live-report-feed-designation" title="' + mobileEsc(item.designation) + '">' + mobileEsc(item.designation) + "</p>" +
+      '<p class="live-report-feed-hostline">' +
+        '<span class="live-report-feed-host-meta">' +
+          '<span class="live-report-feed-hostname" title="' + mobileEsc(item.shortHostname) + '">' + mobileEsc(item.shortHostname) + "</span>" +
+          '<span class="live-report-feed-sep" aria-hidden="true">·</span>' +
+          '<span class="live-report-feed-ip" title="' + mobileEsc(item.ip) + '">' + mobileEsc(item.ip) + "</span>" +
+        "</span>" +
+        '<span class="' + mobileEsc(item.deliveryClass) + '">' + mobileEsc(item.deliveryLabel) + "</span>" +
+      "</p>" +
+      '<div class="live-report-feed-item-foot">' +
+        statsHtml +
+      "</div>" +
     "</div>"
   );
 }

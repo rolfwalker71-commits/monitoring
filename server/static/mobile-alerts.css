@@ -2438,14 +2438,8 @@ body.host-insight-open {
 
 .live-report-feed-item {
   box-sizing: border-box;
-  display: grid;
-  grid-template-rows:
-    var(--live-feed-row-head)
-    var(--live-feed-row-title)
-    var(--live-feed-row-host)
-    var(--live-feed-row-foot);
-  row-gap: 3px;
-  align-content: start;
+  position: relative;
+  display: block;
   width: 100%;
   flex: 0 0 var(--live-feed-slot);
   height: var(--live-feed-slot) !important;
@@ -2523,6 +2517,44 @@ body.host-insight-open {
   }
 }
 
+.live-report-feed-item-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows:
+    var(--live-feed-row-head)
+    var(--live-feed-row-title)
+    var(--live-feed-row-host)
+    var(--live-feed-row-foot);
+  row-gap: 3px;
+  align-content: start;
+  width: 100%;
+  height: 100%;
+}
+
+.live-report-feed-customer-bg-watermark {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0.08;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.live-report-feed-customer-bg-watermark-logo {
+  width: 86%;
+  height: 86%;
+  object-fit: contain;
+  object-position: center center;
+  display: block;
+}
+
 .live-report-feed-item-head {
   display: flex;
   align-items: center;
@@ -2540,28 +2572,6 @@ body.host-insight-open {
   gap: 5px;
   min-width: 0;
   flex: 1 1 auto;
-}
-
-.live-report-feed-customer-logo-wrap {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  border: 1px solid #dbe4f0;
-  border-radius: 4px;
-  background: #fff;
-  overflow: hidden;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-
-.live-report-feed-customer-logo {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center center;
-  display: block;
 }
 
 .live-report-feed-customer {
@@ -2704,6 +2714,10 @@ body.host-insight-open {
 
   .live-report-feed-item.is-new:not(.is-entering) {
     animation: live-report-feed-flash-dark 0.9s ease-out 1;
+  }
+
+  .live-report-feed-customer-bg-watermark {
+    opacity: 0.065;
   }
 
   .live-report-feed-customer {

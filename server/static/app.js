@@ -13503,34 +13503,49 @@ function hydrateLiveReportFeedItemLogos() {
   }
 }
 
+function buildLiveReportFeedCustomerWatermarkHtml(customerLogoUrl) {
+  const url = asText(customerLogoUrl, "").trim();
+  if (!url) {
+    return "";
+  }
+  return `<div class="live-report-feed-customer-bg-watermark" aria-hidden="true">
+      <img
+        src="${escapeHtml(url)}"
+        alt=""
+        class="live-report-feed-customer-bg-watermark-logo"
+        loading="lazy"
+        decoding="async"
+        onerror="this.closest('.live-report-feed-customer-bg-watermark')?.remove()"
+      >
+    </div>`;
+}
+
 function buildLiveReportFeedItemInnerHtml(item) {
   const statsHtml = item.metricsText
     ? `<span class="live-report-feed-stats">${escapeHtml(item.metricsText)}</span>`
     : `<span class="live-report-feed-stats live-report-feed-stats--empty" aria-hidden="true"></span>`;
-  const customerLogoHtml = item.customerLogoUrl
-    ? `<span class="live-report-feed-customer-logo-wrap" aria-hidden="true">
-        <img src="${escapeHtml(item.customerLogoUrl)}" alt="" class="live-report-feed-customer-logo" loading="lazy" decoding="async" onerror="this.closest('.live-report-feed-customer-logo-wrap').style.display='none'">
-      </span>`
-    : "";
+  const customerWatermarkHtml = buildLiveReportFeedCustomerWatermarkHtml(item.customerLogoUrl);
   return `
-      <div class="live-report-feed-item-head">
-        <span class="live-report-feed-customer-row">
-          ${customerLogoHtml}
-          <span class="live-report-feed-customer" title="${escapeHtml(item.customerName)}">${escapeHtml(item.customerName)}</span>
-        </span>
-        <time class="live-report-feed-time" datetime="${escapeHtml(item.receivedAtUtc)}" title="${escapeHtml(item.clockTitle)}">${escapeHtml(item.clockLabel)}</time>
-      </div>
-      <p class="live-report-feed-designation" title="${escapeHtml(item.designation)}">${escapeHtml(item.designation)}</p>
-      <p class="live-report-feed-hostline">
-        <span class="live-report-feed-host-meta">
-          <span class="live-report-feed-hostname" title="${escapeHtml(item.shortHostname)}">${escapeHtml(item.shortHostname)}</span>
-          <span class="live-report-feed-sep" aria-hidden="true">·</span>
-          <span class="live-report-feed-ip" title="${escapeHtml(item.ip)}">${escapeHtml(item.ip)}</span>
-        </span>
-        <span class="${item.deliveryClass}">${escapeHtml(item.deliveryLabel)}</span>
-      </p>
-      <div class="live-report-feed-item-foot">
-        ${statsHtml}
+      ${customerWatermarkHtml}
+      <div class="live-report-feed-item-grid">
+        <div class="live-report-feed-item-head">
+          <span class="live-report-feed-customer-row">
+            <span class="live-report-feed-customer" title="${escapeHtml(item.customerName)}">${escapeHtml(item.customerName)}</span>
+          </span>
+          <time class="live-report-feed-time" datetime="${escapeHtml(item.receivedAtUtc)}" title="${escapeHtml(item.clockTitle)}">${escapeHtml(item.clockLabel)}</time>
+        </div>
+        <p class="live-report-feed-designation" title="${escapeHtml(item.designation)}">${escapeHtml(item.designation)}</p>
+        <p class="live-report-feed-hostline">
+          <span class="live-report-feed-host-meta">
+            <span class="live-report-feed-hostname" title="${escapeHtml(item.shortHostname)}">${escapeHtml(item.shortHostname)}</span>
+            <span class="live-report-feed-sep" aria-hidden="true">·</span>
+            <span class="live-report-feed-ip" title="${escapeHtml(item.ip)}">${escapeHtml(item.ip)}</span>
+          </span>
+          <span class="${item.deliveryClass}">${escapeHtml(item.deliveryLabel)}</span>
+        </p>
+        <div class="live-report-feed-item-foot">
+          ${statsHtml}
+        </div>
       </div>
   `;
 }
