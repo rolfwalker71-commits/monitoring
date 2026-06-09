@@ -10702,7 +10702,8 @@ function renderSingleHostCard(host) {
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span></span></div>`
     : "";
-  const customerCardWatermark = customerLogoUrl
+  const isSelectedHost = selectedClass.includes("selected");
+  const customerCardWatermark = isSelectedHost && customerLogoUrl
     ? `<div class="host-customer-bg-watermark" aria-hidden="true">
         <img
           src="${escapeHtml(customerLogoUrl)}"
