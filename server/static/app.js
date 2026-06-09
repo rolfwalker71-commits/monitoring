@@ -9909,12 +9909,12 @@ function renderReportCard(report) {
   } else if (section === "processes") {
     detailContent = `
       <section class="detail-card">
-        <h4>🏎️ Prozesse</h4>
-        ${renderTopProcessesTable(payload.top_processes)}
-      </section>
-      <section class="detail-card">
         <h4>👤 Usersessions</h4>
         ${renderUserSessionsTable(payload.user_sessions, payload.os)}
+      </section>
+      <section class="detail-card">
+        <h4>🏎️ Prozesse</h4>
+        ${renderTopProcessesTable(payload.top_processes)}
       </section>
     `;
   } else if (section === "logfiles") {

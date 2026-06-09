@@ -439,7 +439,7 @@ function openMobileHostListSheet(host, variant) {
 const HOST_INSIGHT_SLIDE_DEFS = [
   { id: "system", icon: "🖥️", title: "System", short: "System" },
   { id: "journal", icon: "📰", title: "Journal", short: "Journal" },
-  { id: "processes", icon: "⚡", title: "Prozesse / User", short: "Prozesse" },
+  { id: "processes", icon: "⚡", title: "User / Prozesse", short: "Prozesse" },
   { id: "logfiles", icon: "📜", title: "Logfiles", short: "Logfiles" },
   { id: "sap-b1", icon: "📦", title: "SAP B1", short: "SAP B1" },
   { id: "containers", icon: "🐳", title: "Container", short: "Container" },
@@ -1033,6 +1033,24 @@ function buildInsightProcessesBody(payload) {
   const sessionBlock = payload?.user_sessions && typeof payload.user_sessions === "object" ? payload.user_sessions : {};
   const sessionEntries = Array.isArray(sessionBlock.entries) ? sessionBlock.entries.slice(0, 10) : [];
   let html = "";
+  if (sessionEntries.length) {
+    const sessionRows = sessionEntries.map((entry) => {
+      const username = String(entry.username || "—").trim();
+      const state = String(entry.state || "—").trim();
+      const sessionType = String(entry.session_type || "—").trim();
+      const logon = mobileFormatReportDateTime(entry.logon_time_utc);
+      return (
+        '<li class="insight-process-item">' +
+        '<div class="insight-process-head">' +
+        '<span class="insight-process-stats">' + mobileEsc(username) + "</span>" +
+        '<span class="insight-process-stats">' + mobileEsc(state) + " · " + mobileEsc(sessionType) + "</span>" +
+        "</div>" +
+        '<span class="insight-process-cmd">' + mobileEsc(logon) + "</span>" +
+        "</li>"
+      );
+    });
+    html += '<p class="insight-hint">Usersessions</p><ul class="insight-process-list">' + sessionRows.join("") + "</ul>";
+  }
   if (!entries.length) {
     html += '<p class="insight-empty">Keine Prozessdaten im letzten Report.</p>';
   } else {
@@ -1060,24 +1078,6 @@ function buildInsightProcessesBody(payload) {
       );
     });
     html += '<p class="insight-hint">Sortiert nach CPU-Auslastung</p><ul class="insight-process-list">' + rows.join("") + "</ul>";
-  }
-  if (sessionEntries.length) {
-    const sessionRows = sessionEntries.map((entry) => {
-      const username = String(entry.username || "—").trim();
-      const state = String(entry.state || "—").trim();
-      const sessionType = String(entry.session_type || "—").trim();
-      const logon = mobileFormatReportDateTime(entry.logon_time_utc);
-      return (
-        '<li class="insight-process-item">' +
-        '<div class="insight-process-head">' +
-        '<span class="insight-process-stats">' + mobileEsc(username) + "</span>" +
-        '<span class="insight-process-stats">' + mobileEsc(state) + " · " + mobileEsc(sessionType) + "</span>" +
-        "</div>" +
-        '<span class="insight-process-cmd">' + mobileEsc(logon) + "</span>" +
-        "</li>"
-      );
-    });
-    html += '<p class="insight-hint">Usersessions</p><ul class="insight-process-list">' + sessionRows.join("") + "</ul>";
   }
   return html;
 }
