@@ -521,6 +521,8 @@ const state = {
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
   dbReportsTotal: null,
+  dbReportsTotalSnapshot: null,
+  dbReportsTotalLiveDelta: 0,
   dbReportsLastHour: 0,
   dbTotalFileBytes: null,
   dbSizeDelta1hBytes: null,
@@ -3584,6 +3586,9 @@ async function logoutWebClient() {
   state.sessionExpiresAtUtc = "";
   liveReportFeedItems = [];
   liveReportPollCursorId = 0;
+  state.dbReportsTotal = null;
+  state.dbReportsTotalSnapshot = null;
+  state.dbReportsTotalLiveDelta = 0;
   stopLiveReportPoll();
   renderLiveReportFeed();
 }
@@ -12992,16 +12997,67 @@ function applyHeaderDbReportsLastHour(value) {
   updateHeaderStatChips();
 }
 
-function bumpHeaderDbReportsTotal(delta) {
-  const increment = Number(delta || 0);
-  if (!Number.isFinite(increment) || increment <= 0 || state.dbReportsTotal === null) {
+function syncDbReportsTotalDisplayTitle(computedAtUtc = "") {
+  const dbReportsChip = document.getElementById("headerDbReportsChip");
+  if (!dbReportsChip) {
     return;
   }
-  state.dbReportsTotal += increment;
-  const dbReportsChip = document.getElementById("headerDbReportsChip");
-  if (dbReportsChip) {
-    dbReportsChip.title = "Berichte in der Datenbank (live mit jedem neuen Report)";
+  const liveDelta = Number(state.dbReportsTotalLiveDelta || 0);
+  const computedAt = String(computedAtUtc || "").trim();
+  if (liveDelta > 0) {
+    dbReportsChip.title = computedAt
+      ? `Berichte in der Datenbank (live +${liveDelta} seit Snapshot ${computedAt})`
+      : `Berichte in der Datenbank (live +${liveDelta} seit letztem Snapshot)`;
+    return;
   }
+  dbReportsChip.title = computedAt
+    ? `Berichte in der Datenbank (Wartungssnapshot ${computedAt})`
+    : "Berichte in der Datenbank";
+}
+
+function applyDbReportsTotalFromServer(serverTotal, computedAtUtc = "") {
+  if (serverTotal === null || serverTotal === undefined) {
+    state.dbReportsTotalSnapshot = null;
+    state.dbReportsTotalLiveDelta = 0;
+    state.dbReportsTotal = null;
+    syncDbReportsTotalDisplayTitle();
+    return;
+  }
+
+  const safeServer = Number(serverTotal);
+  if (!Number.isFinite(safeServer) || safeServer < 0) {
+    return;
+  }
+
+  const snapshot = state.dbReportsTotalSnapshot;
+  const liveDelta = Number(state.dbReportsTotalLiveDelta || 0);
+  const currentDisplay = snapshot === null ? null : snapshot + liveDelta;
+
+  if (snapshot === null || currentDisplay === null) {
+    state.dbReportsTotalSnapshot = safeServer;
+    state.dbReportsTotalLiveDelta = 0;
+  } else if (safeServer >= currentDisplay) {
+    state.dbReportsTotalSnapshot = safeServer;
+    state.dbReportsTotalLiveDelta = 0;
+  } else if (safeServer > snapshot) {
+    state.dbReportsTotalSnapshot = safeServer;
+    state.dbReportsTotalLiveDelta = Math.max(0, currentDisplay - safeServer);
+  }
+
+  state.dbReportsTotal = state.dbReportsTotalSnapshot === null
+    ? null
+    : state.dbReportsTotalSnapshot + Number(state.dbReportsTotalLiveDelta || 0);
+  syncDbReportsTotalDisplayTitle(computedAtUtc);
+}
+
+function bumpHeaderDbReportsTotal(delta) {
+  const increment = Number(delta || 0);
+  if (!Number.isFinite(increment) || increment <= 0 || state.dbReportsTotalSnapshot === null) {
+    return;
+  }
+  state.dbReportsTotalLiveDelta = Number(state.dbReportsTotalLiveDelta || 0) + increment;
+  state.dbReportsTotal = state.dbReportsTotalSnapshot + state.dbReportsTotalLiveDelta;
+  syncDbReportsTotalDisplayTitle();
   updateHeaderStatChips();
 }
 
@@ -13020,24 +13076,21 @@ async function loadHeaderDatabaseKpis() {
   const reportsLastHour = Number(stats.reports_last_hour || 0);
   const totalFileBytes = Number(stats.total_file_bytes);
   const dbSizeDelta1hBytes = Number(stats.db_size_delta_1h_bytes);
+  const computedAt = String(stats.reports_total_computed_at_utc || "").trim();
   if (reportsTotalRaw === null || reportsTotalRaw === undefined) {
-    state.dbReportsTotal = null;
+    applyDbReportsTotalFromServer(null);
   } else {
     const reportsTotal = Number(reportsTotalRaw);
-    state.dbReportsTotal = Number.isFinite(reportsTotal) && reportsTotal >= 0 ? reportsTotal : null;
+    applyDbReportsTotalFromServer(
+      Number.isFinite(reportsTotal) && reportsTotal >= 0 ? reportsTotal : null,
+      computedAt,
+    );
   }
   state.dbReportsLastHour = Number.isFinite(reportsLastHour) && reportsLastHour >= 0 ? reportsLastHour : 0;
   state.dbTotalFileBytes = Number.isFinite(totalFileBytes) && totalFileBytes >= 0 ? totalFileBytes : null;
   state.dbSizeDelta1hBytes = Number.isFinite(dbSizeDelta1hBytes) ? dbSizeDelta1hBytes : null;
-  const dbReportsChip = document.getElementById("headerDbReportsChip");
   const dbReportsHourChip = document.getElementById("headerDbReportsHourChip");
   const dbSizeDeltaChip = document.getElementById("headerDbSizeDeltaChip");
-  const computedAt = String(stats.reports_total_computed_at_utc || "").trim();
-  if (dbReportsChip) {
-    dbReportsChip.title = computedAt
-      ? `Berichte in der Datenbank (Wartungssnapshot ${computedAt})`
-      : "Berichte in der Datenbank";
-  }
   if (dbReportsHourChip) {
     dbReportsHourChip.title = "In der letzten Stunde in die DB geschriebene Agent-Reports";
   }
