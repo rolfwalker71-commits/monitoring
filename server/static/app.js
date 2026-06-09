@@ -521,8 +521,7 @@ const state = {
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
   dbReportsTotal: null,
-  dbReportsTotalSnapshot: null,
-  dbReportsTotalLiveDelta: 0,
+  dbReportsTotalSeeded: false,
   dbReportsLastHour: 0,
   dbTotalFileBytes: null,
   dbSizeDelta1hBytes: null,
@@ -1677,6 +1676,11 @@ async function refreshDashboard(options = {}) {
     void loadHeaderDatabaseKpis().catch((error) => {
       console.warn("loadHeaderDatabaseKpis failed:", error);
     });
+    if (force) {
+      void refreshHeaderReportsTotalLive().catch((error) => {
+        console.warn("refreshHeaderReportsTotalLive failed:", error);
+      });
+    }
     let kpiPromise = Promise.resolve();
     if (force || !state.deferredDashboardTasksInFlight) {
       state.deferredDashboardTasksInFlight = true;
@@ -3587,8 +3591,7 @@ async function logoutWebClient() {
   liveReportFeedItems = [];
   liveReportPollCursorId = 0;
   state.dbReportsTotal = null;
-  state.dbReportsTotalSnapshot = null;
-  state.dbReportsTotalLiveDelta = 0;
+  state.dbReportsTotalSeeded = false;
   stopLiveReportPoll();
   renderLiveReportFeed();
 }
@@ -13002,61 +13005,47 @@ function syncDbReportsTotalDisplayTitle(computedAtUtc = "") {
   if (!dbReportsChip) {
     return;
   }
-  const liveDelta = Number(state.dbReportsTotalLiveDelta || 0);
   const computedAt = String(computedAtUtc || "").trim();
-  if (liveDelta > 0) {
-    dbReportsChip.title = computedAt
-      ? `Berichte in der Datenbank (live +${liveDelta} seit Snapshot ${computedAt})`
-      : `Berichte in der Datenbank (live +${liveDelta} seit letztem Snapshot)`;
-    return;
-  }
   dbReportsChip.title = computedAt
-    ? `Berichte in der Datenbank (Wartungssnapshot ${computedAt})`
-    : "Berichte in der Datenbank";
+    ? `Berichte in der Datenbank (live, Stand ${computedAt})`
+    : "Berichte in der Datenbank (live)";
 }
 
-function applyDbReportsTotalFromServer(serverTotal, computedAtUtc = "") {
-  if (serverTotal === null || serverTotal === undefined) {
-    state.dbReportsTotalSnapshot = null;
-    state.dbReportsTotalLiveDelta = 0;
-    state.dbReportsTotal = null;
-    syncDbReportsTotalDisplayTitle();
-    return;
+function applyHeaderReportsTotalLive(serverTotal, computedAtUtc = "") {
+  const safeTotal = Number(serverTotal);
+  if (!Number.isFinite(safeTotal) || safeTotal < 0) {
+    return false;
   }
-
-  const safeServer = Number(serverTotal);
-  if (!Number.isFinite(safeServer) || safeServer < 0) {
-    return;
-  }
-
-  const snapshot = state.dbReportsTotalSnapshot;
-  const liveDelta = Number(state.dbReportsTotalLiveDelta || 0);
-  const currentDisplay = snapshot === null ? null : snapshot + liveDelta;
-
-  if (snapshot === null || currentDisplay === null) {
-    state.dbReportsTotalSnapshot = safeServer;
-    state.dbReportsTotalLiveDelta = 0;
-  } else if (safeServer >= currentDisplay) {
-    state.dbReportsTotalSnapshot = safeServer;
-    state.dbReportsTotalLiveDelta = 0;
-  } else if (safeServer > snapshot) {
-    state.dbReportsTotalSnapshot = safeServer;
-    state.dbReportsTotalLiveDelta = Math.max(0, currentDisplay - safeServer);
-  }
-
-  state.dbReportsTotal = state.dbReportsTotalSnapshot === null
-    ? null
-    : state.dbReportsTotalSnapshot + Number(state.dbReportsTotalLiveDelta || 0);
+  state.dbReportsTotal = safeTotal;
+  state.dbReportsTotalSeeded = true;
   syncDbReportsTotalDisplayTitle(computedAtUtc);
+  updateHeaderStatChips();
+  return true;
+}
+
+async function refreshHeaderReportsTotalLive() {
+  const response = await fetch("/api/v1/dashboard-reports-total", {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || data.message || ("HTTP " + response.status));
+  }
+  applyHeaderReportsTotalLive(
+    data.reports_total,
+    String(data.computed_at_utc || "").trim(),
+  );
+  return data;
 }
 
 function bumpHeaderDbReportsTotal(delta) {
   const increment = Number(delta || 0);
-  if (!Number.isFinite(increment) || increment <= 0 || state.dbReportsTotalSnapshot === null) {
+  if (!Number.isFinite(increment) || increment <= 0 || !state.dbReportsTotalSeeded) {
     return;
   }
-  state.dbReportsTotalLiveDelta = Number(state.dbReportsTotalLiveDelta || 0) + increment;
-  state.dbReportsTotal = state.dbReportsTotalSnapshot + state.dbReportsTotalLiveDelta;
+  state.dbReportsTotal = Number(state.dbReportsTotal || 0) + increment;
   syncDbReportsTotalDisplayTitle();
   updateHeaderStatChips();
 }
@@ -13072,20 +13061,9 @@ async function loadHeaderDatabaseKpis() {
     throw new Error(data.error || ("HTTP " + response.status));
   }
   const stats = data && typeof data.stats === "object" ? data.stats : {};
-  const reportsTotalRaw = stats.reports_total;
   const reportsLastHour = Number(stats.reports_last_hour || 0);
   const totalFileBytes = Number(stats.total_file_bytes);
   const dbSizeDelta1hBytes = Number(stats.db_size_delta_1h_bytes);
-  const computedAt = String(stats.reports_total_computed_at_utc || "").trim();
-  if (reportsTotalRaw === null || reportsTotalRaw === undefined) {
-    applyDbReportsTotalFromServer(null);
-  } else {
-    const reportsTotal = Number(reportsTotalRaw);
-    applyDbReportsTotalFromServer(
-      Number.isFinite(reportsTotal) && reportsTotal >= 0 ? reportsTotal : null,
-      computedAt,
-    );
-  }
   state.dbReportsLastHour = Number.isFinite(reportsLastHour) && reportsLastHour >= 0 ? reportsLastHour : 0;
   state.dbTotalFileBytes = Number.isFinite(totalFileBytes) && totalFileBytes >= 0 ? totalFileBytes : null;
   state.dbSizeDelta1hBytes = Number.isFinite(dbSizeDelta1hBytes) ? dbSizeDelta1hBytes : null;
@@ -19448,6 +19426,11 @@ async function init() {
     await applyStartRoute(startRoute);
   }
   await refreshDashboard({ preserveScroll: false });
+  try {
+    await refreshHeaderReportsTotalLive();
+  } catch (error) {
+    console.warn("initial refreshHeaderReportsTotalLive failed:", error);
+  }
   await loadAgentUpdateStatus();
   startAutoRefreshTimer();
   startSessionRefreshTimer();

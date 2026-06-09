@@ -4296,6 +4296,11 @@ def _read_sqlite_file_byte_sizes() -> dict[str, int]:
     }
 
 
+def _count_reports_total(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT COUNT(*) FROM reports").fetchone()
+    return int((row[0] or 0) if row else 0)
+
+
 def _count_reports_last_hour(conn: sqlite3.Connection) -> int:
     cutoff_1h = utc_hours_ago_iso(1)
     reports_last_hour_row = conn.execute(
@@ -4333,21 +4338,12 @@ def collect_dashboard_db_kpis(conn: sqlite3.Connection) -> dict[str, object]:
         payload["total_file_bytes"] = int(payload.get("total_file_bytes", 0) or 0)
         payload["reports_last_hour"] = _count_reports_last_hour(conn)
         payload.pop("db_size_baseline_1h_bytes", None)
+        payload.pop("reports_total", None)
+        payload.pop("reports_total_computed_at_utc", None)
         return payload
 
     file_stats = _read_sqlite_file_byte_sizes()
     total_file_bytes = int(file_stats["total_file_bytes"])
-
-    latest_row = conn.execute(
-        """
-        SELECT reports_total, computed_at_utc
-        FROM db_maintenance_history
-        ORDER BY computed_at_utc DESC
-        LIMIT 1
-        """
-    ).fetchone()
-    reports_total = int(latest_row[0] or 0) if latest_row else None
-    reports_total_computed_at = str(latest_row[1] or "") if latest_row else ""
 
     reports_last_hour = _count_reports_last_hour(conn)
 
@@ -4370,13 +4366,11 @@ def collect_dashboard_db_kpis(conn: sqlite3.Connection) -> dict[str, object]:
         db_size_delta_1h_bytes = db_file_bytes - db_size_baseline_1h_bytes
 
     cache_payload: dict[str, object] = {
-        "reports_total": reports_total,
         "reports_last_hour": reports_last_hour,
         "total_file_bytes": total_file_bytes,
         "db_file_bytes": db_file_bytes,
         "db_size_delta_1h_bytes": db_size_delta_1h_bytes,
         "db_size_baseline_1h_bytes": db_size_baseline_1h_bytes,
-        "reports_total_computed_at_utc": reports_total_computed_at,
     }
     _read_cache_set(cache_key, cache_payload, ttl_seconds=DASHBOARD_DB_KPIS_CACHE_TTL_SECONDS)
     public_payload = dict(cache_payload)
@@ -20247,6 +20241,35 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "status": "ok",
                     "stats": stats,
                 },
+            )
+            return
+
+        if parsed.path == "/api/v1/dashboard-reports-total":
+            if not self._require_web_session():
+                return
+            try:
+                with sqlite_connect_read() as conn:
+                    reports_total = _count_reports_total(conn)
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": "database_busy",
+                            "message": "Datenbank kurz gesperrt. Bitte in wenigen Sekunden erneut laden.",
+                        },
+                        extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+                    )
+                    return
+                raise
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "reports_total": reports_total,
+                    "computed_at_utc": utc_now_iso(),
+                },
+                extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
             )
             return
 
