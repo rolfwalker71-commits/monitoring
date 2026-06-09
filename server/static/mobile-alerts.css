@@ -1,5 +1,5 @@
 :root {
-  --bg: #e8eef5;
+  --bg: #ffffff;
   --panel: #ffffff;
   --ink: #143047;
   --muted: #5a6f82;
@@ -792,7 +792,7 @@ body {
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 8px 10px 6px;
-  box-shadow: var(--shadow);
+  box-shadow: none;
   position: relative;
   overflow: hidden;
   height: fit-content;
@@ -1273,7 +1273,7 @@ body {
 }
 
 .alert-card-highlight {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
   animation: alertPulse 1.2s ease-in-out 2;
 }
 
