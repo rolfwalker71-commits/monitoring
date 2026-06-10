@@ -962,6 +962,10 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   overflow: hidden;
 }
 
+.host-meta-modal-inner--wide {
+  width: min(920px, 100%);
+}
+
 .host-meta-modal-body {
   display: grid;
   gap: 12px;

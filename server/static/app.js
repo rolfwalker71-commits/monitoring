@@ -522,6 +522,8 @@ const state = {
   inactiveHostsCount: 0,
   externalMonitors: [],
   externalMonitorSummary: { total: 0, up: 0, down: 0, degraded: 0, unknown: 0, cert_warn: 0 },
+  probeSites: [],
+  probeSiteTokenById: {},
   selectedExternalMonitorId: null,
   sidebarMode: "hosts",
   sidebarModeToggleWired: false,
@@ -21234,8 +21236,21 @@ function renderExternalMonitorDetail(monitor) {
         </tr>
       `).join("")
     : '<tr><td colspan="4" class="muted">Noch keine Historie vorhanden.</td></tr>';
+  const isPushProbe = asText(monitor.probe_source, "server") === "push";
+  const probeSiteId = Number(monitor.probe_site_id || 0);
+  const pushMonitorsOnSite = isPushProbe && probeSiteId ? getPushMonitorsForProbeSite(probeSiteId) : [];
   const editButtonHtml = state.isAdmin
     ? `<button type="button" class="btn-icon btn-icon--compact" data-action="edit-external-monitor" title="Service bearbeiten (Bezeichnung, URL, Intervall)">✏️</button>`
+    : "";
+  const probeScriptButtonHtml = state.isAdmin && isPushProbe && probeSiteId
+    ? `<button type="button" class="btn-secondary btn-secondary--compact" data-action="generate-probe-script" data-probe-site-id="${probeSiteId}">Probe-Skript generieren</button>`
+    : "";
+  const pushProbePanelHtml = isPushProbe && probeSiteId
+    ? `<div class="external-monitor-panel">
+        <h5>Interne Probe</h5>
+        <p class="settings-helper-text">Probe-Stelle #${probeSiteId}: ${escapeHtml(resolveProbeSiteName(probeSiteId))}. Ein Skript auf dem Host prüft ${pushMonitorsOnSite.length || 1} Dienst${(pushMonitorsOnSite.length || 1) === 1 ? "" : "e"} in jedem Lauf.</p>
+        ${probeScriptButtonHtml}
+      </div>`
     : "";
 
   detailView.innerHTML = `
@@ -21278,9 +21293,11 @@ function renderExternalMonitorDetail(monitor) {
           <tr><td>Intervall</td><td>${escapeHtml(String(formatExternalMonitorIntervalMinutes(monitor)))} Min.</td></tr>
           <tr><td>Erwartung</td><td>${monitor.expected_status != null ? `HTTP ${escapeHtml(String(monitor.expected_status))}` : "-"}${monitor.keyword ? ` · Keyword „${escapeHtml(monitor.keyword)}“` : ""}</td></tr>
           <tr><td>Verknüpfter Host</td><td>${renderLinkedHostDetailCell(monitor)}</td></tr>
+          ${isPushProbe && probeSiteId ? `<tr><td>Probe-Stelle</td><td>#${probeSiteId} — ${escapeHtml(resolveProbeSiteName(probeSiteId))}</td></tr>` : ""}
         </tbody>
       </table>
     </div>
+    ${pushProbePanelHtml}
     <div class="external-monitor-panel">
       <h5>Letzte Prüfungen</h5>
       <table class="external-monitor-table">
@@ -21415,10 +21432,478 @@ async function loadExternalMonitors(options = {}) {
   }
   await loadExternalMonitorSummary();
   updateExternalMonitorAdminUi();
+  if (state.isAdmin) {
+    void loadProbeSites(true).catch((error) => {
+      console.warn("loadProbeSites failed:", error);
+    });
+  }
 }
 
 function updateExternalMonitorAdminUi() {
   setSidebarMode(state.sidebarMode || "hosts");
+}
+
+function getExternalMonitorServerUrl() {
+  return String(window.location.origin || "").replace(/\/+$/, "");
+}
+
+function getPushMonitorsForProbeSite(probeSiteId) {
+  const siteId = Number(probeSiteId || 0);
+  if (!siteId) {
+    return [];
+  }
+  return (Array.isArray(state.externalMonitors) ? state.externalMonitors : [])
+    .filter((monitor) => asText(monitor?.probe_source, "").toLowerCase() === "push"
+      && Number(monitor?.probe_site_id || 0) === siteId
+      && monitor?.enabled !== false);
+}
+
+function rememberProbeSiteToken(probeSiteId, token) {
+  const siteId = Number(probeSiteId || 0);
+  const tokenValue = asText(token, "").trim();
+  if (!siteId || !tokenValue) {
+    return;
+  }
+  if (!state.probeSiteTokenById || typeof state.probeSiteTokenById !== "object") {
+    state.probeSiteTokenById = {};
+  }
+  state.probeSiteTokenById[String(siteId)] = tokenValue;
+}
+
+function resolveProbeSiteToken(probeSiteId) {
+  return asText(state.probeSiteTokenById?.[String(Number(probeSiteId || 0))], "").trim();
+}
+
+function resolveProbeSiteName(probeSiteId) {
+  const siteId = Number(probeSiteId || 0);
+  const fromList = (Array.isArray(state.probeSites) ? state.probeSites : [])
+    .find((site) => Number(site?.id || 0) === siteId);
+  if (fromList) {
+    return asText(fromList.name, `Probe-Stelle #${siteId}`);
+  }
+  return `Probe-Stelle #${siteId}`;
+}
+
+function resolveProbeRunnerIntervalSec(monitors) {
+  const rows = Array.isArray(monitors) ? monitors : [];
+  const intervals = rows
+    .map((monitor) => Number(monitor?.interval_sec || 0))
+    .filter((value) => Number.isFinite(value) && value >= 60);
+  if (!intervals.length) {
+    return 300;
+  }
+  return Math.min(...intervals);
+}
+
+async function loadProbeSites(force = false) {
+  if (!state.isAdmin) {
+    return [];
+  }
+  if (!force && Array.isArray(state.probeSites) && state.probeSites.length) {
+    return state.probeSites;
+  }
+  const response = await fetch("/api/v1/external-monitor-probe-sites", { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  state.probeSites = Array.isArray(data.probe_sites) ? data.probe_sites : [];
+  return state.probeSites;
+}
+
+async function rotateProbeSiteToken(probeSiteId) {
+  const response = await fetch("/api/v1/external-monitor-probe-sites/rotate-token", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: Number(probeSiteId || 0) }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(asText(data.error, `HTTP ${response.status}`));
+  }
+  const token = asText(data?.probe_site?.token, "").trim();
+  const siteId = Number(data?.probe_site?.id || probeSiteId || 0);
+  if (token && siteId) {
+    rememberProbeSiteToken(siteId, token);
+  }
+  return data.probe_site || null;
+}
+
+function buildLinuxProbeInstallScript({ serverUrl, probeToken, intervalSec, probeSiteName, probeSiteId, monitors }) {
+  const monitorLines = (Array.isArray(monitors) ? monitors : [])
+    .map((monitor) => `- ${asText(monitor.name, "Service")}: ${asText(monitor.target_url, "")}`)
+    .join("\n");
+  const cronEveryMin = Math.max(1, Math.round(Number(intervalSec || 300) / 60));
+  return `#!/bin/bash
+# Monitoring Push-Probe — Linux Setup
+# Probe-Stelle: ${probeSiteName} (ID ${probeSiteId})
+# Ein Probe-Prozess prüft alle zugehörigen Dienste und sendet Resultate zurück.
+${monitorLines ? `# Dienste:\n${monitorLines}\n` : ""}
+set -euo pipefail
+
+sudo mkdir -p /etc/monitoring-probe /opt/monitoring-agent
+
+sudo tee /etc/monitoring-probe/probe.conf >/dev/null <<'EOF'
+SERVER_URL="${serverUrl}"
+PROBE_TOKEN="${probeToken}"
+INTERVAL_SEC=${intervalSec}
+EOF
+sudo chmod 600 /etc/monitoring-probe/probe.conf
+
+sudo curl -fsSL "${serverUrl}/updates/client/linux/monitor_probe.sh" \\
+  -o /opt/monitoring-agent/monitor_probe.sh
+sudo chmod 755 /opt/monitoring-agent/monitor_probe.sh
+
+# Testlauf (einmalig)
+sudo RUN_ONCE=1 CONFIG_FILE=/etc/monitoring-probe/probe.conf /opt/monitoring-agent/monitor_probe.sh
+
+# Cron: alle ${cronEveryMin} Minuten ein Prüfzyklus
+echo "*/${cronEveryMin} * * * * root RUN_ONCE=1 CONFIG_FILE=/etc/monitoring-probe/probe.conf /opt/monitoring-agent/monitor_probe.sh >> /var/log/monitoring-probe.log 2>&1" | sudo tee /etc/cron.d/monitoring-probe
+`;
+}
+
+function buildWindowsProbeInstallScript({ serverUrl, probeToken, intervalSec, probeSiteName, probeSiteId, monitors }) {
+  const monitorLines = (Array.isArray(monitors) ? monitors : [])
+    .map((monitor) => `# - ${asText(monitor.name, "Service")}: ${asText(monitor.target_url, "")}`)
+    .join("\n");
+  const taskMinutes = Math.max(1, Math.round(Number(intervalSec || 300) / 60));
+  const configJson = JSON.stringify({
+    ServerUrl: serverUrl,
+    ProbeToken: probeToken,
+    IntervalSec: Number(intervalSec || 300),
+    TlsInsecure: false,
+  }, null, 2);
+  return `# Monitoring Push-Probe — Windows Setup
+# Probe-Stelle: ${probeSiteName} (ID ${probeSiteId})
+# Ein Probe-Prozess prüft alle zugehörigen Dienste und sendet Resultate zurück.
+${monitorLines}
+
+$ProbeDir = 'C:\\ProgramData\\MonitoringProbe'
+$ConfigFile = Join-Path $ProbeDir 'probe.json'
+$ScriptPath = Join-Path $ProbeDir 'monitor_probe.ps1'
+
+New-Item -ItemType Directory -Force -Path $ProbeDir | Out-Null
+
+@'
+${configJson}
+'@ | Set-Content -LiteralPath $ConfigFile -Encoding UTF8
+
+Invoke-WebRequest -Uri '${serverUrl}/updates/client/windows/monitor_probe.ps1' -OutFile $ScriptPath -UseBasicParsing
+
+# Testlauf (einmalig)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath -ConfigFile $ConfigFile -RunOnce
+
+# Geplante Aufgabe: alle ${taskMinutes} Minuten
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $ScriptPath + '" -ConfigFile "' + $ConfigFile + '" -RunOnce')
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes ${taskMinutes}) -RepetitionDuration ([TimeSpan]::MaxValue)
+Register-ScheduledTask -TaskName 'MonitoringPushProbe' -Action $action -Trigger $trigger -RunLevel Highest -Force
+`;
+}
+
+async function openProbeScriptGeneratorDialog(probeSiteId, options = {}) {
+  if (!state.isAdmin || !probeSiteId) {
+    return;
+  }
+  try {
+    await loadProbeSites(true);
+  } catch (error) {
+    window.alert(formatApiLoadError(error?.message, "Probe-Stellen"));
+    return;
+  }
+  const monitors = getPushMonitorsForProbeSite(probeSiteId);
+  const probeSiteName = resolveProbeSiteName(probeSiteId);
+  const serverUrl = getExternalMonitorServerUrl();
+  let probeToken = resolveProbeSiteToken(probeSiteId);
+  const intervalSec = resolveProbeRunnerIntervalSec(monitors);
+  let activeOs = asText(options.os, "linux").toLowerCase() === "windows" ? "windows" : "linux";
+
+  const renderScript = () => {
+    const tokenValue = asText(tokenInput?.value, probeToken).trim() || "HIER_PROBE_TOKEN_EINFUEGEN";
+    const payload = {
+      serverUrl,
+      probeToken: tokenValue,
+      intervalSec,
+      probeSiteName,
+      probeSiteId: Number(probeSiteId),
+      monitors,
+    };
+    return activeOs === "windows"
+      ? buildWindowsProbeInstallScript(payload)
+      : buildLinuxProbeInstallScript(payload);
+  };
+
+  const monitorListHtml = monitors.length
+    ? `<ul class="external-monitor-probe-monitor-list">${monitors.map((monitor) => `<li>${escapeHtml(asText(monitor.name, "Service"))} — <code>${escapeHtml(asText(monitor.target_url, ""))}</code></li>`).join("")}</ul>`
+    : '<p class="muted">Noch keine Push-Monitore an dieser Probe-Stelle.</p>';
+
+  const modal = document.createElement("div");
+  modal.className = "host-meta-modal";
+  modal.innerHTML = `<div class="host-meta-modal-backdrop"></div>
+    <div class="host-meta-modal-inner host-meta-modal-inner--wide" role="dialog" aria-modal="true" aria-label="Probe-Skript generieren">
+      <div class="chart-drill-header">
+        <div class="chart-drill-title">Probe-Skript: ${escapeHtml(probeSiteName)}</div>
+        <button type="button" class="btn-secondary btn-secondary--compact" data-action="cancel">Schließen</button>
+      </div>
+      <div class="chart-drill-body host-meta-modal-body">
+        <p class="settings-helper-text">Ein Probe-Skript pro Host/Netzwerkstandort. Mehrere Dienste auf dem gleichen Host nutzen dieselbe Probe-Stelle — das Skript prüft alle zugeordneten URLs in jedem Lauf.</p>
+        <div class="external-monitor-probe-script-meta">
+          <span>Probe-ID: ${Number(probeSiteId)}</span>
+          <span>Dienste: ${monitors.length}</span>
+          <span>Empfohlenes Lauf-Intervall: ${Math.max(1, Math.round(intervalSec / 60))} Min.</span>
+        </div>
+        <h4>Zugeordnete Dienste</h4>
+        ${monitorListHtml}
+        <label>Probe-Token
+          <input id="probeScriptTokenInput" type="text" placeholder="mprb_…" value="${escapeHtml(probeToken)}" />
+        </label>
+        <div class="external-monitor-probe-script-actions">
+          <button type="button" class="btn-secondary btn-secondary--compact" data-action="rotate-probe-token">Token neu generieren</button>
+        </div>
+        <div class="external-monitor-probe-os-toggle" role="tablist">
+          <button type="button" class="external-monitor-probe-os-btn ${activeOs === "linux" ? "active" : ""}" data-probe-os="linux">Linux</button>
+          <button type="button" class="external-monitor-probe-os-btn ${activeOs === "windows" ? "active" : ""}" data-probe-os="windows">Windows</button>
+        </div>
+        <label>Setup-Skript (Copy &amp; Paste)
+          <textarea id="probeScriptOutput" class="external-monitor-probe-script-output" readonly rows="18"></textarea>
+        </label>
+        <div class="host-meta-modal-actions">
+          <button type="button" class="btn-secondary" data-action="cancel">Schließen</button>
+          <button type="button" class="btn-primary" data-action="copy-probe-script">In Zwischenablage kopieren</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  const tokenInput = modal.querySelector("#probeScriptTokenInput");
+  const outputEl = modal.querySelector("#probeScriptOutput");
+
+  const refreshOutput = () => {
+    if (outputEl) {
+      outputEl.value = renderScript();
+    }
+  };
+  refreshOutput();
+
+  const close = () => modal.remove();
+  modal.querySelector(".host-meta-modal-backdrop")?.addEventListener("click", close);
+  modal.querySelectorAll('[data-action="cancel"]').forEach((button) => button.addEventListener("click", close));
+  tokenInput?.addEventListener("input", refreshOutput);
+  modal.querySelectorAll("[data-probe-os]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeOs = button.getAttribute("data-probe-os") === "windows" ? "windows" : "linux";
+      modal.querySelectorAll("[data-probe-os]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+      refreshOutput();
+    });
+  });
+  modal.querySelector('[data-action="rotate-probe-token"]')?.addEventListener("click", async () => {
+    try {
+      const site = await rotateProbeSiteToken(probeSiteId);
+      if (site?.token && tokenInput) {
+        tokenInput.value = site.token;
+        rememberProbeSiteToken(probeSiteId, site.token);
+        refreshOutput();
+      }
+    } catch (error) {
+      window.alert(`Token konnte nicht erneuert werden: ${error.message}`);
+    }
+  });
+  modal.querySelector('[data-action="copy-probe-script"]')?.addEventListener("click", async () => {
+    const text = asText(outputEl?.value, "");
+    if (!text) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      window.alert("Setup-Skript in die Zwischenablage kopiert.");
+    } catch (_error) {
+      outputEl?.focus();
+      outputEl?.select();
+      window.alert("Bitte markieren und manuell kopieren (Strg/Cmd+C).");
+    }
+  });
+}
+
+async function openExternalMonitorCreateDialog() {
+  if (!state.isAdmin) {
+    return;
+  }
+  let probeSites = [];
+  try {
+    probeSites = await loadProbeSites(true);
+  } catch (error) {
+    window.alert(formatApiLoadError(error?.message, "Probe-Stellen"));
+    return;
+  }
+  const hostOptions = (Array.isArray(state.hosts) ? state.hosts : [])
+    .slice()
+    .sort((left, right) => asText(left.display_name || left.hostname, "").localeCompare(asText(right.display_name || right.hostname, ""), undefined, { sensitivity: "base" }))
+    .map((host) => {
+      const hostIdentity = resolveHostIdentity(host);
+      const label = asText(host.display_name || host.hostname, hostIdentity);
+      const hostname = asText(host.hostname, "");
+      const suffix = hostname && hostname !== label ? ` (${hostname})` : "";
+      return `<option value="${escapeHtml(hostIdentity)}">${escapeHtml(`${label}${suffix}`)}</option>`;
+    })
+    .join("");
+  const probeSiteOptions = probeSites.map((site) => {
+    const monitorCount = getPushMonitorsForProbeSite(site.id).length;
+    const suffix = monitorCount ? ` — ${monitorCount} Dienst${monitorCount === 1 ? "" : "e"}` : "";
+    return `<option value="${Number(site.id)}">${escapeHtml(asText(site.name, `Probe #${site.id}`))}${escapeHtml(suffix)}</option>`;
+  }).join("");
+
+  const modal = document.createElement("div");
+  modal.className = "host-meta-modal";
+  modal.innerHTML = `<div class="host-meta-modal-backdrop"></div>
+    <div class="host-meta-modal-inner" role="dialog" aria-modal="true" aria-label="Service-Monitor anlegen">
+      <div class="chart-drill-header">
+        <div class="chart-drill-title">Service-Monitor anlegen</div>
+        <button type="button" class="btn-secondary btn-secondary--compact" data-action="cancel">Schließen</button>
+      </div>
+      <div class="chart-drill-body host-meta-modal-body">
+        <div class="host-meta-modal-grid">
+          <label>Bezeichnung
+            <input id="externalMonitorCreateNameInput" type="text" placeholder="z.B. SAP Web Client intern" />
+          </label>
+          <label>Ziel-URL
+            <input id="externalMonitorCreateUrlInput" type="text" placeholder="https://intern/... oder host:port" />
+          </label>
+          <label>Quelle
+            <select id="externalMonitorCreateSourceSelect">
+              <option value="server">Extern (vom Infoboard)</option>
+              <option value="push">Intern (Push-Probe im Kundennetz)</option>
+            </select>
+          </label>
+          <label>Intervall (Minuten)
+            <input id="externalMonitorCreateIntervalInput" type="number" min="1" max="1440" step="1" value="30" />
+          </label>
+          <label>Erwarteter HTTP-Status
+            <input id="externalMonitorCreateExpectedStatusInput" type="number" min="100" max="599" step="1" value="200" />
+          </label>
+          <label>Verknüpfter Host (optional)
+            <select id="externalMonitorCreateHostSelect">
+              <option value="">— Kein Host —</option>
+              ${hostOptions}
+            </select>
+          </label>
+        </div>
+        <div id="externalMonitorCreatePushWrap" class="external-monitor-create-push-wrap hidden">
+          <label>Probe-Stelle
+            <select id="externalMonitorCreateProbeSiteMode">
+              <option value="existing">Bestehende Probe-Stelle verwenden</option>
+              <option value="new">Neue Probe-Stelle anlegen</option>
+            </select>
+          </label>
+          <label id="externalMonitorCreateProbeSiteExistingWrap">Bestehende Probe-Stelle
+            <select id="externalMonitorCreateProbeSiteSelect">
+              <option value="">— Bitte wählen —</option>
+              ${probeSiteOptions}
+            </select>
+          </label>
+          <label id="externalMonitorCreateProbeSiteNewWrap" class="hidden">Name der neuen Probe-Stelle
+            <input id="externalMonitorCreateProbeSiteNameInput" type="text" placeholder="z.B. App-Server Kunde XY" />
+          </label>
+          <p class="settings-helper-text">Mehrere interne Dienste auf dem gleichen Host: weitere Monitore mit derselben Probe-Stelle anlegen, dann einmalig das Probe-Skript generieren.</p>
+        </div>
+        <div class="host-meta-modal-actions">
+          <button type="button" class="btn-secondary" data-action="cancel">Abbrechen</button>
+          <button type="button" class="btn-primary" data-action="save">Anlegen</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  const sourceSelect = modal.querySelector("#externalMonitorCreateSourceSelect");
+  const pushWrap = modal.querySelector("#externalMonitorCreatePushWrap");
+  const probeSiteMode = modal.querySelector("#externalMonitorCreateProbeSiteMode");
+  const probeSiteExistingWrap = modal.querySelector("#externalMonitorCreateProbeSiteExistingWrap");
+  const probeSiteNewWrap = modal.querySelector("#externalMonitorCreateProbeSiteNewWrap");
+
+  const syncPushUi = () => {
+    const isPush = asText(sourceSelect?.value, "server") === "push";
+    pushWrap?.classList.toggle("hidden", !isPush);
+    const isNew = asText(probeSiteMode?.value, "existing") === "new";
+    probeSiteExistingWrap?.classList.toggle("hidden", isNew);
+    probeSiteNewWrap?.classList.toggle("hidden", !isNew);
+  };
+  sourceSelect?.addEventListener("change", syncPushUi);
+  probeSiteMode?.addEventListener("change", syncPushUi);
+  syncPushUi();
+
+  const close = () => modal.remove();
+  modal.querySelector(".host-meta-modal-backdrop")?.addEventListener("click", close);
+  modal.querySelectorAll('[data-action="cancel"]').forEach((button) => button.addEventListener("click", close));
+  modal.querySelector('[data-action="save"]')?.addEventListener("click", async () => {
+    const name = asText(modal.querySelector("#externalMonitorCreateNameInput")?.value, "").trim();
+    const targetUrl = asText(modal.querySelector("#externalMonitorCreateUrlInput")?.value, "").trim();
+    const probeSource = asText(sourceSelect?.value, "server");
+    const intervalMin = Math.max(1, Math.min(1440, Number(modal.querySelector("#externalMonitorCreateIntervalInput")?.value || 30)));
+    const expectedStatus = Number(modal.querySelector("#externalMonitorCreateExpectedStatusInput")?.value || 200);
+    if (!name || !targetUrl) {
+      window.alert("Bitte Bezeichnung und Ziel-URL angeben.");
+      return;
+    }
+    let probeSiteId = null;
+    if (probeSource === "push") {
+      if (asText(probeSiteMode?.value, "existing") === "new") {
+        const probeSiteName = asText(modal.querySelector("#externalMonitorCreateProbeSiteNameInput")?.value, "").trim();
+        if (!probeSiteName) {
+          window.alert("Bitte einen Namen für die neue Probe-Stelle angeben.");
+          return;
+        }
+        const siteResponse = await fetch("/api/v1/external-monitor-probe-sites", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: probeSiteName }),
+        });
+        const siteData = await siteResponse.json().catch(() => ({}));
+        if (!siteResponse.ok) {
+          window.alert(asText(siteData.error, "Probe-Stelle konnte nicht angelegt werden."));
+          return;
+        }
+        probeSiteId = Number(siteData?.probe_site?.id || 0);
+        rememberProbeSiteToken(probeSiteId, siteData?.probe_site?.token);
+      } else {
+        probeSiteId = Number(modal.querySelector("#externalMonitorCreateProbeSiteSelect")?.value || 0);
+        if (!probeSiteId) {
+          window.alert("Bitte eine bestehende Probe-Stelle wählen oder eine neue anlegen.");
+          return;
+        }
+      }
+    }
+    const payload = {
+      name,
+      target_url: targetUrl,
+      monitor_type: "http",
+      probe_source: probeSource,
+      probe_site_id: probeSiteId,
+      interval_sec: intervalMin * 60,
+      expected_status: Number.isFinite(expectedStatus) ? expectedStatus : 200,
+      related_host_uid: asText(modal.querySelector("#externalMonitorCreateHostSelect")?.value, "").trim(),
+    };
+    const response = await fetch("/api/v1/external-monitors", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      window.alert(asText(data.error, "Monitor konnte nicht angelegt werden."));
+      return;
+    }
+    close();
+    await loadExternalMonitors({ silent: true });
+    if (data.monitor?.id) {
+      selectExternalMonitor(data.monitor.id);
+      if (probeSource === "push" && probeSiteId) {
+        void openProbeScriptGeneratorDialog(probeSiteId);
+      }
+    }
+  });
 }
 
 async function openExternalMonitorEditorDialog(monitor) {
@@ -21606,6 +22091,15 @@ function wireExternalMonitorDetailInteractions() {
       );
       return;
     }
+    const probeScriptButton = target ? target.closest('[data-action="generate-probe-script"]') : null;
+    if (probeScriptButton) {
+      event.preventDefault();
+      const probeSiteId = Number(probeScriptButton.getAttribute("data-probe-site-id") || 0);
+      if (probeSiteId) {
+        void openProbeScriptGeneratorDialog(probeSiteId);
+      }
+      return;
+    }
     const editButton = target ? target.closest('[data-action="edit-external-monitor"]') : null;
     if (!editButton) {
       return;
@@ -21617,69 +22111,6 @@ function wireExternalMonitorDetailInteractions() {
     }
   });
   state.externalMonitorDetailWired = true;
-}
-
-async function openExternalMonitorCreateDialog() {
-  if (!state.isAdmin) {
-    return;
-  }
-  const name = window.prompt("Name des Service-Monitors:", "");
-  if (!name || !name.trim()) {
-    return;
-  }
-  const targetUrl = window.prompt("Ziel-URL (https://... oder host:port):", "");
-  if (!targetUrl || !targetUrl.trim()) {
-    return;
-  }
-  const probeSourceRaw = window.prompt("Quelle: 'server' (extern vom Infoboard) oder 'push' (intern per Probe):", "server");
-  const probeSource = asText(probeSourceRaw, "server").toLowerCase() === "push" ? "push" : "server";
-  let probeSiteId = null;
-  if (probeSource === "push") {
-    const probeSiteName = window.prompt("Name der internen Probe-Stelle (wird neu angelegt wenn leer):", "Interne Probe");
-    if (!probeSiteName || !probeSiteName.trim()) {
-      return;
-    }
-    const siteResponse = await fetch("/api/v1/external-monitor-probe-sites", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: probeSiteName.trim() }),
-    });
-    const siteData = await siteResponse.json().catch(() => ({}));
-    if (!siteResponse.ok) {
-      window.alert(asText(siteData.error, "Probe-Stelle konnte nicht angelegt werden."));
-      return;
-    }
-    probeSiteId = siteData?.probe_site?.id;
-    const probeToken = asText(siteData?.probe_site?.token, "");
-    if (probeToken) {
-      window.alert(`Probe-Token (einmalig speichern):\n\n${probeToken}`);
-    }
-  }
-  const payload = {
-    name: name.trim(),
-    target_url: targetUrl.trim(),
-    monitor_type: "http",
-    probe_source: probeSource,
-    probe_site_id: probeSiteId,
-    interval_sec: 1800,
-    expected_status: 200,
-  };
-  const response = await fetch("/api/v1/external-monitors", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    window.alert(asText(data.error, "Monitor konnte nicht angelegt werden."));
-    return;
-  }
-  await loadExternalMonitors({ silent: true });
-  if (data.monitor?.id) {
-    selectExternalMonitor(data.monitor.id);
-  }
 }
 
 document.getElementById("addExternalMonitorButton")?.addEventListener("click", () => {

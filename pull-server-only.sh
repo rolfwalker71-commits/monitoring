@@ -11,8 +11,8 @@ trap on_pull_script_error ERR
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
 PULL_SCRIPT_VERSION="20260610a"
 # Bump when FILES_LIST changes (must match script_guardian entries).
-PULL_FILES_MANIFEST="scripts-37-v1"
-PULL_FILES_EXPECTED_COUNT=37
+PULL_FILES_MANIFEST="scripts-38-v1"
+PULL_FILES_EXPECTED_COUNT=38
 _DEPLOY_MAIN_SHA_CACHED=""
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
@@ -924,6 +924,7 @@ mirror_update_payloads() {
   cp -f "$TARGET_DIR/client/windows/script_guardian.ps1" "$TARGET_DIR/updates/client/windows/script_guardian.ps1"
   cp -f "$TARGET_DIR/client/linux/script_guardian.sh" "$TARGET_DIR/updates/client/linux/script_guardian.sh"
   cp -f "$TARGET_DIR/client/linux/monitor_probe.sh" "$TARGET_DIR/updates/client/linux/monitor_probe.sh"
+  cp -f "$TARGET_DIR/client/windows/monitor_probe.ps1" "$TARGET_DIR/updates/client/windows/monitor_probe.ps1"
   chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/script_guardian.sh" "$TARGET_DIR/updates/client/linux/monitor_probe.sh" 2>/dev/null || true
 }
 
@@ -1607,6 +1608,7 @@ client/linux/install_agent.sh
 client/linux/self_update.sh
 client/linux/script_guardian.sh
 client/linux/monitor_probe.sh
+client/windows/monitor_probe.ps1
 "
 
 # Parallele downloads: standardmaessig bis zu 8 gleichzeitig

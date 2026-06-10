@@ -258,6 +258,30 @@ def list_probe_sites(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     ]
 
 
+def rotate_probe_site_token(conn: sqlite3.Connection, site_id: int) -> dict[str, Any] | None:
+    row = conn.execute(
+        "SELECT id, name FROM external_monitor_probe_sites WHERE id = ?",
+        (int(site_id),),
+    ).fetchone()
+    if not row:
+        return None
+    token = generate_probe_token()
+    now = utc_now_iso()
+    conn.execute(
+        """
+        UPDATE external_monitor_probe_sites
+        SET token_hash = ?, updated_at_utc = ?
+        WHERE id = ?
+        """,
+        (hash_probe_token(token), now, int(site_id)),
+    )
+    return {
+        "id": int(row[0]),
+        "name": str(row[1] or ""),
+        "token": token,
+    }
+
+
 def create_probe_site(conn: sqlite3.Connection, *, name: str, related_host_uid: str = "") -> dict[str, Any]:
     token = generate_probe_token()
     now = utc_now_iso()

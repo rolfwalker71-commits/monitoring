@@ -2533,6 +2533,71 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   text-transform: uppercase;
 }
 
+.external-monitor-create-push-wrap {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px dashed #c8d5e6;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.external-monitor-probe-script-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-size: 11px;
+  color: #475569;
+}
+
+.external-monitor-probe-monitor-list {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.external-monitor-probe-script-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.external-monitor-probe-os-toggle {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.external-monitor-probe-os-btn {
+  border: 1px solid #c8d5e6;
+  background: #fff;
+  color: #334155;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.external-monitor-probe-os-btn.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.external-monitor-probe-script-output {
+  width: 100%;
+  min-height: 280px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 10px;
+  border: 1px solid #c8d5e6;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  resize: vertical;
+}
+
 body[data-theme="dark"] .service-monitor-card {
   border-color: #5b21b6;
   background: linear-gradient(180deg, #1e1b4b 0%, #172554 100%);

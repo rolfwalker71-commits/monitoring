@@ -57,6 +57,7 @@ from external_monitors import (
     list_external_monitors,
     list_probe_sites,
     push_probe_results,
+    rotate_probe_site_token,
     start_external_monitor_worker,
     update_external_monitor,
     wake_external_monitor_worker,
@@ -25451,6 +25452,34 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except Exception as exc:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            return
+
+        if path == "/api/v1/external-monitor-probe-sites/rotate-token":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            site_id_raw = payload.get("id")
+            try:
+                site_id = int(site_id_raw)
+            except (TypeError, ValueError):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "id required"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                site = rotate_probe_site_token(conn, site_id)
+                if not site:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "probe site not found"})
+                    return
+                conn.commit()
+            self._send_json(HTTPStatus.OK, {"probe_site": site})
             return
 
         if path == "/api/v1/external-monitor-probe-sites":
