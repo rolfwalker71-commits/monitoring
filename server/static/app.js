@@ -21384,7 +21384,7 @@ function formatExternalMonitorTlsVerifyLabel(monitor) {
 
 function isExternalMonitorTlsVerifyApplicable(monitorType) {
   const normalized = asText(monitorType, "http").toLowerCase();
-  return normalized === "http" || normalized === "ssl_cert";
+  return normalized === "http";
 }
 
 function formatExternalMonitorCertDaysLeft(value) {
@@ -22045,6 +22045,7 @@ function renderExternalMonitorDetail(monitor) {
             <tr><td>Intervall</td><td>${escapeHtml(String(formatExternalMonitorIntervalMinutes(monitor)))} Min.</td></tr>
             <tr><td>Erwartung</td><td>${monitor.expected_status != null ? `HTTP ${escapeHtml(String(monitor.expected_status))}` : "-"}${monitor.keyword ? ` · Keyword „${escapeHtml(monitor.keyword)}“` : ""}</td></tr>
             ${isExternalMonitorTlsVerifyApplicable(monitor.monitor_type) ? `<tr><td>TLS-Prüfung</td><td>${escapeHtml(formatExternalMonitorTlsVerifyLabel(monitor))}</td></tr>` : ""}
+            ${asText(monitor.monitor_type, "").toLowerCase() === "ssl_cert" ? "<tr><td>Prüfmethode</td><td>Nur Zertifikatslaufzeit (Kette wird nicht validiert)</td></tr>" : ""}
             <tr><td>Verknüpfter Host</td><td>${renderLinkedHostDetailCell(monitor)}</td></tr>
             ${isPushProbe && probeSiteId ? `<tr><td>Probe-Stelle</td><td>#${probeSiteId} — ${escapeHtml(resolveProbeSiteName(probeSiteId))}</td></tr>` : ""}
           </tbody>

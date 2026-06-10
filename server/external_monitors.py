@@ -250,6 +250,14 @@ def _ssl_context(tls_verify: bool) -> ssl.SSLContext:
     return ssl._create_unverified_context()
 
 
+def _ssl_context_expiry_only() -> ssl.SSLContext:
+    """TLS without chain or hostname verification — only to read the peer certificate."""
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
+
+
 def _row_to_monitor_dict(row: sqlite3.Row, *, include_history: bool = False, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
     service_definition_id = None
     if "service_definition_id" in row.keys() and row["service_definition_id"] is not None:
@@ -664,10 +672,8 @@ def _run_ssl_cert_probe(
     host: str,
     port: int,
     timeout_sec: int,
-    *,
-    tls_verify: bool = True,
 ) -> tuple[str, int | None, str]:
-    context = _ssl_context(tls_verify)
+    context = _ssl_context_expiry_only()
     with socket.create_connection((host, port), timeout=timeout_sec) as raw_sock:
         with context.wrap_socket(raw_sock, server_hostname=host) as ssock:
             cert = ssock.getpeercert() or {}
@@ -722,7 +728,6 @@ def run_monitor_check(monitor: dict[str, Any]) -> dict[str, Any]:
                 host,
                 port,
                 timeout_sec,
-                tls_verify=tls_verify,
             )
             response_ms = int((time.monotonic() - started) * 1000)
             if cert_days_left is None:
@@ -753,7 +758,6 @@ def run_monitor_check(monitor: dict[str, Any]) -> dict[str, Any]:
                     parsed.hostname,
                     parsed.port or 443,
                     timeout_sec,
-                    tls_verify=tls_verify,
                 )
             except Exception as cert_exc:
                 cert_expires_at = ""
