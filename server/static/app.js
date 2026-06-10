@@ -20949,26 +20949,31 @@ function renderLinkedHostForServiceCard(monitor) {
   if (!host) {
     return `
       <button type="button" class="service-monitor-linked-host service-monitor-linked-host--missing" data-action="select-linked-host" data-host="${escapeHtml(hostIdentity)}" data-host-uid="${escapeHtml(hostIdentity)}" title="Verknüpfter Host (${escapeHtml(hostIdentity)}) — nicht in der Hostliste">
-        <span class="host-status-pulse host-status-pulse--unknown" aria-hidden="true"></span>
-        <span class="service-monitor-linked-host-label">${escapeHtml(hostIdentity)}</span>
+        <span class="service-monitor-linked-host-main">
+          <span class="host-status-pulse host-status-pulse--unknown" aria-hidden="true"></span>
+          <span class="service-monitor-linked-host-label">${escapeHtml(hostIdentity)}</span>
+        </span>
         <span class="service-monitor-linked-host-meta">Host nicht sichtbar</span>
       </button>
     `;
   }
   const hostname = asText(host.hostname, hostIdentity);
   const hostUid = resolveHostIdentity(host);
-  const displayLabel = asText(host.display_name || host.hostname, hostname).split(".")[0];
+  const displayLabel = asText(host.display_name || host.hostname, hostname);
   const lastReportInfo = formatHostLastReportAge(host.last_report_utc || host.last_seen_utc);
   const openAlertCount = Number(host.open_alert_count || 0);
-  const metaLabel = openAlertCount > 0
-    ? `${openAlertCount} Alarm${openAlertCount === 1 ? "" : "e"}`
-    : lastReportInfo.label;
-  const title = `Host: ${displayLabel} · ${metaLabel} · ${lastReportInfo.title}`;
+  const alertHtml = openAlertCount > 0
+    ? `<span class="service-monitor-linked-host-alerts">${openAlertCount} Alarm${openAlertCount === 1 ? "" : "e"}</span>`
+    : "";
+  const title = `Host: ${displayLabel}${openAlertCount > 0 ? ` · ${openAlertCount} Alarm${openAlertCount === 1 ? "" : "e"}` : ""} · ${lastReportInfo.label} · ${lastReportInfo.title}`;
   return `
     <button type="button" class="service-monitor-linked-host" data-action="select-linked-host" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostUid)}" title="${escapeHtml(title)}">
-      <span class="${getHostStatusPulseClass(host)}" aria-hidden="true"></span>
-      <span class="service-monitor-linked-host-label">${escapeHtml(displayLabel)}</span>
-      <span class="service-monitor-linked-host-meta">${escapeHtml(metaLabel)}</span>
+      <span class="service-monitor-linked-host-main">
+        <span class="${getHostStatusPulseClass(host)}" aria-hidden="true"></span>
+        <span class="service-monitor-linked-host-label">${escapeHtml(displayLabel)}</span>
+        ${alertHtml}
+      </span>
+      <span class="service-monitor-linked-host-meta">${escapeHtml(lastReportInfo.label)}</span>
     </button>
   `;
 }
@@ -20990,6 +20995,24 @@ function renderLinkedHostDetailCell(monitor) {
   return `<button type="button" class="external-monitor-linked-host-link" data-action="select-linked-host" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostUid)}"><span class="${getHostStatusPulseClass(host)}" aria-hidden="true"></span>${escapeHtml(displayLabel)}${escapeHtml(hostMeta)}</button>`;
 }
 
+function scrollSelectedHostIntoView() {
+  const hostList = document.getElementById("hostList");
+  if (!hostList) {
+    return;
+  }
+  const selectedUid = asText(state.selectedHostUid, "").trim();
+  const selectedHost = asText(state.selectedHost, "").trim();
+  const item = (selectedUid
+    ? hostList.querySelector(`.host-item[data-host-uid="${CSS.escape(selectedUid)}"]`)
+    : null)
+    || (selectedHost
+      ? hostList.querySelector(`.host-item[data-host="${CSS.escape(selectedHost)}"]`)
+      : null);
+  if (item) {
+    item.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+}
+
 function selectHostFromMonitorLink(hostname, hostUid) {
   const normalizedHost = asText(hostname, "").trim();
   const normalizedUid = asText(hostUid, "").trim() || normalizedHost;
@@ -20999,7 +21022,33 @@ function selectHostFromMonitorLink(hostname, hostUid) {
   state.selectedExternalMonitorId = null;
   setSidebarMode("hosts");
   applyServiceMonitorViewMode(false);
-  selectHostFromLiveReportFeed(normalizedHost, normalizedUid);
+
+  const hostRecord = findHostRecordByIdentity(normalizedUid) || findHostRecordByIdentity(normalizedHost);
+  state.selectedHost = asText(hostRecord?.hostname, normalizedHost);
+  state.selectedHostUid = hostRecord ? resolveHostIdentity(hostRecord) : normalizedUid;
+  state.selectedDisplayName = asText(hostRecord?.display_name || state.selectedHost, state.selectedHost);
+  state.reportOffset = 0;
+  state.hostReportMeta = null;
+  state.viewMode = "overview";
+  state.overviewSection = "main";
+  state.reportSection = "overview";
+
+  renderHosts(state.hosts || []);
+  renderServiceMonitors();
+  updateOverviewSection();
+  window.requestAnimationFrame(() => {
+    scrollSelectedHostIntoView();
+  });
+
+  void loadReportsForHost().then(() => {
+    window.setTimeout(() => {
+      void loadAnalysisForHost();
+      void loadAlertsForHost();
+      void loadDatabaseLifecycleForHost();
+      void loadConfigChangelogForHost();
+      void loadAndRenderCustomerNotificationPanel(state.selectedHost, state.selectedHostUid || "");
+    }, 300);
+  });
 }
 
 function externalMonitorStatusBarClass(status) {

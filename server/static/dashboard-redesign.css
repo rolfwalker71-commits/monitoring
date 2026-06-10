@@ -2245,12 +2245,11 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .service-monitor-linked-host {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: grid;
+  gap: 3px;
   width: 100%;
   margin-top: 4px;
-  padding: 4px 6px;
+  padding: 5px 6px;
   border-radius: 6px;
   border: 1px solid #dbeafe;
   background: #eff6ff;
@@ -2259,6 +2258,13 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   font-weight: 700;
   text-align: left;
   cursor: pointer;
+}
+
+.service-monitor-linked-host-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .service-monitor-linked-host--missing {
@@ -2275,9 +2281,19 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .service-monitor-linked-host-meta {
+  display: block;
+  padding-left: 13px;
   font-size: 8px;
   font-weight: 600;
   color: #64748b;
+  line-height: 1.2;
+}
+
+.service-monitor-linked-host-alerts {
+  flex: 0 0 auto;
+  font-size: 8px;
+  font-weight: 700;
+  color: #b45309;
   white-space: nowrap;
 }
 
