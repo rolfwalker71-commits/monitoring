@@ -2520,11 +2520,12 @@ body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.se
   white-space: nowrap;
 }
 
-.host-linked-monitor-group-count {
+.host-linked-monitor-group-stats {
   flex: 0 0 auto;
   font-size: 8px;
   font-weight: 700;
   color: #64748b;
+  white-space: nowrap;
 }
 
 .host-linked-monitor-group-items {
@@ -3095,7 +3096,7 @@ body[data-theme="dark"] .host-linked-monitor-group-summary {
   color: #e2e8f0;
 }
 
-body[data-theme="dark"] .host-linked-monitor-group-count {
+body[data-theme="dark"] .host-linked-monitor-group-stats {
   color: #94a3b8;
 }
 

@@ -21499,6 +21499,32 @@ function resolveWorstLinkedMonitorStatus(monitors) {
   return worst;
 }
 
+function summarizeLinkedMonitorGroupStatuses(monitors) {
+  const rows = Array.isArray(monitors) ? monitors : [];
+  let up = 0;
+  let down = 0;
+  let degraded = 0;
+  let unknown = 0;
+  rows.forEach((monitor) => {
+    const status = normalizeLinkedMonitorStatus(monitor?.last_status);
+    if (status === "up") up += 1;
+    else if (status === "down") down += 1;
+    else if (status === "degraded") degraded += 1;
+    else unknown += 1;
+  });
+  return { up, down, degraded, unknown };
+}
+
+function formatLinkedMonitorGroupStatusSummary(monitors) {
+  const { up, down, degraded, unknown } = summarizeLinkedMonitorGroupStatuses(monitors);
+  const parts = [];
+  if (up > 0) parts.push(`${up} Online`);
+  if (down > 0) parts.push(`${down} Offline`);
+  if (degraded > 0) parts.push(`${degraded} Warnung`);
+  if (unknown > 0) parts.push(`${unknown} Unbekannt`);
+  return parts.length ? parts.join(" / ") : "0 Services";
+}
+
 function groupLinkedMonitorsByCatalog(monitors) {
   const groups = new Map();
   (Array.isArray(monitors) ? monitors : []).forEach((monitor) => {
@@ -21544,11 +21570,12 @@ function renderLinkedMonitorsForHostCard(hostIdentity) {
         <span class="host-linked-monitor-item-name">${escapeHtml(monitorName)}</span>
       </button>`;
     }).join("");
+    const groupStatusSummary = formatLinkedMonitorGroupStatusSummary(group.monitors);
     return `<details class="host-linked-monitor-group host-linked-monitor-group--${escapeHtml(groupStatus)}"${autoOpen ? " open" : ""}>
-      <summary class="host-linked-monitor-group-summary" title="${escapeHtml(group.catalogName)}">
+      <summary class="host-linked-monitor-group-summary" title="${escapeHtml(`${group.catalogName} · ${groupStatusSummary}`)}">
         <span class="host-linked-monitor-group-dot" aria-hidden="true"></span>
         <span class="host-linked-monitor-group-name">${escapeHtml(group.catalogName)}</span>
-        <span class="host-linked-monitor-group-count">(${group.monitors.length})</span>
+        <span class="host-linked-monitor-group-stats">${escapeHtml(groupStatusSummary)}</span>
       </summary>
       <div class="host-linked-monitor-group-items">${itemsHtml}</div>
     </details>`;
