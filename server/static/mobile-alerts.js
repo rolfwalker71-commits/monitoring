@@ -4414,6 +4414,8 @@ function mobileExternalMonitorHistoryBarClass(status) {
   return "service-mobile-history-bar--unknown";
 }
 
+const MOBILE_SERVICE_HISTORY_BAR_LIMIT = 25;
+
 function formatMobileExternalMonitorHistoryClock(value) {
   const text = mobileAsText(value, "");
   if (!text) return "--:--";
@@ -4422,22 +4424,36 @@ function formatMobileExternalMonitorHistoryClock(value) {
   return parsed.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+function mobileServiceHistoryTimestampIndices(barCount) {
+  if (barCount <= 0) return new Set();
+  if (barCount === 1) return new Set([0]);
+  const indices = new Set([0, barCount - 1]);
+  indices.add(Math.floor((barCount - 1) / 2));
+  return indices;
+}
+
 function buildMobileServiceHistorySectionHtml(monitor) {
-  const history = Array.isArray(monitor?.history) ? monitor.history.slice().reverse() : [];
+  const history = Array.isArray(monitor?.history)
+    ? monitor.history.slice(0, MOBILE_SERVICE_HISTORY_BAR_LIMIT).slice().reverse()
+    : [];
   if (!history.length) {
     return '<div class="service-mobile-history service-mobile-history--empty"><span class="service-mobile-history-empty">Noch keine Prüfungen</span></div>';
   }
   const barCount = history.length;
+  const timestampIndices = mobileServiceHistoryTimestampIndices(barCount);
   const colsHtml = history.map((entry, index) => {
     const status = mobileAsText(entry?.status, "unknown").toLowerCase();
     const barClass = mobileExternalMonitorHistoryBarClass(status);
     const clock = formatMobileExternalMonitorHistoryClock(entry?.checked_at_utc);
     const latency = entry?.response_ms != null ? entry.response_ms + " ms" : "—";
     const title = clock + " · " + status.toUpperCase() + " · " + latency;
+    const timeHtml = timestampIndices.has(index)
+      ? '<time class="service-mobile-history-time">' + mobileEsc(clock) + "</time>"
+      : '<span class="service-mobile-history-time service-mobile-history-time--spacer" aria-hidden="true"></span>';
     return (
       '<div class="service-mobile-history-col" style="--bar-index: ' + index + ';" title="' + mobileEsc(title) + '">'
       + '<div class="service-mobile-history-bar ' + barClass + '" aria-hidden="true"></div>'
-      + '<time class="service-mobile-history-time">' + mobileEsc(clock) + "</time>"
+      + timeHtml
       + "</div>"
     );
   }).join("");

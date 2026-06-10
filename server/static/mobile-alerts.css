@@ -1039,25 +1039,18 @@ body {
 }
 
 .service-mobile-history-scroll {
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--panel) 88%, #f8fafc);
   padding: 4px 4px 2px;
 }
 
-.service-mobile-history-scroll::-webkit-scrollbar {
-  display: none;
-}
-
 .service-mobile-history-bars {
-  display: inline-flex;
+  display: flex;
   align-items: flex-end;
   gap: 2px;
-  min-width: 100%;
+  width: 100%;
 }
 
 .service-mobile-history-col {
@@ -1065,8 +1058,8 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  flex: 0 0 14px;
-  min-width: 14px;
+  flex: 1 1 0;
+  min-width: 0;
   opacity: 0;
   transform: scaleY(0);
   transform-origin: bottom center;
@@ -1078,7 +1071,8 @@ body {
 }
 
 .service-mobile-history-bar {
-  width: 10px;
+  width: 100%;
+  max-width: 12px;
   height: 28px;
   border-radius: 2px 2px 1px 1px;
 }
@@ -1100,12 +1094,22 @@ body {
 }
 
 .service-mobile-history-time {
-  font-size: 0.48rem;
+  display: block;
+  min-height: 0.55rem;
+  font-size: 0.4rem;
   font-weight: 700;
   line-height: 1;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.service-mobile-history-time--spacer {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 @keyframes serviceMobileHistoryColPop {
