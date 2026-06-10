@@ -25412,6 +25412,23 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not probe_token:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
                 return
+            if isinstance(payload, dict) and "results" in payload:
+                results = payload.get("results")
+                if not isinstance(results, list):
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "results must be an array"})
+                    return
+                try:
+                    with sqlite3.connect(DB_PATH) as conn:
+                        push_result = push_probe_results(conn, probe_token, results)
+                        conn.commit()
+                except Exception as exc:
+                    self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                    return
+                if push_result.get("error"):
+                    self._send_json(HTTPStatus.UNAUTHORIZED, push_result)
+                    return
+                self._send_json(HTTPStatus.OK, push_result)
+                return
             with sqlite3.connect(DB_PATH) as conn:
                 status_code, response_payload = resolve_probe_config(conn, probe_token)
                 conn.commit()

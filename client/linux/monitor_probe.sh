@@ -45,15 +45,23 @@ fetch_config() {
 
 push_results() {
   local payload="$1"
-  local wrapped_payload
+  local wrapped_payload endpoint
   wrapped_payload="$(PROBE_TOKEN_VALUE="${PROBE_TOKEN}" PAYLOAD_JSON="${payload}" python3 -c 'import json,os; raw=json.loads(os.environ["PAYLOAD_JSON"]); print(json.dumps({"probe_token": os.environ["PROBE_TOKEN_VALUE"], **raw}, separators=(",", ":")))')"
-  curl "${CURL_ARGS[@]}" \
-    -X POST \
-    -H "X-Probe-Token: ${PROBE_TOKEN}" \
-    -H "Authorization: Bearer ${PROBE_TOKEN}" \
-    -H "Content-Type: application/json" \
-    --data-binary "$wrapped_payload" \
-    "${SERVER_URL%/}/api/v1/external-monitor-probe/push"
+  for endpoint in \
+    "${SERVER_URL%/}/api/v1/external-monitor-probe/config" \
+    "${SERVER_URL%/}/api/v1/external-monitor-probe/push"; do
+    if curl "${CURL_ARGS[@]}" \
+      -X POST \
+      -H "X-Probe-Token: ${PROBE_TOKEN}" \
+      -H "Authorization: Bearer ${PROBE_TOKEN}" \
+      -H "Content-Type: application/json" \
+      --data-binary "$wrapped_payload" \
+      "$endpoint"; then
+      return 0
+    fi
+    probe_log "Push via ${endpoint} failed, trying alternate endpoint..."
+  done
+  return 1
 }
 
 check_http_monitor() {

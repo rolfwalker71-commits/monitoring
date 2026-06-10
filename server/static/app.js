@@ -21845,7 +21845,7 @@ try {
 Write-Host 'Push-Endpunkt testen (POST, leere results)...'
 $pushBody = (@{ probe_token = $probeToken; results = @() } | ConvertTo-Json -Compress)
 try {
-    $pushResponse = Invoke-WebRequest -Method POST -Uri "$baseUrl/api/v1/external-monitor-probe/push" -Headers $testHeaders -Body $pushBody -ContentType 'application/json' -UseBasicParsing
+    $pushResponse = Invoke-WebRequest -Method POST -Uri "$baseUrl/api/v1/external-monitor-probe/config" -Headers $testHeaders -Body $pushBody -ContentType 'application/json' -UseBasicParsing
     Write-Host "Push-Test OK (HTTP $($pushResponse.StatusCode))"
 } catch {
     $detail = $_.Exception.Message

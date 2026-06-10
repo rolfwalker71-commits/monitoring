@@ -87,31 +87,48 @@ function Invoke-ProbePush {
         [array]$Results,
         [bool]$TlsInsecure = $false
     )
-    $pushUrl = "$BaseUrl/api/v1/external-monitor-probe/push"
+    $pushUrls = @(
+        "$BaseUrl/api/v1/external-monitor-probe/config",
+        "$BaseUrl/api/v1/external-monitor-probe/push"
+    )
     $batchPayload = Build-ProbePushPayload -ProbeToken $ProbeToken -Results $Results
     $transientPattern = '502|503|504|Bad Gateway|Gateway Timeout|Service Unavailable'
-    for ($attempt = 1; $attempt -le 2; $attempt++) {
-        try {
-            Invoke-ProbeRequest -Method Post -Url $pushUrl -Headers $Headers -Body $batchPayload -TlsInsecure:$TlsInsecure | Out-Null
-            return
-        } catch {
-            $message = [string]$_.Exception.Message
-            if ($attempt -lt 2 -and $message -match $transientPattern) {
-                Write-ProbeLog "Batch push failed ($message), retrying..."
-                Start-Sleep -Seconds 2
-                continue
+    $lastError = $null
+    foreach ($pushUrl in $pushUrls) {
+        for ($attempt = 1; $attempt -le 2; $attempt++) {
+            try {
+                Invoke-ProbeRequest -Method Post -Url $pushUrl -Headers $Headers -Body $batchPayload -TlsInsecure:$TlsInsecure | Out-Null
+                if ($pushUrl -match '/push$') {
+                    Write-ProbeLog 'Pushed via /push endpoint.'
+                }
+                return
+            } catch {
+                $message = [string]$_.Exception.Message
+                $lastError = $message
+                if ($attempt -lt 2 -and $message -match $transientPattern) {
+                    Write-ProbeLog "Push via $pushUrl failed ($message), retrying..."
+                    Start-Sleep -Seconds 2
+                    continue
+                }
+                break
             }
-            if ($message -notmatch $transientPattern -or $Results.Count -le 1) {
-                throw
-            }
-            Write-ProbeLog "Batch push failed ($message), pushing $($Results.Count) result(s) individually..."
-            foreach ($result in $Results) {
-                $singlePayload = Build-ProbePushPayload -ProbeToken $ProbeToken -Results @($result)
-                Invoke-ProbeRequest -Method Post -Url $pushUrl -Headers $Headers -Body $singlePayload -TlsInsecure:$TlsInsecure | Out-Null
-            }
-            return
+        }
+        if ($pushUrl -notmatch '/push$') {
+            Write-ProbeLog "Push via $pushUrl failed ($lastError), trying alternate endpoint..."
         }
     }
+    if ($lastError -match $transientPattern -and $Results.Count -gt 1) {
+        Write-ProbeLog "Batch push failed ($lastError), pushing $($Results.Count) result(s) individually via /config..."
+        foreach ($result in $Results) {
+            $singlePayload = Build-ProbePushPayload -ProbeToken $ProbeToken -Results @($result)
+            Invoke-ProbeRequest -Method Post -Url $pushUrls[0] -Headers $Headers -Body $singlePayload -TlsInsecure:$TlsInsecure | Out-Null
+        }
+        return
+    }
+    if ($lastError) {
+        throw $lastError
+    }
+    throw 'Probe push failed without details.'
 }
 
 function Invoke-ProbeRequest {
@@ -330,7 +347,7 @@ do {
         if ($errorText -match '401|Nicht autorisiert|Unauthorized|invalid_probe_token|missing_probe_token') {
             Write-ProbeLog 'Hint: Probe-Token ungueltig oder fehlt. Token in probe.json pruefen oder im Infoboard unter Service-Monitor neu generieren.'
         } elseif ($errorText -match '502|503|504|Bad Gateway|Gateway Timeout') {
-            Write-ProbeLog 'Hint: Infoboard-API nicht erreichbar (Proxy/Gateway). POST /api/v1/external-monitor-probe/push muss wie der Token-Test durch den Reverse-Proxy erreichbar sein.'
+            Write-ProbeLog 'Hint: Infoboard Push-API nicht erreichbar (Proxy/Gateway). POST mit results[] auf /api/v1/external-monitor-probe/config muss erlaubt sein (wie der Token-Test).'
         }
     }
     if ($RunOnce) {
