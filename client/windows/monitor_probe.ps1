@@ -58,25 +58,46 @@ function ConvertTo-ProbeResultJson {
             $httpStatusPart = 'null'
         }
     }
-    $errorMessage = Escape-ProbeJsonString ([string]$Result.error_message)
-    if ($errorMessage.Length -gt 500) {
-        $errorMessage = $errorMessage.Substring(0, 500)
+    $errorMessage = ([string]$Result.error_message -replace '[^\x20-\x7E]', ' ').Trim()
+    if ($errorMessage.Length -gt 120) {
+        $errorMessage = $errorMessage.Substring(0, 120)
     }
+    $errorMessage = Escape-ProbeJsonString $errorMessage
     return "{`"monitor_id`":$monitorId,`"status`":`"$status`",`"response_ms`":$responseMs,`"http_status`":$httpStatusPart,`"error_message`":`"$errorMessage`"}"
+}
+
+function Get-ProbeResultsJsonArray {
+    param([array]$Results)
+    $resultParts = @()
+    foreach ($result in $Results) {
+        $resultParts += (ConvertTo-ProbeResultJson -Result $result)
+    }
+    return '[' + ($resultParts -join ',') + ']'
 }
 
 function Build-ProbePushPayload {
     param(
         [string]$ProbeToken,
-        [array]$Results
+        [array]$Results,
+        [switch]$UseBase64
     )
     $token = Escape-ProbeJsonString $ProbeToken
-    $resultParts = @()
-    foreach ($result in $Results) {
-        $resultParts += (ConvertTo-ProbeResultJson -Result $result)
+    $resultsJson = Get-ProbeResultsJsonArray -Results $Results
+    if ($UseBase64) {
+        $resultsB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($resultsJson))
+        return "{`"probe_token`":`"$token`",`"results_b64`":`"$resultsB64`"}"
     }
-    $resultsJson = '[' + ($resultParts -join ',') + ']'
     return "{`"probe_token`":`"$token`",`"results`":$resultsJson}"
+}
+
+function Invoke-ProbePushAttempt {
+    param(
+        [string]$Url,
+        [string]$Payload,
+        [hashtable]$Headers,
+        [bool]$TlsInsecure = $false
+    )
+    Invoke-ProbeRequest -Method Post -Url $Url -Headers $Headers -Body $Payload -TlsInsecure:$TlsInsecure | Out-Null
 }
 
 function Invoke-ProbePush {
@@ -87,41 +108,43 @@ function Invoke-ProbePush {
         [array]$Results,
         [bool]$TlsInsecure = $false
     )
-    $pushUrls = @(
-        "$BaseUrl/api/v1/external-monitor-probe/config",
-        "$BaseUrl/api/v1/external-monitor-probe/push"
-    )
-    $batchPayload = Build-ProbePushPayload -ProbeToken $ProbeToken -Results $Results
+    $configUrl = "$BaseUrl/api/v1/external-monitor-probe/config"
+    $pushUrl = "$BaseUrl/api/v1/external-monitor-probe/push"
     $transientPattern = '502|503|504|Bad Gateway|Gateway Timeout|Service Unavailable'
+    $attemptPlans = @(
+        @{ Url = $configUrl; Base64 = $true; Label = 'config/base64' },
+        @{ Url = $configUrl; Base64 = $false; Label = 'config/plain' },
+        @{ Url = $pushUrl; Base64 = $true; Label = 'push/base64' },
+        @{ Url = $pushUrl; Base64 = $false; Label = 'push/plain' }
+    )
     $lastError = $null
-    foreach ($pushUrl in $pushUrls) {
+    foreach ($plan in $attemptPlans) {
+        $payload = Build-ProbePushPayload -ProbeToken $ProbeToken -Results $Results -UseBase64:([bool]$plan.Base64)
         for ($attempt = 1; $attempt -le 2; $attempt++) {
             try {
-                Invoke-ProbeRequest -Method Post -Url $pushUrl -Headers $Headers -Body $batchPayload -TlsInsecure:$TlsInsecure | Out-Null
-                if ($pushUrl -match '/push$') {
-                    Write-ProbeLog 'Pushed via /push endpoint.'
+                Invoke-ProbePushAttempt -Url $plan.Url -Payload $payload -Headers $Headers -TlsInsecure:$TlsInsecure
+                if ($plan.Label -ne 'config/base64') {
+                    Write-ProbeLog "Pushed via $($plan.Label)."
                 }
                 return
             } catch {
                 $message = [string]$_.Exception.Message
                 $lastError = $message
                 if ($attempt -lt 2 -and $message -match $transientPattern) {
-                    Write-ProbeLog "Push via $pushUrl failed ($message), retrying..."
+                    Write-ProbeLog "Push via $($plan.Label) failed ($message), retrying..."
                     Start-Sleep -Seconds 2
                     continue
                 }
+                Write-ProbeLog "Push via $($plan.Label) failed ($message), trying next transport..."
                 break
             }
         }
-        if ($pushUrl -notmatch '/push$') {
-            Write-ProbeLog "Push via $pushUrl failed ($lastError), trying alternate endpoint..."
-        }
     }
     if ($lastError -match $transientPattern -and $Results.Count -gt 1) {
-        Write-ProbeLog "Batch push failed ($lastError), pushing $($Results.Count) result(s) individually via /config..."
+        Write-ProbeLog "Batch push failed ($lastError), pushing $($Results.Count) result(s) individually (base64 via config)..."
         foreach ($result in $Results) {
-            $singlePayload = Build-ProbePushPayload -ProbeToken $ProbeToken -Results @($result)
-            Invoke-ProbeRequest -Method Post -Url $pushUrls[0] -Headers $Headers -Body $singlePayload -TlsInsecure:$TlsInsecure | Out-Null
+            $singlePayload = Build-ProbePushPayload -ProbeToken $ProbeToken -Results @($result) -UseBase64
+            Invoke-ProbePushAttempt -Url $configUrl -Payload $singlePayload -Headers $Headers -TlsInsecure:$TlsInsecure
         }
         return
     }

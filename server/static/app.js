@@ -21842,8 +21842,8 @@ try {
     throw "Probe-Token-Test fehlgeschlagen: $detail"
 }
 
-Write-Host 'Push-Endpunkt testen (POST, leere results)...'
-$pushBody = (@{ probe_token = $probeToken; results = @() } | ConvertTo-Json -Compress)
+Write-Host 'Push-Endpunkt testen (POST, base64 leere results)...'
+$pushBody = (@{ probe_token = $probeToken; results_b64 = 'W10=' } | ConvertTo-Json -Compress)
 try {
     $pushResponse = Invoke-WebRequest -Method POST -Uri "$baseUrl/api/v1/external-monitor-probe/config" -Headers $testHeaders -Body $pushBody -ContentType 'application/json' -UseBasicParsing
     Write-Host "Push-Test OK (HTTP $($pushResponse.StatusCode))"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -803,6 +805,29 @@ def get_probe_config(conn: sqlite3.Connection, token: str) -> dict[str, Any] | N
         },
         "monitors": monitors,
     }
+
+
+def decode_probe_push_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        raise ValueError("invalid payload")
+    if "results_b64" in payload:
+        raw_b64 = str(payload.get("results_b64") or "").strip()
+        if not raw_b64:
+            return []
+        try:
+            decoded = base64.b64decode(raw_b64, validate=True)
+            data = json.loads(decoded.decode("utf-8"))
+        except (binascii.Error, ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ValueError("invalid results_b64") from exc
+        if not isinstance(data, list):
+            raise ValueError("results must be an array")
+        return data
+    if "results" in payload:
+        results = payload.get("results")
+        if not isinstance(results, list):
+            raise ValueError("results must be an array")
+        return results
+    raise ValueError("results or results_b64 required")
 
 
 def push_probe_results(conn: sqlite3.Connection, token: str, results: list[dict[str, Any]]) -> dict[str, Any]:

@@ -45,21 +45,27 @@ fetch_config() {
 
 push_results() {
   local payload="$1"
-  local wrapped_payload endpoint
-  wrapped_payload="$(PROBE_TOKEN_VALUE="${PROBE_TOKEN}" PAYLOAD_JSON="${payload}" python3 -c 'import json,os; raw=json.loads(os.environ["PAYLOAD_JSON"]); print(json.dumps({"probe_token": os.environ["PROBE_TOKEN_VALUE"], **raw}, separators=(",", ":")))')"
-  for endpoint in \
-    "${SERVER_URL%/}/api/v1/external-monitor-probe/config" \
-    "${SERVER_URL%/}/api/v1/external-monitor-probe/push"; do
-    if curl "${CURL_ARGS[@]}" \
-      -X POST \
-      -H "X-Probe-Token: ${PROBE_TOKEN}" \
-      -H "Authorization: Bearer ${PROBE_TOKEN}" \
-      -H "Content-Type: application/json" \
-      --data-binary "$wrapped_payload" \
-      "$endpoint"; then
-      return 0
+  local wrapped_payload endpoint encoding
+  for encoding in b64 plain; do
+    if [[ "$encoding" == "b64" ]]; then
+      wrapped_payload="$(PROBE_TOKEN_VALUE="${PROBE_TOKEN}" PAYLOAD_JSON="${payload}" python3 -c 'import base64,json,os; raw=json.loads(os.environ["PAYLOAD_JSON"]); results=raw.get("results") or []; outer={"probe_token": os.environ["PROBE_TOKEN_VALUE"], "results_b64": base64.b64encode(json.dumps(results, separators=(",", ":")).encode()).decode()}; print(json.dumps(outer, separators=(",", ":")))')"
+    else
+      wrapped_payload="$(PROBE_TOKEN_VALUE="${PROBE_TOKEN}" PAYLOAD_JSON="${payload}" python3 -c 'import json,os; raw=json.loads(os.environ["PAYLOAD_JSON"]); print(json.dumps({"probe_token": os.environ["PROBE_TOKEN_VALUE"], **raw}, separators=(",", ":")))')"
     fi
-    probe_log "Push via ${endpoint} failed, trying alternate endpoint..."
+    for endpoint in \
+      "${SERVER_URL%/}/api/v1/external-monitor-probe/config" \
+      "${SERVER_URL%/}/api/v1/external-monitor-probe/push"; do
+      if curl "${CURL_ARGS[@]}" \
+        -X POST \
+        -H "X-Probe-Token: ${PROBE_TOKEN}" \
+        -H "Authorization: Bearer ${PROBE_TOKEN}" \
+        -H "Content-Type: application/json" \
+        --data-binary "$wrapped_payload" \
+        "$endpoint"; then
+        return 0
+      fi
+      probe_log "Push via ${endpoint} (${encoding}) failed, trying next transport..."
+    done
   done
   return 1
 }

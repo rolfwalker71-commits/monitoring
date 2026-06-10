@@ -52,6 +52,7 @@ from external_monitors import (
     create_external_monitor,
     delete_external_monitor,
     create_probe_site,
+    decode_probe_push_results,
     extract_probe_token,
     verify_probe_site_token,
     external_monitor_summary,
@@ -25412,10 +25413,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not probe_token:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
                 return
-            if isinstance(payload, dict) and "results" in payload:
-                results = payload.get("results")
-                if not isinstance(results, list):
-                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "results must be an array"})
+            if isinstance(payload, dict) and ("results" in payload or "results_b64" in payload):
+                try:
+                    results = decode_probe_push_results(payload)
+                except ValueError as exc:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                     return
                 try:
                     with sqlite3.connect(DB_PATH) as conn:
@@ -25450,9 +25452,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not probe_token:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
                 return
-            results = payload.get("results")
-            if not isinstance(results, list):
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "results must be an array"})
+            try:
+                results = decode_probe_push_results(payload)
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 return
             try:
                 with sqlite3.connect(DB_PATH) as conn:
