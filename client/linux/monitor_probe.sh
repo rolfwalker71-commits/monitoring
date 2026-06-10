@@ -53,15 +53,20 @@ check_http_monitor() {
   local expected_status="$3"
   local keyword="$4"
   local timeout_sec="$5"
+  local tls_verify="${6:-1}"
   local url="$target_url"
   if [[ "$url" != http://* && "$url" != https://* ]]; then
     url="https://${url}"
   fi
   local started end elapsed http_code body_file status error_msg response_ms
+  local -a request_args=("${CURL_ARGS[@]}")
+  if [[ "$tls_verify" == "0" ]]; then
+    request_args+=(--insecure)
+  fi
   started=$(date +%s)
   body_file="$(mktemp)"
   set +e
-  http_code=$(curl "${CURL_ARGS[@]}" --max-time "$timeout_sec" -o "$body_file" -w '%{http_code}' "$url")
+  http_code=$(curl "${request_args[@]}" --max-time "$timeout_sec" -o "$body_file" -w '%{http_code}' "$url")
   curl_exit=$?
   set -e
   end=$(date +%s)
@@ -120,18 +125,19 @@ run_probe_cycle() {
     return 0
   fi
   result_parts=()
-  while IFS=$'\t' read -r monitor_id monitor_type target_url expected_status keyword timeout_sec; do
+  while IFS=$'\t' read -r monitor_id monitor_type target_url expected_status keyword timeout_sec tls_verify; do
     case "$monitor_type" in
       tcp)
         result_parts+=("$(check_tcp_monitor "$monitor_id" "$target_url" "$timeout_sec")")
         ;;
       http|ssl_cert|*)
-        result_parts+=("$(check_http_monitor "$monitor_id" "$target_url" "$expected_status" "$keyword" "$timeout_sec")")
+        result_parts+=("$(check_http_monitor "$monitor_id" "$target_url" "$expected_status" "$keyword" "$timeout_sec" "$tls_verify")")
         ;;
     esac
   done < <(printf '%s' "$config_json" | python3 -c 'import json,sys
 data=json.load(sys.stdin)
 for m in data.get("monitors") or []:
+    tls_verify = 1 if m.get("tls_verify", True) else 0
     print(
         m.get("id", 0),
         m.get("monitor_type", "http"),
@@ -139,6 +145,7 @@ for m in data.get("monitors") or []:
         "" if m.get("expected_status") is None else m.get("expected_status"),
         m.get("keyword", "") or "",
         m.get("timeout_sec", 15) or 15,
+        tls_verify,
         sep="\t",
     )')
   local payload

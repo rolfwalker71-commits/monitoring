@@ -2351,6 +2351,13 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   gap: 10px;
 }
 
+.external-monitor-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .external-monitor-detail-header h4 {
   margin: 0 0 4px;
   font-size: 20px;

@@ -20850,6 +20850,45 @@ function formatExternalMonitorIntervalMinutes(monitor) {
   return Math.max(1, Math.round(intervalSec / 60));
 }
 
+function formatExternalMonitorTlsVerifyLabel(monitor) {
+  const monitorType = asText(monitor?.monitor_type, "http").toLowerCase();
+  if (monitorType === "tcp") {
+    return "—";
+  }
+  return monitor?.tls_verify === false ? "Nur Verbindung (Zertifikat ignorieren)" : "Zertifikat prüfen";
+}
+
+function isExternalMonitorTlsVerifyApplicable(monitorType) {
+  const normalized = asText(monitorType, "http").toLowerCase();
+  return normalized === "http" || normalized === "ssl_cert";
+}
+
+function formatExternalMonitorCertDaysLeft(value) {
+  if (value === null || value === undefined || value === "") {
+    return {
+      display: "-",
+      hint: "Zertifikat nicht auslesbar",
+      warn: false,
+      cardLabel: "",
+    };
+  }
+  const days = Number(value);
+  if (!Number.isFinite(days)) {
+    return {
+      display: "-",
+      hint: "Zertifikat nicht auslesbar",
+      warn: false,
+      cardLabel: "",
+    };
+  }
+  return {
+    display: `${days}d`,
+    hint: days < 0 ? "Zertifikat abgelaufen" : `läuft ab in ${days} Tagen`,
+    warn: days <= 14,
+    cardLabel: `Zertifikat: ${days} Tage`,
+  };
+}
+
 function formatExternalMonitorLatency(monitor) {
   const responseMs = Number(monitor?.last_response_ms);
   if (Number.isFinite(responseMs) && responseMs >= 0) {
@@ -21165,9 +21204,9 @@ function renderServiceMonitorCard(monitor) {
   const monitorId = Number(monitor?.id || 0);
   const selectedClass = monitorId === Number(state.selectedExternalMonitorId || 0) ? " selected" : "";
   const status = asText(monitor?.last_status, "unknown").toLowerCase();
-  const certDays = monitor?.last_cert_days_left;
-  const certHtml = Number.isFinite(Number(certDays))
-    ? `<span class="service-monitor-cert ${Number(certDays) <= 14 ? "service-monitor-cert--warn" : "service-monitor-cert--ok"}">Zertifikat: ${Number(certDays)} Tage</span>`
+  const certInfo = formatExternalMonitorCertDaysLeft(monitor?.last_cert_days_left);
+  const certHtml = certInfo.cardLabel
+    ? `<span class="service-monitor-cert ${certInfo.warn ? "service-monitor-cert--warn" : "service-monitor-cert--ok"}">${escapeHtml(certInfo.cardLabel)}</span>`
     : "";
   const probeSource = asText(monitor?.probe_source, "server").toLowerCase();
   const sourceLabel = probeSource === "push" ? "Intern · Push-Probe" : "Extern · Server";
@@ -21220,9 +21259,7 @@ function renderExternalMonitorDetail(monitor) {
   }
   const status = asText(monitor.last_status, "unknown").toLowerCase();
   const metricClass = status === "up" ? "external-monitor-metric--up" : status === "down" ? "external-monitor-metric--down" : "external-monitor-metric--warn";
-  const certHint = Number.isFinite(Number(monitor.last_cert_days_left))
-    ? `läuft ab in ${Number(monitor.last_cert_days_left)} Tagen`
-    : "kein Zertifikat erkannt";
+  const certInfo = formatExternalMonitorCertDaysLeft(monitor.last_cert_days_left);
   const historyRows = Array.isArray(monitor.history) ? monitor.history : [];
   const historyChartHtml = renderExternalMonitorHistoryChart(historyRows, monitor);
   const historyTableRows = historyRows.slice(0, 20);
@@ -21239,8 +21276,17 @@ function renderExternalMonitorDetail(monitor) {
   const isPushProbe = asText(monitor.probe_source, "server") === "push";
   const probeSiteId = Number(monitor.probe_site_id || 0);
   const pushMonitorsOnSite = isPushProbe && probeSiteId ? getPushMonitorsForProbeSite(probeSiteId) : [];
+  const testButtonTitle = isPushProbe
+    ? "Sofortprüfung vom Infoboard-Server (nur wenn die URL von außen erreichbar ist)"
+    : "Sofortprüfung vom Infoboard-Server ausführen";
+  const testButtonHtml = state.isAdmin
+    ? `<button type="button" class="btn-secondary btn-secondary--compact" data-action="test-external-monitor-now" title="${escapeHtml(testButtonTitle)}">Jetzt testen</button>`
+    : "";
   const editButtonHtml = state.isAdmin
     ? `<button type="button" class="btn-icon btn-icon--compact" data-action="edit-external-monitor" title="Service bearbeiten (Bezeichnung, URL, Intervall)">✏️</button>`
+    : "";
+  const headerActionsHtml = (testButtonHtml || editButtonHtml)
+    ? `<div class="external-monitor-detail-actions">${testButtonHtml}${editButtonHtml}</div>`
     : "";
   const probeScriptButtonHtml = state.isAdmin && isPushProbe && probeSiteId
     ? `<button type="button" class="btn-secondary btn-secondary--compact" data-action="generate-probe-script" data-probe-site-id="${probeSiteId}">Probe-Skript generieren</button>`
@@ -21260,7 +21306,7 @@ function renderExternalMonitorDetail(monitor) {
           <h4>${escapeHtml(asText(monitor.name, "Service"))}</h4>
           <p class="sub">${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Interner Monitor (Push-Probe) — " : "Externer Monitor — ")}${escapeHtml(asText(monitor.target_url, ""))}</p>
         </div>
-        ${editButtonHtml}
+        ${headerActionsHtml}
       </div>
     </div>
     <div class="external-monitor-metrics">
@@ -21269,10 +21315,10 @@ function renderExternalMonitorDetail(monitor) {
         <div class="value">${escapeHtml(status.toUpperCase())}</div>
         <div class="hint">${escapeHtml(asText(monitor.last_error_message, "OK"))}</div>
       </div>
-      <div class="external-monitor-metric external-monitor-metric--warn">
+      <div class="external-monitor-metric ${certInfo.warn ? "external-monitor-metric--warn" : ""}">
         <div class="label">Zertifikat</div>
-        <div class="value">${Number.isFinite(Number(monitor.last_cert_days_left)) ? `${Number(monitor.last_cert_days_left)}d` : "-"}</div>
-        <div class="hint">${escapeHtml(certHint)}</div>
+        <div class="value">${escapeHtml(certInfo.display)}</div>
+        <div class="hint">${escapeHtml(certInfo.hint)}</div>
       </div>
       <div class="external-monitor-metric">
         <div class="label">Latenz</div>
@@ -21292,6 +21338,7 @@ function renderExternalMonitorDetail(monitor) {
           <tr><td>Quelle</td><td>${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Intern (Push-Probe)" : "Extern (Server)")}</td></tr>
           <tr><td>Intervall</td><td>${escapeHtml(String(formatExternalMonitorIntervalMinutes(monitor)))} Min.</td></tr>
           <tr><td>Erwartung</td><td>${monitor.expected_status != null ? `HTTP ${escapeHtml(String(monitor.expected_status))}` : "-"}${monitor.keyword ? ` · Keyword „${escapeHtml(monitor.keyword)}“` : ""}</td></tr>
+          ${isExternalMonitorTlsVerifyApplicable(monitor.monitor_type) ? `<tr><td>TLS-Prüfung</td><td>${escapeHtml(formatExternalMonitorTlsVerifyLabel(monitor))}</td></tr>` : ""}
           <tr><td>Verknüpfter Host</td><td>${renderLinkedHostDetailCell(monitor)}</td></tr>
           ${isPushProbe && probeSiteId ? `<tr><td>Probe-Stelle</td><td>#${probeSiteId} — ${escapeHtml(resolveProbeSiteName(probeSiteId))}</td></tr>` : ""}
         </tbody>
@@ -21782,6 +21829,13 @@ async function openExternalMonitorCreateDialog() {
           <label>Erwarteter HTTP-Status
             <input id="externalMonitorCreateExpectedStatusInput" type="number" min="100" max="599" step="1" value="200" />
           </label>
+          <label>HTTPS-Zertifikat
+            <select id="externalMonitorCreateTlsVerifySelect">
+              <option value="1" selected>Zertifikat prüfen (empfohlen)</option>
+              <option value="0">Nur Verbindung (Zertifikat ignorieren)</option>
+            </select>
+          </label>
+          <p class="settings-helper-text external-monitor-create-tls-hint">Bei „Nur Verbindung“ wird HTTPS ohne Zertifikatsprüfung getestet — sinnvoll bei unvollständiger Zertifikatskette. Ablaufdatum wird dann nicht ausgelesen.</p>
           <label>Verknüpfter Host (optional)
             <select id="externalMonitorCreateHostSelect">
               <option value="">— Kein Host —</option>
@@ -21882,6 +21936,7 @@ async function openExternalMonitorCreateDialog() {
       probe_site_id: probeSiteId,
       interval_sec: intervalMin * 60,
       expected_status: Number.isFinite(expectedStatus) ? expectedStatus : 200,
+      tls_verify: asText(modal.querySelector("#externalMonitorCreateTlsVerifySelect")?.value, "1") !== "0",
       related_host_uid: asText(modal.querySelector("#externalMonitorCreateHostSelect")?.value, "").trim(),
     };
     const response = await fetch("/api/v1/external-monitors", {
@@ -21911,6 +21966,7 @@ async function openExternalMonitorEditorDialog(monitor) {
     return null;
   }
   const monitorType = asText(monitor.monitor_type, "http").toLowerCase();
+  const tlsVerify = monitor.tls_verify !== false;
   const intervalMin = formatExternalMonitorIntervalMinutes(monitor);
   const probeSource = asText(monitor.probe_source, "server").toLowerCase();
   const probeSourceLabel = probeSource === "push" ? "Intern (Push-Probe)" : "Extern (Server)";
@@ -21963,6 +22019,12 @@ async function openExternalMonitorEditorDialog(monitor) {
           <label>Keyword (optional)
             <input id="externalMonitorEditKeywordInput" type="text" placeholder="Text der in der Antwort vorkommen muss" value="${escapeHtml(asText(monitor.keyword, ""))}" />
           </label>
+          <label id="externalMonitorEditTlsVerifyWrap">HTTPS-Zertifikat
+            <select id="externalMonitorEditTlsVerifySelect">
+              <option value="1" ${tlsVerify ? "selected" : ""}>Zertifikat prüfen (empfohlen)</option>
+              <option value="0" ${!tlsVerify ? "selected" : ""}>Nur Verbindung (Zertifikat ignorieren)</option>
+            </select>
+          </label>
           <label>Timeout (Sekunden)
             <input id="externalMonitorEditTimeoutInput" type="number" min="3" max="120" step="1" value="${Math.max(3, Math.min(120, Number(monitor.timeout_sec || 15)))}" />
           </label>
@@ -21978,7 +22040,7 @@ async function openExternalMonitorEditorDialog(monitor) {
           <input id="externalMonitorEditEnabledInput" type="checkbox" ${monitor.enabled !== false ? "checked" : ""} />
           Monitor aktiv
         </label>
-        <p class="settings-helper-text">Quelle: ${escapeHtml(probeSourceLabel)} (nicht änderbar). Prüfungen laufen alle ${intervalMin} Minuten.</p>
+        <p class="settings-helper-text">Quelle: ${escapeHtml(probeSourceLabel)} (nicht änderbar). Prüfungen laufen alle ${intervalMin} Minuten. Bei „Nur Verbindung“ wird kein Zertifikatsablauf ausgelesen.</p>
         <div class="host-meta-modal-actions">
           <button type="button" class="btn-secondary" data-action="cancel">Abbrechen</button>
           <button type="button" class="btn-primary" data-action="save">Speichern</button>
@@ -21997,6 +22059,14 @@ async function openExternalMonitorEditorDialog(monitor) {
   const timeoutInput = modal.querySelector("#externalMonitorEditTimeoutInput");
   const hostSelect = modal.querySelector("#externalMonitorEditHostSelect");
   const enabledInput = modal.querySelector("#externalMonitorEditEnabledInput");
+  const tlsVerifyWrap = modal.querySelector("#externalMonitorEditTlsVerifyWrap");
+  const tlsVerifySelect = modal.querySelector("#externalMonitorEditTlsVerifySelect");
+  const syncTlsVerifyUi = () => {
+    const applicable = isExternalMonitorTlsVerifyApplicable(asText(typeSelect?.value, "http"));
+    tlsVerifyWrap?.classList.toggle("hidden", !applicable);
+  };
+  typeSelect?.addEventListener("change", syncTlsVerifyUi);
+  syncTlsVerifyUi();
 
   return new Promise((resolve) => {
     const close = (result) => {
@@ -22029,11 +22099,56 @@ async function openExternalMonitorEditorDialog(monitor) {
         expected_status: Number.isFinite(expectedStatus) ? expectedStatus : null,
         keyword: asText(keywordInput?.value, "").trim(),
         timeout_sec: Math.max(3, Math.min(120, Number(timeoutInput?.value || 15))),
+        tls_verify: asText(tlsVerifySelect?.value, "1") !== "0",
         related_host_uid: asText(hostSelect?.value, "").trim(),
         enabled: Boolean(enabledInput?.checked),
       });
     });
   });
+}
+
+async function testExternalMonitorNow(monitorId) {
+  const numericId = Number(monitorId || 0);
+  if (!state.isAdmin || !numericId) {
+    return;
+  }
+  const detailView = document.getElementById("externalMonitorDetailView");
+  const testButton = detailView?.querySelector('[data-action="test-external-monitor-now"]');
+  const previousLabel = testButton?.textContent || "Jetzt testen";
+  if (testButton) {
+    testButton.disabled = true;
+    testButton.textContent = "Teste…";
+  }
+  try {
+    const response = await fetch("/api/v1/external-monitors/test-now", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: numericId }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(asText(data.error, `HTTP ${response.status}`));
+    }
+    if (data.monitor) {
+      const existing = Array.isArray(state.externalMonitors) ? state.externalMonitors : [];
+      state.externalMonitors = existing.map((item) => (
+        Number(item?.id) === numericId ? { ...item, ...data.monitor } : item
+      ));
+      renderServiceMonitors();
+      if (Number(state.selectedExternalMonitorId) === numericId) {
+        renderExternalMonitorDetail(data.monitor);
+      }
+    }
+    await loadExternalMonitorSummary();
+  } catch (error) {
+    window.alert(`Soforttest fehlgeschlagen: ${error.message}`);
+  } finally {
+    if (testButton) {
+      testButton.disabled = false;
+      testButton.textContent = previousLabel;
+    }
+  }
 }
 
 async function editExternalMonitor(monitorId) {
@@ -22097,6 +22212,15 @@ function wireExternalMonitorDetailInteractions() {
       const probeSiteId = Number(probeScriptButton.getAttribute("data-probe-site-id") || 0);
       if (probeSiteId) {
         void openProbeScriptGeneratorDialog(probeSiteId);
+      }
+      return;
+    }
+    const testButton = target ? target.closest('[data-action="test-external-monitor-now"]') : null;
+    if (testButton) {
+      event.preventDefault();
+      const monitorId = Number(state.selectedExternalMonitorId || 0);
+      if (monitorId) {
+        void testExternalMonitorNow(monitorId);
       }
       return;
     }

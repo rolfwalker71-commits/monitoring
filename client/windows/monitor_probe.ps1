@@ -75,7 +75,8 @@ function Test-HttpMonitor {
         [string]$TargetUrl,
         $ExpectedStatus,
         [string]$Keyword,
-        [int]$TimeoutSec
+        [int]$TimeoutSec,
+        [bool]$TlsVerify = $true
     )
     $url = $TargetUrl
     if ($url -notmatch '^https?://') {
@@ -86,7 +87,25 @@ function Test-HttpMonitor {
     $errorMessage = ''
     $httpStatus = $null
     try {
-        $response = Invoke-WebRequest -Uri $url -Method Get -TimeoutSec $TimeoutSec -UseBasicParsing
+        $requestParams = @{
+            Uri = $url
+            Method = 'Get'
+            TimeoutSec = $TimeoutSec
+            UseBasicParsing = $true
+        }
+        if (-not $TlsVerify) {
+            if (-not ([System.Management.Automation.PSTypeName]'TrustAllCertsPolicy').Type) {
+                Add-Type @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+public class TrustAllCertsPolicy : ICertificatePolicy {
+    public bool CheckValidationResult(ServicePoint srvPoint, X509Certificate certificate, WebRequest request, int certificateProblem) { return true; }
+}
+"@
+            }
+            [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+        }
+        $response = Invoke-WebRequest @requestParams
         $httpStatus = [int]$response.StatusCode
         $body = [string]$response.Content
         if ($null -ne $ExpectedStatus -and "$ExpectedStatus" -ne '' -and $httpStatus -ne [int]$ExpectedStatus) {
@@ -184,7 +203,11 @@ function Invoke-ProbeCycle {
         } else {
             $expected = $monitor.expected_status
             $keyword = if ($monitor.keyword) { [string]$monitor.keyword } else { '' }
-            $results += Test-HttpMonitor -MonitorId ([int]$monitor.id) -TargetUrl ([string]$monitor.target_url) -ExpectedStatus $expected -Keyword $keyword -TimeoutSec $timeoutSec
+            $tlsVerify = $true
+            if ($monitor.PSObject.Properties.Name -contains 'tls_verify') {
+                $tlsVerify = [bool]$monitor.tls_verify
+            }
+            $results += Test-HttpMonitor -MonitorId ([int]$monitor.id) -TargetUrl ([string]$monitor.target_url) -ExpectedStatus $expected -Keyword $keyword -TimeoutSec $timeoutSec -TlsVerify:$tlsVerify
         }
     }
     $payload = @{ results = $results } | ConvertTo-Json -Compress -Depth 4

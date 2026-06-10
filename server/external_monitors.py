@@ -29,6 +29,36 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _format_monitor_error_message(exc: BaseException | str) -> str:
+    text = str(exc).strip()
+    if text.lower().startswith("ssl:"):
+        return _format_monitor_error_message(text[4:].strip())
+    lower = text.lower()
+    if "certificate_verify_failed" in lower or "cert certificate verify failed" in lower:
+        if "unable to get local issuer certificate" in lower:
+            return (
+                "SSL-Zertifikatskette unvollständig oder Zwischenzertifikat auf dem "
+                "Infoboard-Server unbekannt (Browser kann die Seite trotzdem öffnen). "
+                "Webserver sollte die volle HTTPS-Kette liefern."
+            )
+        if "self signed certificate" in lower or "self-signed" in lower:
+            return (
+                "SSL-Zertifikat ist selbstsigniert oder nicht von einer vertrauenswürdigen "
+                "Stelle ausgestellt."
+            )
+        if "certificate has expired" in lower or "has expired" in lower:
+            return "SSL-Zertifikat ist abgelaufen."
+        return (
+            "SSL-Zertifikat konnte vom Infoboard-Server nicht verifiziert werden. "
+            f"Technisch: {text}"
+        )
+    if "keyword '" in lower and "not found" in lower:
+        return text.replace("keyword '", "Keyword „").replace("' not found", "“ nicht im Antwort-Body gefunden.")
+    if lower.startswith("expected http "):
+        return text.replace("expected HTTP ", "Erwartet HTTP ").replace(", got ", ", erhalten ")
+    return text
+
+
 def _parse_cert_not_after(cert: dict) -> tuple[str, int | None]:
     raw = str(cert.get("notAfter") or "").strip()
     if not raw:
@@ -128,6 +158,35 @@ def init_external_monitor_tables(conn: sqlite3.Connection) -> None:
         ON external_monitor_results(monitor_id, checked_at_utc DESC)
         """
     )
+    _ensure_external_monitor_columns(conn)
+
+
+def _ensure_external_monitor_columns(conn: sqlite3.Connection) -> None:
+    columns = {
+        str(row[1])
+        for row in conn.execute("PRAGMA table_info(external_monitors)").fetchall()
+    }
+    if "tls_verify" not in columns:
+        conn.execute(
+            "ALTER TABLE external_monitors ADD COLUMN tls_verify INTEGER NOT NULL DEFAULT 1"
+        )
+
+
+def _monitor_tls_verify_enabled(monitor: dict[str, Any]) -> bool:
+    value = monitor.get("tls_verify", True)
+    if isinstance(value, bool):
+        return value
+    if value in (None, ""):
+        return True
+    if isinstance(value, (int, float)):
+        return int(value) != 0
+    return str(value).strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _ssl_context(tls_verify: bool) -> ssl.SSLContext:
+    if tls_verify:
+        return ssl.create_default_context()
+    return ssl._create_unverified_context()
 
 
 def _row_to_monitor_dict(row: sqlite3.Row, *, include_history: bool = False, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
@@ -144,6 +203,7 @@ def _row_to_monitor_dict(row: sqlite3.Row, *, include_history: bool = False, con
         "expected_status": int(row["expected_status"]) if row["expected_status"] is not None else None,
         "keyword": str(row["keyword"] or ""),
         "timeout_sec": int(row["timeout_sec"] or 15),
+        "tls_verify": bool(int(row["tls_verify"])) if "tls_verify" in row.keys() else True,
         "enabled": bool(int(row["enabled"] or 0)),
         "last_checked_at_utc": str(row["last_checked_at_utc"] or ""),
         "last_status": str(row["last_status"] or "unknown"),
@@ -186,7 +246,7 @@ def _monitor_select_sql() -> str:
         SELECT
             id, name, monitor_type, probe_source, probe_site_id, target_url,
             customer_id, related_host_uid, interval_sec, expected_status, keyword,
-            timeout_sec, enabled, last_checked_at_utc, last_status, last_response_ms,
+            timeout_sec, tls_verify, enabled, last_checked_at_utc, last_status, last_response_ms,
             last_http_status, last_cert_expires_at_utc, last_cert_days_left,
             last_error_message, next_check_at_utc, created_at_utc, updated_at_utc
         FROM external_monitors
@@ -318,8 +378,8 @@ def create_external_monitor(conn: sqlite3.Connection, payload: dict[str, Any]) -
         INSERT INTO external_monitors (
             name, monitor_type, probe_source, probe_site_id, target_url, customer_id,
             related_host_uid, interval_sec, expected_status, keyword, timeout_sec,
-            enabled, last_status, next_check_at_utc, created_at_utc, updated_at_utc
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?)
+            tls_verify, enabled, last_status, next_check_at_utc, created_at_utc, updated_at_utc
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?)
         """,
         (
             str(payload.get("name") or "").strip(),
@@ -333,6 +393,7 @@ def create_external_monitor(conn: sqlite3.Connection, payload: dict[str, Any]) -
             expected_status_value,
             str(payload.get("keyword") or "").strip(),
             max(3, min(120, int(payload.get("timeout_sec") or 15))),
+            1 if _monitor_tls_verify_enabled({"tls_verify": payload.get("tls_verify", True)}) else 0,
             1 if payload.get("enabled", True) else 0,
             now,
             now,
@@ -362,6 +423,10 @@ def update_external_monitor(conn: sqlite3.Connection, monitor_id: int, payload: 
         "expected_status": ("expected_status", lambda v: int(v) if v not in (None, "") else None),
         "keyword": ("keyword", lambda v: str(v or "").strip()),
         "timeout_sec": ("timeout_sec", lambda v: max(3, min(120, int(v or 15)))),
+        "tls_verify": (
+            "tls_verify",
+            lambda v: 1 if _monitor_tls_verify_enabled({"tls_verify": v}) else 0,
+        ),
         "enabled": ("enabled", lambda v: 1 if v else 0),
     }
     interval_changed = False
@@ -385,8 +450,14 @@ def update_external_monitor(conn: sqlite3.Connection, monitor_id: int, payload: 
     return monitors[0] if monitors else None
 
 
-def _run_ssl_cert_probe(host: str, port: int, timeout_sec: int) -> tuple[str, int | None, str]:
-    context = ssl.create_default_context()
+def _run_ssl_cert_probe(
+    host: str,
+    port: int,
+    timeout_sec: int,
+    *,
+    tls_verify: bool = True,
+) -> tuple[str, int | None, str]:
+    context = _ssl_context(tls_verify)
     with socket.create_connection((host, port), timeout=timeout_sec) as raw_sock:
         with context.wrap_socket(raw_sock, server_hostname=host) as ssock:
             cert = ssock.getpeercert() or {}
@@ -400,6 +471,7 @@ def run_monitor_check(monitor: dict[str, Any]) -> dict[str, Any]:
     timeout_sec = max(3, min(120, int(monitor.get("timeout_sec") or 15)))
     expected_status = monitor.get("expected_status")
     keyword = str(monitor.get("keyword") or "")
+    tls_verify = _monitor_tls_verify_enabled(monitor)
     started = time.monotonic()
     cert_expires_at = ""
     cert_days_left = None
@@ -436,7 +508,12 @@ def run_monitor_check(monitor: dict[str, Any]) -> dict[str, Any]:
             parsed = urlparse(target_url if "://" in target_url else f"https://{target_url}")
             host = parsed.hostname or target_url
             port = parsed.port or 443
-            cert_expires_at, cert_days_left, error_message = _run_ssl_cert_probe(host, port, timeout_sec)
+            cert_expires_at, cert_days_left, error_message = _run_ssl_cert_probe(
+                host,
+                port,
+                timeout_sec,
+                tls_verify=tls_verify,
+            )
             response_ms = int((time.monotonic() - started) * 1000)
             if cert_days_left is None:
                 status = "degraded"
@@ -466,24 +543,29 @@ def run_monitor_check(monitor: dict[str, Any]) -> dict[str, Any]:
                     parsed.hostname,
                     parsed.port or 443,
                     timeout_sec,
+                    tls_verify=tls_verify,
                 )
             except Exception as cert_exc:
                 cert_expires_at = ""
                 cert_days_left = None
-                error_message = f"ssl: {cert_exc}"
+                error_message = _format_monitor_error_message(cert_exc)
 
         req = request.Request(url, method="GET", headers={"User-Agent": "monitoring-external-monitor/1.0"})
-        with request.urlopen(req, timeout=timeout_sec) as resp:
+        with request.urlopen(req, timeout=timeout_sec, context=_ssl_context(tls_verify)) as resp:
             http_status = int(getattr(resp, "status", 0) or 0)
             body = resp.read(131072)
         response_ms = int((time.monotonic() - started) * 1000)
         status = "up"
         if expected_status is not None and http_status != int(expected_status):
             status = "down"
-            error_message = f"expected HTTP {expected_status}, got {http_status}"
+            error_message = _format_monitor_error_message(
+                f"expected HTTP {expected_status}, got {http_status}"
+            )
         if keyword and keyword.encode("utf-8") not in body:
             status = "down"
-            error_message = error_message or f"keyword '{keyword}' not found"
+            error_message = error_message or _format_monitor_error_message(
+                f"keyword '{keyword}' not found"
+            )
         if cert_days_left is not None and cert_days_left <= 14 and status == "up":
             status = "degraded"
             error_message = error_message or f"certificate expires in {cert_days_left} days"
@@ -513,7 +595,7 @@ def run_monitor_check(monitor: dict[str, Any]) -> dict[str, Any]:
             "http_status": http_status,
             "cert_expires_at_utc": cert_expires_at,
             "cert_days_left": cert_days_left,
-            "error_message": str(http_exc),
+            "error_message": _format_monitor_error_message(http_exc),
         }
     except Exception as exc:
         response_ms = int((time.monotonic() - started) * 1000)
@@ -523,7 +605,7 @@ def run_monitor_check(monitor: dict[str, Any]) -> dict[str, Any]:
             "http_status": http_status,
             "cert_expires_at_utc": cert_expires_at,
             "cert_days_left": cert_days_left,
-            "error_message": str(exc),
+            "error_message": _format_monitor_error_message(exc),
         }
 
 
@@ -621,7 +703,7 @@ def get_probe_config(conn: sqlite3.Connection, token: str) -> dict[str, Any] | N
         """
         SELECT
             id, name, monitor_type, target_url, interval_sec, expected_status,
-            keyword, timeout_sec, related_host_uid
+            keyword, timeout_sec, tls_verify, related_host_uid
         FROM external_monitors
         WHERE enabled = 1 AND probe_source = 'push' AND probe_site_id = ?
         ORDER BY id ASC
@@ -638,6 +720,7 @@ def get_probe_config(conn: sqlite3.Connection, token: str) -> dict[str, Any] | N
             "expected_status": int(row["expected_status"]) if row["expected_status"] is not None else None,
             "keyword": str(row["keyword"] or ""),
             "timeout_sec": int(row["timeout_sec"] or 15),
+            "tls_verify": bool(int(row["tls_verify"])) if row["tls_verify"] is not None else True,
             "related_host_uid": str(row["related_host_uid"] or ""),
         }
         for row in rows
@@ -740,6 +823,20 @@ def start_external_monitor_worker(db_path: str) -> None:
 
 def wake_external_monitor_worker() -> None:
     _monitor_worker_wakeup.set()
+
+
+def test_external_monitor_now(conn: sqlite3.Connection, monitor_id: int) -> dict[str, Any] | None:
+    monitors = list_external_monitors(conn, monitor_id=monitor_id)
+    if not monitors:
+        return None
+    monitor = monitors[0]
+    result = run_monitor_check(monitor)
+    record_monitor_result(conn, int(monitor_id), result)
+    refreshed = list_external_monitors(conn, monitor_id=monitor_id)
+    return {
+        "monitor": refreshed[0] if refreshed else monitor,
+        "result": result,
+    }
 
 
 def verify_probe_token(provided: str, expected_hash: str) -> bool:
