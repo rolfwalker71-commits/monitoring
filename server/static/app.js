@@ -21401,8 +21401,8 @@ function formatExternalMonitorTlsModeLabel(monitorType) {
   return "Erreichbarkeit ohne Kettenprüfung; Zertifikatslaufzeit wird ausgelesen";
 }
 
-function formatExternalMonitorCertDaysLeft(value) {
-  if (value === null || value === undefined || value === "") {
+function formatExternalMonitorCertDaysLeft(daysLeft, expiresAtUtc) {
+  if (daysLeft === null || daysLeft === undefined || daysLeft === "") {
     return {
       display: "-",
       hint: "Zertifikat nicht auslesbar",
@@ -21410,7 +21410,7 @@ function formatExternalMonitorCertDaysLeft(value) {
       cardLabel: "",
     };
   }
-  const days = Number(value);
+  const days = Number(daysLeft);
   if (!Number.isFinite(days)) {
     return {
       display: "-",
@@ -21419,11 +21419,24 @@ function formatExternalMonitorCertDaysLeft(value) {
       cardLabel: "",
     };
   }
+  const expiryLabel = formatReportDateTime(expiresAtUtc);
+  const hasExpiryLabel = expiryLabel !== "-";
+  const daysLabel = `${days} Tage`;
+  const display = hasExpiryLabel ? `${daysLabel} · ${expiryLabel}` : daysLabel;
+  let hint = "";
+  if (days < 0) {
+    hint = hasExpiryLabel ? `abgelaufen am ${expiryLabel}` : "Zertifikat abgelaufen";
+  } else if (hasExpiryLabel) {
+    hint = `gültig bis ${expiryLabel}`;
+  } else {
+    hint = `läuft ab in ${days} Tagen`;
+  }
+  const cardLabel = hasExpiryLabel ? `Zertifikat: ${daysLabel} · ${expiryLabel}` : `Zertifikat: ${daysLabel}`;
   return {
-    display: `${days}d`,
-    hint: days < 0 ? "Zertifikat abgelaufen" : `läuft ab in ${days} Tagen`,
+    display,
+    hint,
     warn: days <= 14,
-    cardLabel: `Zertifikat: ${days} Tage`,
+    cardLabel,
   };
 }
 
@@ -21899,7 +21912,7 @@ function renderServiceMonitorCard(monitor) {
   const selectedClass = monitorId === Number(state.selectedExternalMonitorId || 0) ? " selected" : "";
   const status = asText(monitor?.last_status, "unknown").toLowerCase();
   const statusClass = serviceMonitorCardStatusClass(status);
-  const certInfo = formatExternalMonitorCertDaysLeft(monitor?.last_cert_days_left);
+  const certInfo = formatExternalMonitorCertDaysLeft(monitor?.last_cert_days_left, monitor?.last_cert_expires_at_utc);
   const certHtml = certInfo.cardLabel
     ? `<span class="service-monitor-cert ${certInfo.warn ? "service-monitor-cert--warn" : "service-monitor-cert--ok"}">${escapeHtml(certInfo.cardLabel)}</span>`
     : "";
@@ -21974,7 +21987,7 @@ function renderExternalMonitorDetail(monitor) {
   }
   const status = asText(monitor.last_status, "unknown").toLowerCase();
   const metricClass = status === "up" ? "external-monitor-metric--up" : status === "down" ? "external-monitor-metric--down" : "external-monitor-metric--warn";
-  const certInfo = formatExternalMonitorCertDaysLeft(monitor.last_cert_days_left);
+  const certInfo = formatExternalMonitorCertDaysLeft(monitor.last_cert_days_left, monitor.last_cert_expires_at_utc);
   const historyRows = Array.isArray(monitor.history) ? monitor.history : [];
   const historyChartHtml = renderExternalMonitorHistoryChart(historyRows, monitor);
   const historyTableRows = historyRows.slice(0, 20);
