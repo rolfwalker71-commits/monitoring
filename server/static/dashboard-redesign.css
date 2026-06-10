@@ -2393,28 +2393,24 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 
 .external-monitor-history-track {
   display: inline-block;
-  min-width: 100%;
   vertical-align: top;
+  padding: 6px 2px;
 }
 
-.external-monitor-history-columns {
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-  padding: 6px 2px 0;
+.external-monitor-history-row {
+  display: grid;
+  grid-template-columns: repeat(var(--point-count), 6px);
+  column-gap: 2px;
+  width: max-content;
 }
 
-.external-monitor-history-column {
-  flex: 1 1 0;
-  min-width: 4px;
-  max-width: 10px;
-  display: flex;
-  flex-direction: column;
+.external-monitor-history-row--status {
+  row-gap: 0;
+  margin-bottom: 2px;
 }
 
-.external-monitor-history-bar {
-  flex: 1 1 auto;
-  min-height: 44px;
+.external-monitor-status-cell {
+  height: 44px;
   border-radius: 2px 2px 0 0;
 }
 
@@ -2551,9 +2547,9 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   margin-top: 10px;
 }
 
-.external-monitor-latency-layer {
-  padding: 4px 2px 6px;
+.external-monitor-latency-section {
   border-top: 1px solid #e8eef5;
+  padding-top: 4px;
 }
 
 .external-monitor-latency-chart-head {
@@ -2561,7 +2557,7 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 2px 3px;
+  padding: 0 0 4px;
 }
 
 .external-monitor-latency-chart-head .label {
@@ -2578,32 +2574,38 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
 }
 
-.external-monitor-latency-svg {
-  display: block;
-  width: 100%;
-  height: 34px;
-}
-
-.external-monitor-latency-line {
-  fill: none;
-  stroke: #2563eb;
-  stroke-width: 0.18;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-
-.external-monitor-latency-dot {
-  fill: #2563eb;
-  vector-effect: non-scaling-stroke;
+.external-monitor-latency-row {
+  position: relative;
 }
 
 .external-monitor-latency-avg-line {
-  stroke: #0ea5e9;
-  stroke-width: 0.16;
-  stroke-dasharray: 0.45 0.35;
-  opacity: 0.9;
-  vector-effect: non-scaling-stroke;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--avg-pct);
+  border-top: 1px dashed #0ea5e9;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.external-monitor-latency-cell {
+  height: 32px;
+  display: flex;
+  align-items: flex-end;
+  background: #eef4fb;
+  border-radius: 0 0 2px 2px;
+  overflow: hidden;
+}
+
+.external-monitor-latency-cell--empty {
+  background: #f1f5f9;
+}
+
+.external-monitor-latency-fill {
+  width: 100%;
+  min-height: 2px;
+  background: #2563eb;
+  border-radius: 1px 1px 0 0;
 }
 
 .external-monitor-latency-empty {
@@ -2769,10 +2771,6 @@ body[data-theme="dark"] .external-monitor-latency-chart-head .value {
   color: #e2e8f0;
 }
 
-body[data-theme="dark"] .external-monitor-latency-avg-line {
-  stroke: #38bdf8;
-}
-
 body[data-theme="dark"] .external-monitor-history-chart-stat {
   border-color: #334155;
   background: #0f172a;
@@ -2787,12 +2785,22 @@ body[data-theme="dark"] .external-monitor-history-timeline {
   background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
 }
 
-body[data-theme="dark"] .external-monitor-latency-layer {
+body[data-theme="dark"] .external-monitor-latency-section {
   border-top-color: #334155;
 }
 
-body[data-theme="dark"] .external-monitor-latency-line,
-body[data-theme="dark"] .external-monitor-latency-dot {
-  stroke: #60a5fa;
-  fill: #60a5fa;
+body[data-theme="dark"] .external-monitor-latency-cell {
+  background: #1e293b;
+}
+
+body[data-theme="dark"] .external-monitor-latency-cell--empty {
+  background: #0f172a;
+}
+
+body[data-theme="dark"] .external-monitor-latency-fill {
+  background: #60a5fa;
+}
+
+body[data-theme="dark"] .external-monitor-latency-avg-line {
+  border-top-color: #38bdf8;
 }

@@ -21264,63 +21264,20 @@ function externalMonitorHistoryBarClass(status) {
   return "external-monitor-history-bar--unknown";
 }
 
-function renderExternalMonitorHistoryLatencyLayer(rows) {
-  const historyRows = Array.isArray(rows) ? rows : [];
-  const count = historyRows.length;
-  if (!count) {
-    return "";
+function computeExternalMonitorLatencyScale(rows) {
+  const latencyValues = (Array.isArray(rows) ? rows : [])
+    .map((entry) => Number(entry?.response_ms))
+    .filter((responseMs) => Number.isFinite(responseMs) && responseMs >= 0);
+  if (!latencyValues.length) {
+    return null;
   }
-
-  const latencyPoints = [];
-  historyRows.forEach((entry, index) => {
-    const responseMs = Number(entry?.response_ms);
-    if (!Number.isFinite(responseMs) || responseMs < 0) {
-      return;
-    }
-    latencyPoints.push({ index, responseMs });
-  });
-
-  if (!latencyPoints.length) {
-    return '<p class="muted external-monitor-latency-empty">Keine Latenzdaten im gewählten Zeitraum.</p>';
-  }
-
-  const chartHeight = 34;
-  const latencyValues = latencyPoints.map((point) => point.responseMs);
   const averageMs = latencyValues.reduce((sum, value) => sum + value, 0) / latencyValues.length;
-  const minCandidate = Math.min(...latencyValues, averageMs);
-  const maxCandidate = Math.max(...latencyValues, averageMs);
-  const span = Math.max(1, maxCandidate - minCandidate);
-  const chartMin = Math.max(0, minCandidate - span * 0.08);
-  const chartMax = maxCandidate + span * 0.12;
-  const chartRange = chartMax - chartMin || 1;
-  const toSvgY = (responseMs) => chartHeight - ((responseMs - chartMin) / chartRange) * (chartHeight - 4) - 2;
-  const avgY = toSvgY(averageMs).toFixed(2);
-  const polylinePoints = latencyPoints
-    .map((point) => `${(point.index + 0.5).toFixed(2)},${toSvgY(point.responseMs).toFixed(2)}`)
-    .join(" ");
-  const dotsHtml = latencyPoints.map((point) => {
-    const checkedAt = historyRows[point.index]?.checked_at_utc;
-    const timestamp = checkedAt
-      ? formatExternalMonitorHistoryTimestamp(new Date(checkedAt))
-      : "-";
-    const title = `${timestamp}: ${Math.round(point.responseMs)} ms`;
-    return `<circle class="external-monitor-latency-dot" cx="${(point.index + 0.5).toFixed(2)}" cy="${toSvgY(point.responseMs).toFixed(2)}" r="0.38"><title>${escapeHtml(title)}</title></circle>`;
-  }).join("");
-
-  return `
-    <div class="external-monitor-latency-layer">
-      <div class="external-monitor-latency-chart-head">
-        <span class="label">Latenz</span>
-        <span class="value">Ø ${Math.round(averageMs)} ms</span>
-      </div>
-      <svg class="external-monitor-latency-svg" viewBox="0 0 ${count} ${chartHeight}" preserveAspectRatio="none" role="img" aria-label="Latenzverlauf je Prüfzeitpunkt">
-        <line class="external-monitor-latency-avg-line" x1="0" y1="${avgY}" x2="${count}" y2="${avgY}" aria-hidden="true"></line>
-        ${latencyPoints.length > 1 ? `<polyline class="external-monitor-latency-line" points="${polylinePoints}" />` : ""}
-        ${dotsHtml}
-      </svg>
-      <p class="muted external-monitor-latency-legend">Gestrichelte Linie = Mittelwert (Ø)</p>
-    </div>
-  `;
+  const chartMax = Math.max(...latencyValues, averageMs, 1);
+  return {
+    averageMs,
+    chartMax,
+    averagePct: Math.max(0, Math.min(100, (averageMs / chartMax) * 100)),
+  };
 }
 
 function summarizeExternalMonitorHistory(historyRows) {
@@ -21367,15 +21324,42 @@ function renderExternalMonitorHistoryChart(historyRows, monitor) {
   const summary = summarizeExternalMonitorHistory(rows);
   const intervalMin = formatExternalMonitorIntervalMinutes(monitor);
   const rangeLabel = `${formatExternalMonitorHistoryTimestamp(rows[0]?.checked_at_utc)} – ${formatExternalMonitorHistoryTimestamp(rows[rows.length - 1]?.checked_at_utc)}`;
-  const columnsHtml = rows.map((entry) => {
+  const latencyScale = computeExternalMonitorLatencyScale(rows);
+  const pointCount = rows.length;
+  const statusCellsHtml = rows.map((entry) => {
     const status = asText(entry.status, "unknown").toLowerCase();
     const timestamp = formatExternalMonitorHistoryTimestamp(entry.checked_at_utc ? new Date(entry.checked_at_utc) : null);
     const latency = entry.response_ms != null ? `${entry.response_ms} ms` : "-";
     const errorText = asText(entry.error_message, "").trim();
     const title = `${timestamp}: ${status.toUpperCase()}${latency !== "-" ? ` · ${latency}` : ""}${errorText ? ` · ${errorText}` : ""}`;
-    return `<div class="external-monitor-history-column" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><div class="external-monitor-history-bar ${externalMonitorHistoryBarClass(status)}"></div></div>`;
+    return `<div class="external-monitor-status-cell ${externalMonitorHistoryBarClass(status)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></div>`;
   }).join("");
-  const latencyLayerHtml = renderExternalMonitorHistoryLatencyLayer(rows);
+  const latencyCellsHtml = rows.map((entry) => {
+    const timestamp = formatExternalMonitorHistoryTimestamp(entry.checked_at_utc ? new Date(entry.checked_at_utc) : null);
+    const responseMs = Number(entry?.response_ms);
+    const hasLatency = Number.isFinite(responseMs) && responseMs >= 0;
+    const title = hasLatency ? `${timestamp}: ${Math.round(responseMs)} ms` : `${timestamp}: keine Latenz`;
+    if (!hasLatency || !latencyScale) {
+      return `<div class="external-monitor-latency-cell external-monitor-latency-cell--empty" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></div>`;
+    }
+    const heightPct = Math.max(6, Math.min(100, (responseMs / latencyScale.chartMax) * 100));
+    return `<div class="external-monitor-latency-cell" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><div class="external-monitor-latency-fill" style="height: ${heightPct.toFixed(1)}%"></div></div>`;
+  }).join("");
+  const latencySectionHtml = latencyScale
+    ? `
+      <div class="external-monitor-latency-section">
+        <div class="external-monitor-latency-chart-head">
+          <span class="label">Latenz</span>
+          <span class="value">Ø ${Math.round(latencyScale.averageMs)} ms</span>
+        </div>
+        <div class="external-monitor-latency-row" style="--avg-pct: ${latencyScale.averagePct.toFixed(2)}%">
+          <div class="external-monitor-latency-avg-line" aria-hidden="true"></div>
+          <div class="external-monitor-history-row external-monitor-history-row--latency" style="--point-count: ${pointCount}" role="img" aria-label="Latenz je Prüfzeitpunkt">${latencyCellsHtml}</div>
+        </div>
+        <p class="muted external-monitor-latency-legend">Gestrichelte Linie = Mittelwert (Ø)</p>
+      </div>
+    `
+    : '<p class="muted external-monitor-latency-empty">Keine Latenzdaten im gewählten Zeitraum.</p>';
   const availabilityValue = summary.availabilityPct != null ? `${summary.availabilityPct}%` : "-";
   const failCount = summary.down + summary.degraded;
   return `
@@ -21396,8 +21380,8 @@ function renderExternalMonitorHistoryChart(historyRows, monitor) {
       </div>
       <div class="external-monitor-history-timeline">
         <div class="external-monitor-history-track">
-          <div class="external-monitor-history-columns" role="img" aria-label="Prüfverlauf">${columnsHtml}</div>
-          ${latencyLayerHtml}
+          <div class="external-monitor-history-row external-monitor-history-row--status" style="--point-count: ${pointCount}" role="img" aria-label="Prüfverlauf">${statusCellsHtml}</div>
+          ${latencySectionHtml}
         </div>
       </div>
       <div class="external-monitor-history-chart-meta">
