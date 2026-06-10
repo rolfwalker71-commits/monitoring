@@ -2174,9 +2174,9 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .service-monitor-pill--definition {
-  color: #1e3a5f;
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(148, 163, 184, 0.55);
+  color: #854d0e;
+  background: #fef08a;
+  border-color: #facc15;
 }
 
 .service-monitor-pill--intern {
@@ -2310,9 +2310,9 @@ body[data-theme="dark"] .service-monitor-type-label {
 }
 
 body[data-theme="dark"] .service-monitor-pill--definition {
-  color: #e2e8f0;
-  background: rgba(15, 23, 42, 0.45);
-  border-color: rgba(148, 163, 184, 0.35);
+  color: #fef9c3;
+  background: #854d0e;
+  border-color: #ca8a04;
 }
 
 body[data-theme="dark"] .service-monitor-pill--intern {
