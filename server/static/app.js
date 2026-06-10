@@ -21382,9 +21382,23 @@ function formatExternalMonitorTlsVerifyLabel(monitor) {
   return monitor?.tls_verify === false ? "Nur Verbindung (Zertifikat ignorieren)" : "Zertifikat prüfen";
 }
 
-function isExternalMonitorTlsVerifyApplicable(monitorType) {
+function isExternalMonitorTlsVerifyApplicable(_monitorType) {
+  return false;
+}
+
+function isExternalMonitorExpiryOnlyTlsMode(monitorType) {
   const normalized = asText(monitorType, "http").toLowerCase();
-  return normalized === "http";
+  return normalized === "http" || normalized === "ssl_cert";
+}
+
+function formatExternalMonitorTlsModeLabel(monitorType) {
+  if (!isExternalMonitorExpiryOnlyTlsMode(monitorType)) {
+    return "";
+  }
+  if (asText(monitorType, "").toLowerCase() === "ssl_cert") {
+    return "Nur Zertifikatslaufzeit (Kette wird nicht validiert)";
+  }
+  return "Erreichbarkeit ohne Kettenprüfung; Zertifikatslaufzeit wird ausgelesen";
 }
 
 function formatExternalMonitorCertDaysLeft(value) {
@@ -22044,8 +22058,7 @@ function renderExternalMonitorDetail(monitor) {
             <tr><td>Quelle</td><td>${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Intern (Push-Probe)" : "Extern (Server)")}</td></tr>
             <tr><td>Intervall</td><td>${escapeHtml(String(formatExternalMonitorIntervalMinutes(monitor)))} Min.</td></tr>
             <tr><td>Erwartung</td><td>${monitor.expected_status != null ? `HTTP ${escapeHtml(String(monitor.expected_status))}` : "-"}${monitor.keyword ? ` · Keyword „${escapeHtml(monitor.keyword)}“` : ""}</td></tr>
-            ${isExternalMonitorTlsVerifyApplicable(monitor.monitor_type) ? `<tr><td>TLS-Prüfung</td><td>${escapeHtml(formatExternalMonitorTlsVerifyLabel(monitor))}</td></tr>` : ""}
-            ${asText(monitor.monitor_type, "").toLowerCase() === "ssl_cert" ? "<tr><td>Prüfmethode</td><td>Nur Zertifikatslaufzeit (Kette wird nicht validiert)</td></tr>" : ""}
+            ${isExternalMonitorExpiryOnlyTlsMode(monitor.monitor_type) ? `<tr><td>Prüfmethode</td><td>${escapeHtml(formatExternalMonitorTlsModeLabel(monitor.monitor_type))}</td></tr>` : ""}
             <tr><td>Verknüpfter Host</td><td>${renderLinkedHostDetailCell(monitor)}</td></tr>
             ${isPushProbe && probeSiteId ? `<tr><td>Probe-Stelle</td><td>#${probeSiteId} — ${escapeHtml(resolveProbeSiteName(probeSiteId))}</td></tr>` : ""}
           </tbody>
@@ -22714,13 +22727,7 @@ async function openExternalMonitorCreateDialog() {
           <label>Erwarteter HTTP-Status
             <input id="externalMonitorCreateExpectedStatusInput" type="number" min="100" max="599" step="1" value="200" />
           </label>
-          <label>HTTPS-Zertifikat
-            <select id="externalMonitorCreateTlsVerifySelect">
-              <option value="1" selected>Zertifikat prüfen (empfohlen)</option>
-              <option value="0">Nur Verbindung (Zertifikat ignorieren)</option>
-            </select>
-          </label>
-          <p class="settings-helper-text external-monitor-create-tls-hint">Bei „Nur Verbindung“ wird HTTPS ohne Zertifikatsprüfung getestet — sinnvoll bei unvollständiger Zertifikatskette. Ablaufdatum wird dann nicht ausgelesen.</p>
+          <p class="settings-helper-text external-monitor-create-tls-hint">HTTPS-Monitore prüfen die Erreichbarkeit ohne Kettenvalidierung; die Zertifikatslaufzeit wird trotzdem ausgelesen.</p>
           <label>Verknüpfter Host (optional)
             <select id="externalMonitorCreateHostSelect">
               <option value="">— Kein Host —</option>
@@ -22823,7 +22830,7 @@ async function openExternalMonitorCreateDialog() {
       probe_site_id: probeSiteId,
       interval_sec: intervalMin * 60,
       expected_status: Number.isFinite(expectedStatus) ? expectedStatus : 200,
-      tls_verify: asText(modal.querySelector("#externalMonitorCreateTlsVerifySelect")?.value, "1") !== "0",
+      tls_verify: false,
       related_host_uid: asText(modal.querySelector("#externalMonitorCreateHostSelect")?.value, "").trim(),
     };
     const response = await fetch("/api/v1/external-monitors", {
@@ -22859,7 +22866,6 @@ async function openExternalMonitorEditorDialog(monitor) {
     return null;
   }
   const monitorType = asText(monitor.monitor_type, "http").toLowerCase();
-  const tlsVerify = monitor.tls_verify !== false;
   const intervalMin = formatExternalMonitorIntervalMinutes(monitor);
   const probeSource = asText(monitor.probe_source, "server").toLowerCase();
   const probeSourceLabel = probeSource === "push" ? "Intern (Push-Probe)" : "Extern (Server)";
@@ -22916,12 +22922,7 @@ async function openExternalMonitorEditorDialog(monitor) {
           <label>Keyword (optional)
             <input id="externalMonitorEditKeywordInput" type="text" placeholder="Text der in der Antwort vorkommen muss" value="${escapeHtml(asText(monitor.keyword, ""))}" />
           </label>
-          <label id="externalMonitorEditTlsVerifyWrap">HTTPS-Zertifikat
-            <select id="externalMonitorEditTlsVerifySelect">
-              <option value="1" ${tlsVerify ? "selected" : ""}>Zertifikat prüfen (empfohlen)</option>
-              <option value="0" ${!tlsVerify ? "selected" : ""}>Nur Verbindung (Zertifikat ignorieren)</option>
-            </select>
-          </label>
+          <p id="externalMonitorEditTlsModeHint" class="settings-helper-text external-monitor-create-tls-hint hidden">HTTPS-Monitore prüfen die Erreichbarkeit ohne Kettenvalidierung; die Zertifikatslaufzeit wird trotzdem ausgelesen.</p>
           <label>Timeout (Sekunden)
             <input id="externalMonitorEditTimeoutInput" type="number" min="3" max="120" step="1" value="${Math.max(3, Math.min(120, Number(monitor.timeout_sec || 15)))}" />
           </label>
@@ -22957,14 +22958,17 @@ async function openExternalMonitorEditorDialog(monitor) {
   const hostSelect = modal.querySelector("#externalMonitorEditHostSelect");
   const definitionSelect = modal.querySelector("#externalMonitorEditDefinitionSelect");
   const enabledInput = modal.querySelector("#externalMonitorEditEnabledInput");
-  const tlsVerifyWrap = modal.querySelector("#externalMonitorEditTlsVerifyWrap");
-  const tlsVerifySelect = modal.querySelector("#externalMonitorEditTlsVerifySelect");
-  const syncTlsVerifyUi = () => {
-    const applicable = isExternalMonitorTlsVerifyApplicable(asText(typeSelect?.value, "http"));
-    tlsVerifyWrap?.classList.toggle("hidden", !applicable);
+  const tlsModeHint = modal.querySelector("#externalMonitorEditTlsModeHint");
+  const syncTlsModeUi = () => {
+    const monitorType = asText(typeSelect?.value, "http");
+    const showHint = monitorType === "http";
+    tlsModeHint?.classList.toggle("hidden", !showHint);
+    if (tlsModeHint && showHint) {
+      tlsModeHint.textContent = formatExternalMonitorTlsModeLabel(monitorType);
+    }
   };
-  typeSelect?.addEventListener("change", syncTlsVerifyUi);
-  syncTlsVerifyUi();
+  typeSelect?.addEventListener("change", syncTlsModeUi);
+  syncTlsModeUi();
 
   return new Promise((resolve) => {
     const close = (result) => {
@@ -22999,7 +23003,7 @@ async function openExternalMonitorEditorDialog(monitor) {
         expected_status: Number.isFinite(expectedStatus) ? expectedStatus : null,
         keyword: asText(keywordInput?.value, "").trim(),
         timeout_sec: Math.max(3, Math.min(120, Number(timeoutInput?.value || 15))),
-        tls_verify: asText(tlsVerifySelect?.value, "1") !== "0",
+        tls_verify: false,
         related_host_uid: asText(hostSelect?.value, "").trim(),
         enabled: Boolean(enabledInput?.checked),
       });

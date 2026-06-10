@@ -7,10 +7,13 @@ import binascii
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import socket
 import sqlite3
 import ssl
+import subprocess
+import tempfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -61,16 +64,70 @@ def _format_monitor_error_message(exc: BaseException | str) -> str:
     return text
 
 
-def _parse_cert_not_after(cert: dict) -> tuple[str, int | None]:
-    raw = str(cert.get("notAfter") or "").strip()
-    if not raw:
+def _cert_expiry_from_openssl_not_after(raw: str) -> tuple[str, int | None]:
+    text = str(raw or "").strip()
+    if text.lower().startswith("notafter="):
+        text = text.split("=", 1)[1].strip()
+    if not text:
         return "", None
     try:
-        expires = datetime.strptime(raw, "%b %d %H:%M:%S %Y %Z").replace(tzinfo=timezone.utc)
+        expires = datetime.strptime(text, "%b %d %H:%M:%S %Y %Z").replace(tzinfo=timezone.utc)
         days_left = int((expires - datetime.now(timezone.utc)).total_seconds() // 86400)
         return expires.strftime("%Y-%m-%dT%H:%M:%SZ"), days_left
     except ValueError:
         return "", None
+
+
+def _parse_cert_not_after(cert: dict) -> tuple[str, int | None]:
+    return _cert_expiry_from_openssl_not_after(str(cert.get("notAfter") or ""))
+
+
+def _parse_cert_not_after_from_openssl_file(cert_path: str) -> tuple[str, int | None]:
+    try:
+        output = subprocess.check_output(
+            ["openssl", "x509", "-in", cert_path, "-noout", "-enddate"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError, OSError):
+        return "", None
+    return _cert_expiry_from_openssl_not_after(output.strip())
+
+
+def _parse_cert_not_after_from_der(cert_der: bytes) -> tuple[str, int | None]:
+    if not cert_der:
+        return "", None
+    cert_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".der", delete=False) as tmp:
+            tmp.write(cert_der)
+            cert_path = tmp.name
+        return _parse_cert_not_after_from_openssl_file(cert_path)
+    finally:
+        if cert_path:
+            try:
+                os.unlink(cert_path)
+            except OSError:
+                pass
+
+
+def _parse_cert_not_after_from_pem(cert_pem: str) -> tuple[str, int | None]:
+    pem = str(cert_pem or "").strip()
+    if not pem:
+        return "", None
+    cert_path = ""
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False, encoding="utf-8") as tmp:
+            tmp.write(pem if pem.endswith("\n") else f"{pem}\n")
+            cert_path = tmp.name
+        return _parse_cert_not_after_from_openssl_file(cert_path)
+    finally:
+        if cert_path:
+            try:
+                os.unlink(cert_path)
+            except OSError:
+                pass
 
 
 def hash_probe_token(token: str) -> str:
@@ -677,8 +734,22 @@ def _run_ssl_cert_probe(
     with socket.create_connection((host, port), timeout=timeout_sec) as raw_sock:
         with context.wrap_socket(raw_sock, server_hostname=host) as ssock:
             cert = ssock.getpeercert() or {}
-    expires_at, days_left = _parse_cert_not_after(cert)
-    return expires_at, days_left, ""
+            expires_at, days_left = _parse_cert_not_after(cert)
+            if days_left is not None:
+                return expires_at, days_left, ""
+            cert_der = ssock.getpeercert(binary_form=True)
+            if cert_der:
+                expires_at, days_left = _parse_cert_not_after_from_der(cert_der)
+                if days_left is not None:
+                    return expires_at, days_left, ""
+    try:
+        cert_pem = ssl.get_server_certificate((host, port))
+        expires_at, days_left = _parse_cert_not_after_from_pem(cert_pem)
+        if days_left is not None:
+            return expires_at, days_left, ""
+    except (ssl.SSLError, OSError, ValueError):
+        pass
+    return "", None, ""
 
 
 def run_monitor_check(monitor: dict[str, Any]) -> dict[str, Any]:
@@ -687,7 +758,6 @@ def run_monitor_check(monitor: dict[str, Any]) -> dict[str, Any]:
     timeout_sec = max(3, min(120, int(monitor.get("timeout_sec") or 15)))
     expected_status = monitor.get("expected_status")
     keyword = str(monitor.get("keyword") or "")
-    tls_verify = _monitor_tls_verify_enabled(monitor)
     started = time.monotonic()
     cert_expires_at = ""
     cert_days_left = None
@@ -765,7 +835,8 @@ def run_monitor_check(monitor: dict[str, Any]) -> dict[str, Any]:
                 error_message = _format_monitor_error_message(cert_exc)
 
         req = request.Request(url, method="GET", headers={"User-Agent": "monitoring-external-monitor/1.0"})
-        with request.urlopen(req, timeout=timeout_sec, context=_ssl_context(tls_verify)) as resp:
+        https_context = _ssl_context_expiry_only() if parsed.scheme in {"https", "ssl"} else None
+        with request.urlopen(req, timeout=timeout_sec, context=https_context) as resp:
             http_status = int(getattr(resp, "status", 0) or 0)
             body = resp.read(131072)
         response_ms = int((time.monotonic() - started) * 1000)

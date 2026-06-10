@@ -83,7 +83,9 @@ check_http_monitor() {
   fi
   local started end elapsed http_code body_file status error_msg response_ms
   local -a request_args=("${CURL_ARGS[@]}")
-  if [[ "$tls_verify" == "0" ]]; then
+  if [[ "$url" == https://* ]]; then
+    request_args+=(--insecure)
+  elif [[ "$tls_verify" == "0" ]]; then
     request_args+=(--insecure)
   fi
   started=$(date +%s)
