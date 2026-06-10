@@ -910,18 +910,18 @@ body {
 }
 
 .service-mobile-card--up {
-  background: #f0fdf4;
-  border-color: #86efac;
+  background: #f7fef9;
+  border-color: #d1fae5;
 }
 
 .service-mobile-card--down {
-  background: #fef2f2;
-  border-color: #fca5a5;
+  background: #fff7f7;
+  border-color: #fecaca;
 }
 
 .service-mobile-card--warn {
-  background: #fffbeb;
-  border-color: #fcd34d;
+  background: #fffbf5;
+  border-color: #fed7aa;
 }
 
 .service-mobile-card--unknown {
@@ -931,18 +931,18 @@ body {
 
 @media (prefers-color-scheme: dark) {
   .service-mobile-card--up {
-    background: #14532d;
-    border-color: #166534;
+    background: #1f5c42;
+    border-color: #2d7a57;
   }
 
   .service-mobile-card--down {
-    background: #7f1d1d;
-    border-color: #991b1b;
+    background: #8b3333;
+    border-color: #b04a4a;
   }
 
   .service-mobile-card--warn {
-    background: #78350f;
-    border-color: #92400e;
+    background: #9a4d28;
+    border-color: #c96a35;
   }
 }
 
@@ -961,31 +961,26 @@ body {
 .service-mobile-pill {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid #e2e8f0;
   border-radius: 999px;
+  background: #fff;
   padding: 2px 8px;
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.02em;
   line-height: 1.3;
 }
 
 .service-mobile-pill--definition {
-  color: #1d4ed8;
-  background: #eff6ff;
-  border-color: #93c5fd;
+  color: #92400e;
 }
 
 .service-mobile-pill--intern {
-  color: #166534;
-  background: #dcfce7;
-  border-color: #86efac;
+  color: #15803d;
 }
 
 .service-mobile-pill--extern {
   color: #1d4ed8;
-  background: #eff6ff;
-  border-color: #93c5fd;
 }
 
 .service-mobile-type {

@@ -2161,11 +2161,12 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid transparent;
+  border: 1px solid #e2e8f0;
+  background: #fff;
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.02em;
   line-height: 1.2;
   white-space: nowrap;
@@ -2174,48 +2175,42 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .service-monitor-pill--definition {
-  color: #854d0e;
-  background: #fef08a;
-  border-color: #facc15;
+  color: #92400e;
 }
 
 .service-monitor-pill--intern {
-  color: #166534;
-  background: #ecfdf5;
-  border-color: #86efac;
+  color: #15803d;
 }
 
 .service-monitor-pill--extern {
   color: #1d4ed8;
-  background: #eff6ff;
-  border-color: #93c5fd;
 }
 
 .service-monitor-list article.host-item.service-monitor-card--up,
 .hosts-column .service-monitor-list article.host-item.service-monitor-card--up {
-  background: #f0fdf4 !important;
-  border-color: #86efac !important;
+  background: #f7fef9 !important;
+  border-color: #d1fae5 !important;
   opacity: 1 !important;
 }
 
 .service-monitor-list article.host-item.service-monitor-card--down,
 .hosts-column .service-monitor-list article.host-item.service-monitor-card--down {
-  background: #fef2f2 !important;
-  border-color: #fca5a5 !important;
+  background: #fff7f7 !important;
+  border-color: #fecaca !important;
   opacity: 1 !important;
 }
 
 .service-monitor-list article.host-item.service-monitor-card--warn,
 .hosts-column .service-monitor-list article.host-item.service-monitor-card--warn {
-  background: #fff7ed !important;
-  border-color: #fdba74 !important;
+  background: #fffbf5 !important;
+  border-color: #fed7aa !important;
   opacity: 1 !important;
 }
 
 .service-monitor-list article.host-item.service-monitor-card--unknown,
 .hosts-column .service-monitor-list article.host-item.service-monitor-card--unknown {
-  background: #f8fafc !important;
-  border-color: #cbd5e1 !important;
+  background: #fafbfc !important;
+  border-color: #e2e8f0 !important;
   opacity: 1 !important;
 }
 
@@ -2296,8 +2291,8 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   font-weight: 600;
 }
 
-.service-monitor-cert--ok { background: #dcfce7; color: #166534; }
-.service-monitor-cert--warn { background: #fef3c7; color: #92400e; }
+.service-monitor-cert--ok { background: #f0fdf4; color: #166534; }
+.service-monitor-cert--warn { background: #fffbeb; color: #92400e; }
 
 body[data-theme="dark"] .service-monitor-filter-select {
   border-color: #334155;
@@ -2309,46 +2304,45 @@ body[data-theme="dark"] .service-monitor-type-label {
   color: #94a3b8;
 }
 
+body[data-theme="dark"] .service-monitor-pill {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
 body[data-theme="dark"] .service-monitor-pill--definition {
-  color: #fef9c3;
-  background: #854d0e;
-  border-color: #ca8a04;
+  color: #92400e;
 }
 
 body[data-theme="dark"] .service-monitor-pill--intern {
-  color: #bbf7d0;
-  background: #14532d;
-  border-color: #166534;
+  color: #15803d;
 }
 
 body[data-theme="dark"] .service-monitor-pill--extern {
-  color: #bfdbfe;
-  background: #1e3a5f;
-  border-color: #334155;
+  color: #1d4ed8;
 }
 
 body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--up,
 body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--up {
-  background: #14532d !important;
-  border-color: #166534 !important;
+  background: #1f5c42 !important;
+  border-color: #2d7a57 !important;
 }
 
 body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--down,
 body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--down {
-  background: #7f1d1d !important;
-  border-color: #991b1b !important;
+  background: #8b3333 !important;
+  border-color: #b04a4a !important;
 }
 
 body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--warn,
 body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--warn {
-  background: #9a3412 !important;
-  border-color: #ea580c !important;
+  background: #9a4d28 !important;
+  border-color: #c96a35 !important;
 }
 
 body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--unknown,
 body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--unknown {
-  background: #1e293b !important;
-  border-color: #334155 !important;
+  background: #2a3648 !important;
+  border-color: #475569 !important;
 }
 
 .host-linked-monitors {
@@ -2450,8 +2444,8 @@ body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.se
   margin-top: 4px;
   padding: 5px 6px;
   border-radius: 6px;
-  border: 1px solid #dbeafe;
-  background: #eff6ff;
+  border: 1px solid #e8f0fe;
+  background: #f8fbff;
   color: #1e3a5f;
   font-size: 9px;
   font-weight: 700;
@@ -2963,8 +2957,8 @@ body[data-theme="dark"] .host-linked-monitor-chip--degraded {
 }
 
 body[data-theme="dark"] .service-monitor-linked-host {
-  border-color: #334155;
-  background: #0f172a;
+  border-color: #475569;
+  background: #2a3648;
   color: #e2e8f0;
 }
 
