@@ -219,11 +219,20 @@ $cfg = Read-ProbeConfig -Path $ConfigFile
 $loopInterval = if ($IntervalSec -gt 0) { $IntervalSec } elseif ($cfg.PSObject.Properties.Name -contains 'IntervalSec' -and [int]$cfg.IntervalSec -gt 0) { [int]$cfg.IntervalSec } else { 300 }
 Write-ProbeLog "monitor_probe starting (server=$($cfg.ServerUrl), interval=${loopInterval}s)"
 do {
+    $cycleFailed = $false
     try {
         Invoke-ProbeCycle -Cfg $cfg
     } catch {
-        Write-ProbeLog "Probe cycle failed: $($_.Exception.Message)"
+        $cycleFailed = $true
+        $errorText = [string]$_.Exception.Message
+        Write-ProbeLog "Probe cycle failed: $errorText"
+        if ($errorText -match '401|Nicht autorisiert|Unauthorized|invalid_probe_token|missing_probe_token') {
+            Write-ProbeLog 'Hint: Probe-Token ungueltig oder fehlt. Token in probe.json pruefen oder im Infoboard unter Service-Monitor neu generieren.'
+        }
     }
-    if ($RunOnce) { break }
+    if ($RunOnce) {
+        if ($cycleFailed) { exit 1 }
+        break
+    }
     Start-Sleep -Seconds $loopInterval
 } while ($true)

@@ -21579,11 +21579,13 @@ async function rotateProbeSiteToken(probeSiteId) {
 
 function buildLinuxProbeInstallScript({ serverUrl, probeToken, intervalSec, probeSiteName, probeSiteId, monitors }) {
   const monitorLines = (Array.isArray(monitors) ? monitors : [])
-    .map((monitor) => `- ${asText(monitor.name, "Service")}: ${asText(monitor.target_url, "")}`)
+    .map((monitor) => `# - ${asText(monitor.name, "Service")}: ${asText(monitor.target_url, "")}`)
     .join("\n");
   const cronEveryMin = Math.max(1, Math.round(Number(intervalSec || 300) / 60));
   return `#!/bin/bash
 # Monitoring Push-Probe — Linux Setup
+# Dateiname: install-monitoring-probe.sh
+# NUR AUF LINUX AUSFÜHREN — nicht unter Windows/PowerShell!
 # Probe-Stelle: ${probeSiteName} (ID ${probeSiteId})
 # Ein Probe-Prozess prüft alle zugehörigen Dienste und sendet Resultate zurück.
 ${monitorLines ? `# Dienste:\n${monitorLines}\n` : ""}
@@ -21621,14 +21623,21 @@ function buildWindowsProbeInstallScript({ serverUrl, probeToken, intervalSec, pr
     IntervalSec: Number(intervalSec || 300),
     TlsInsecure: false,
   }, null, 2);
-  return `# Monitoring Push-Probe — Windows Setup
+  return `#Requires -Version 5.1
+#Requires -RunAsAdministrator
+# Monitoring Push-Probe — Windows Setup
+# Dateiname: monitoring-probe-setup.ps1
+# NUR AUF WINDOWS AUSFUEHREN — im Generator-Dialog Tab "Windows" waehlen!
 # Probe-Stelle: ${probeSiteName} (ID ${probeSiteId})
-# Ein Probe-Prozess prüft alle zugehörigen Dienste und sendet Resultate zurück.
+# Ein Probe-Prozess prueft alle zugehoerigen Dienste und sendet Resultate zurueck.
 ${monitorLines}
+
+$ErrorActionPreference = 'Stop'
 
 $ProbeDir = 'C:\\ProgramData\\MonitoringProbe'
 $ConfigFile = Join-Path $ProbeDir 'probe.json'
 $ScriptPath = Join-Path $ProbeDir 'monitor_probe.ps1'
+$TaskName = 'MonitoringPushProbe'
 
 New-Item -ItemType Directory -Force -Path $ProbeDir | Out-Null
 
@@ -21638,13 +21647,24 @@ ${configJson}
 
 Invoke-WebRequest -Uri '${serverUrl}/updates/client/windows/monitor_probe.ps1' -OutFile $ScriptPath -UseBasicParsing
 
-# Testlauf (einmalig)
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath -ConfigFile $ConfigFile -RunOnce
+Write-Host 'Probe-Testlauf...'
+$testArgs = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', $ScriptPath,
+    '-ConfigFile', $ConfigFile,
+    '-RunOnce'
+)
+$testProc = Start-Process -FilePath 'powershell.exe' -ArgumentList $testArgs -Wait -PassThru -NoNewWindow
+if ($testProc.ExitCode -ne 0) {
+    throw "Probe-Test fehlgeschlagen (Exit $($testProc.ExitCode)). 401 = Probe-Token ungueltig. Token in '$ConfigFile' pruefen oder im Infoboard neu generieren."
+}
 
-# Geplante Aufgabe: alle ${taskMinutes} Minuten
+Write-Host 'Geplante Aufgabe anlegen...'
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $ScriptPath + '" -ConfigFile "' + $ConfigFile + '" -RunOnce')
-$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes ${taskMinutes}) -RepetitionDuration ([TimeSpan]::MaxValue)
-Register-ScheduledTask -TaskName 'MonitoringPushProbe' -Action $action -Trigger $trigger -RunLevel Highest -Force
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes ${taskMinutes}) -RepetitionDuration (New-TimeSpan -Days 3650)
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -RunLevel Highest -Force | Out-Null
+Write-Host "Setup abgeschlossen. Aufgabe '$TaskName' laeuft alle ${taskMinutes} Minuten."
 `;
 }
 
@@ -21693,7 +21713,7 @@ async function openProbeScriptGeneratorDialog(probeSiteId, options = {}) {
         <button type="button" class="btn-secondary btn-secondary--compact" data-action="cancel">Schließen</button>
       </div>
       <div class="chart-drill-body host-meta-modal-body">
-        <p class="settings-helper-text">Ein Probe-Skript pro Host/Netzwerkstandort. Mehrere Dienste auf dem gleichen Host nutzen dieselbe Probe-Stelle — das Skript prüft alle zugeordneten URLs in jedem Lauf.</p>
+        <p class="settings-helper-text">Ein Probe-Skript pro Host/Netzwerkstandort. Mehrere Dienste auf dem gleichen Host nutzen dieselbe Probe-Stelle — das Skript prüft alle zugeordneten URLs in jedem Lauf. Windows: Tab <strong>Windows</strong> wählen, als <code>monitoring-probe-setup.ps1</code> speichern und als Administrator ausführen. Fehler 401 = Probe-Token prüfen oder neu generieren.</p>
         <div class="external-monitor-probe-script-meta">
           <span>Probe-ID: ${Number(probeSiteId)}</span>
           <span>Dienste: ${monitors.length}</span>
@@ -21711,6 +21731,7 @@ async function openProbeScriptGeneratorDialog(probeSiteId, options = {}) {
           <button type="button" class="external-monitor-probe-os-btn ${activeOs === "linux" ? "active" : ""}" data-probe-os="linux">Linux</button>
           <button type="button" class="external-monitor-probe-os-btn ${activeOs === "windows" ? "active" : ""}" data-probe-os="windows">Windows</button>
         </div>
+        <div class="external-monitor-probe-script-filename" id="probeScriptFilenameHint">Dateiname: monitoring-probe-setup.sh</div>
         <label>Setup-Skript (Copy &amp; Paste)
           <textarea id="probeScriptOutput" class="external-monitor-probe-script-output" readonly rows="18"></textarea>
         </label>
@@ -21725,9 +21746,15 @@ async function openProbeScriptGeneratorDialog(probeSiteId, options = {}) {
   const tokenInput = modal.querySelector("#probeScriptTokenInput");
   const outputEl = modal.querySelector("#probeScriptOutput");
 
+  const filenameHintEl = modal.querySelector("#probeScriptFilenameHint");
   const refreshOutput = () => {
     if (outputEl) {
       outputEl.value = renderScript();
+    }
+    if (filenameHintEl) {
+      filenameHintEl.textContent = activeOs === "windows"
+        ? "Dateiname: monitoring-probe-setup.ps1 (PowerShell als Administrator)"
+        : "Dateiname: monitoring-probe-setup.sh (auf Linux-Host als root/sudo)";
     }
   };
   refreshOutput();
