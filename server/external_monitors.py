@@ -495,6 +495,24 @@ def update_external_monitor(conn: sqlite3.Connection, monitor_id: int, payload: 
     return monitors[0] if monitors else None
 
 
+def delete_external_monitor(conn: sqlite3.Connection, monitor_id: int) -> bool:
+    row = conn.execute(
+        "SELECT id FROM external_monitors WHERE id = ?",
+        (int(monitor_id),),
+    ).fetchone()
+    if not row:
+        return False
+    conn.execute(
+        "DELETE FROM external_monitor_results WHERE monitor_id = ?",
+        (int(monitor_id),),
+    )
+    conn.execute(
+        "DELETE FROM external_monitors WHERE id = ?",
+        (int(monitor_id),),
+    )
+    return True
+
+
 def _run_ssl_cert_probe(
     host: str,
     port: int,
@@ -806,13 +824,27 @@ def push_probe_results(conn: sqlite3.Connection, token: str, results: list[dict[
         ).fetchone()
         if not row:
             continue
+        http_status_raw = item.get("http_status")
+        http_status_value = None
+        if http_status_raw not in (None, ""):
+            try:
+                http_status_value = int(http_status_raw)
+            except (TypeError, ValueError):
+                http_status_value = None
+        response_ms_raw = item.get("response_ms")
+        response_ms_value = None
+        if response_ms_raw not in (None, ""):
+            try:
+                response_ms_value = int(response_ms_raw)
+            except (TypeError, ValueError):
+                response_ms_value = None
         record_monitor_result(
             conn,
             monitor_id,
             {
                 "status": str(item.get("status") or "unknown"),
-                "response_ms": item.get("response_ms"),
-                "http_status": item.get("http_status"),
+                "response_ms": response_ms_value,
+                "http_status": http_status_value,
                 "cert_expires_at_utc": str(item.get("cert_expires_at_utc") or ""),
                 "cert_days_left": item.get("cert_days_left"),
                 "error_message": str(item.get("error_message") or ""),

@@ -50,6 +50,7 @@ if str(BASE_DIR) not in sys.path:
 
 from external_monitors import (
     create_external_monitor,
+    delete_external_monitor,
     create_probe_site,
     extract_probe_token,
     verify_probe_site_token,
@@ -25436,9 +25437,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not isinstance(results, list):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "results must be an array"})
                 return
-            with sqlite3.connect(DB_PATH) as conn:
-                push_result = push_probe_results(conn, probe_token, results)
-                conn.commit()
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    push_result = push_probe_results(conn, probe_token, results)
+                    conn.commit()
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
             if push_result.get("error"):
                 self._send_json(HTTPStatus.UNAUTHORIZED, push_result)
                 return
@@ -25504,6 +25509,41 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.OK, {"monitor": monitor})
             except ValueError as exc:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            return
+
+        if path == "/api/v1/external-monitor-delete":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            monitor_id_raw = payload.get("id")
+            try:
+                monitor_id = int(monitor_id_raw)
+            except (TypeError, ValueError):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "id required"})
+                return
+            if monitor_id <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "id required"})
+                return
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    deleted = delete_external_monitor(conn, monitor_id)
+                    if not deleted:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"error": "monitor not found"})
+                        return
+                    conn.commit()
+                wake_external_monitor_worker()
+                self._send_json(HTTPStatus.OK, {"deleted": True, "id": monitor_id})
             except Exception as exc:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
             return

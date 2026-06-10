@@ -3334,8 +3334,10 @@ function buildAlertIdentityHtml(item) {
   const customerName = String(item.customer_name || "").trim();
   const hostLabel = String(item.display_name || item.hostname || "-").trim();
   const hostname = String(item.hostname || "").trim();
+  const hostIp = String(item.latest_report_ip || item.primary_ip || "").trim();
   const showFqdn = Boolean(hostname && hostname.toLowerCase() !== hostLabel.toLowerCase());
   const fqdnHtml = showFqdn ? '<p class="alert-host-fqdn">' + mobileEsc(hostname) + "</p>" : "";
+  const ipHtml = hostIp ? '<p class="alert-host-fqdn">' + mobileEsc(hostIp) + "</p>" : "";
   const logoHtml = buildCustomerLogoHtml(item);
   const hostRowAttrs =
     ' class="alert-host-row is-tappable" data-action="host-info" role="button" tabindex="0" aria-label="Host-Details"';
@@ -3352,6 +3354,7 @@ function buildAlertIdentityHtml(item) {
       + "<div" + hostRowAttrs + '><div class="alert-host-main">'
       + '<p class="alert-host-name">' + mobileEsc(hostLabel) + "</p>"
       + fqdnHtml
+      + ipHtml
       + "</div></div>"
       + "</div>"
     );
@@ -3363,6 +3366,7 @@ function buildAlertIdentityHtml(item) {
     + '<div class="alert-host-main">'
     + '<h2 class="alert-customer-name">' + mobileEsc(hostLabel) + "</h2>"
     + fqdnHtml
+    + ipHtml
     + "</div>"
     + logoHtml
     + "</div></div>"

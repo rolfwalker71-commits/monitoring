@@ -1368,6 +1368,10 @@ function firstIpv4FromValue(value) {
   return isValidIpv4(text) ? text : "";
 }
 
+function resolveAlertHostIp(item) {
+  return firstIpv4FromValue(asText(item?.latest_report_ip || item?.primary_ip, "").trim());
+}
+
 function resolveDefaultNicIpv4(report, payload, network) {
   const defaultInterface = String(network?.default_interface || "").trim();
   const interfaces = Array.isArray(network?.interfaces) ? network.interfaces : [];
@@ -12148,7 +12152,128 @@ function ensureHostContextMenu() {
   return menu;
 }
 
+async function deleteServiceMonitorCard(monitorId) {
+  const response = await fetch("/api/v1/external-monitor-delete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      id: Number(monitorId || 0),
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
+function closeServiceContextMenu() {
+  const menu = document.getElementById("serviceContextMenu");
+  if (!menu) {
+    return;
+  }
+  menu.classList.add("hidden");
+  delete menu.dataset.monitorId;
+  delete menu.dataset.monitorName;
+}
+
+function ensureServiceContextMenu() {
+  let menu = document.getElementById("serviceContextMenu");
+  if (menu) {
+    return menu;
+  }
+
+  menu = document.createElement("div");
+  menu.id = "serviceContextMenu";
+  menu.className = "host-context-menu hidden";
+  menu.innerHTML = `
+    <div class="host-context-menu-label"></div>
+    <button type="button" data-action="delete-service-card">Karte löschen…</button>
+  `;
+  document.body.appendChild(menu);
+
+  menu.addEventListener("click", async (event) => {
+    const deleteTrigger = event.target.closest("button[data-action='delete-service-card']");
+    if (!deleteTrigger) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const monitorId = Number(menu.dataset.monitorId || 0);
+    const monitorName = String(menu.dataset.monitorName || "").trim() || `Service #${monitorId}`;
+    closeServiceContextMenu();
+    if (!monitorId) {
+      return;
+    }
+
+    const monitorLabelShort = monitorName.length > 54 ? `${monitorName.slice(0, 51)}...` : monitorName;
+    const confirmed = window.confirm(
+      `Service „${monitorLabelShort}“ wirklich löschen?\n\nDer Monitor und seine Prüfhistorie werden dauerhaft entfernt.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteServiceMonitorCard(monitorId);
+      if (Number(state.selectedExternalMonitorId || 0) === monitorId) {
+        state.selectedExternalMonitorId = null;
+        applyServiceMonitorViewMode(false);
+      }
+      await loadExternalMonitors();
+    } catch (error) {
+      window.alert(`Service-Karte konnte nicht gelöscht werden: ${error.message}`);
+    }
+  });
+
+  document.addEventListener("click", () => closeServiceContextMenu());
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeServiceContextMenu();
+    }
+  });
+  document.addEventListener("scroll", () => closeServiceContextMenu(), true);
+  window.addEventListener("resize", () => closeServiceContextMenu());
+
+  return menu;
+}
+
+function openServiceContextMenu(monitorId, monitorName, clientX, clientY) {
+  if (!state.isAdmin) {
+    return;
+  }
+  const numericId = Number(monitorId || 0);
+  if (!numericId) {
+    return;
+  }
+  closeHostContextMenu();
+  const menu = ensureServiceContextMenu();
+  const label = menu.querySelector(".host-context-menu-label");
+  if (label) {
+    label.textContent = String(monitorName || "").trim() || `Service #${numericId}`;
+  }
+  menu.dataset.monitorId = String(numericId);
+  menu.dataset.monitorName = String(monitorName || "").trim();
+  menu.classList.remove("hidden");
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const rect = menu.getBoundingClientRect();
+  const menuWidth = rect.width || 220;
+  const menuHeight = rect.height || 88;
+  const margin = 8;
+  const left = Math.min(Math.max(clientX, margin), viewportWidth - menuWidth - margin);
+  const top = Math.min(Math.max(clientY, margin), viewportHeight - menuHeight - margin);
+
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
 function openHostContextMenu(hostname, hostUid, clientX, clientY) {
+  closeServiceContextMenu();
   const menu = ensureHostContextMenu();
   const normalizedHost = String(hostname || "").trim();
   const normalizedHostUid = String(hostUid || "").trim();
@@ -17633,6 +17758,10 @@ function renderGlobalAlertRowHtml(item) {
   const hostDisplayName = asText(item.display_name || item.hostname);
   const customerName = asText(item.customer_name || "");
   const hostName = asText(item.hostname);
+  const hostIp = resolveAlertHostIp(item);
+  const hostMetaSub = hostIp
+    ? `<span class="global-hostname-sub">(${escapeHtml(hostName)} · ${escapeHtml(hostIp)})</span>`
+    : `<span class="global-hostname-sub">(${escapeHtml(hostName)})</span>`;
   const isMuted = Boolean(item.is_muted);
   const isAcknowledged = Boolean(item.is_acknowledged);
   const isClosed = Boolean(item.is_closed);
@@ -17672,7 +17801,7 @@ function renderGlobalAlertRowHtml(item) {
         <div class="global-host-cell">
           ${customerName ? `<span class="global-host-customer">${escapeHtml(customerName)}</span>` : ""}
           <span class="global-host-label">${escapeHtml(hostDisplayName)}</span>
-          <span class="global-hostname-sub">(${escapeHtml(hostName)})</span>
+          ${hostMetaSub}
           <span class="global-hostname-sub alert-id-sub">#${item.id}</span>
         </div>
       </td>
@@ -19312,9 +19441,9 @@ function wireEvents() {
 
   // Primary save action (placed at the end of the digest section).
   wireMailSettingsSaveButton("saveAllMailSettingsButton");
-  // Backward compatibility for older cached HTML shells.
   wireMailSettingsSaveButton("saveUserMailSettingsButton");
   wireMailSettingsSaveButton("saveDigestSettingsButton");
+  wireMailSettingsSaveButton("saveUserChannelsSettingsButton");
 
   const hostInterestModeSelect = document.getElementById("hostInterestModeSelect");
   if (hostInterestModeSelect) {
@@ -21437,6 +21566,26 @@ function wireServiceMonitorListInteractions() {
     event.preventDefault();
     selectExternalMonitor(Number(card.getAttribute("data-service-monitor-id") || 0));
   });
+  listEl.addEventListener("contextmenu", (event) => {
+    if (!state.isAdmin) {
+      return;
+    }
+    const target = event.target instanceof Element ? event.target : null;
+    const card = target ? target.closest(".service-monitor-card") : null;
+    if (!card) {
+      return;
+    }
+    const monitorId = Number(card.getAttribute("data-service-monitor-id") || 0);
+    if (!monitorId) {
+      return;
+    }
+    const monitor = (Array.isArray(state.externalMonitors) ? state.externalMonitors : [])
+      .find((entry) => Number(entry?.id || 0) === monitorId);
+    const monitorName = asText(monitor?.name, "Service");
+    event.preventDefault();
+    event.stopPropagation();
+    openServiceContextMenu(monitorId, monitorName, event.clientX, event.clientY);
+  });
   state.serviceMonitorListDelegatedWired = true;
 }
 
@@ -21693,17 +21842,29 @@ try {
     throw "Probe-Token-Test fehlgeschlagen: $detail"
 }
 
+Write-Host 'Push-Endpunkt testen (POST, leere results)...'
+$pushBody = (@{ probe_token = $probeToken; results = @() } | ConvertTo-Json -Compress)
+try {
+    $pushResponse = Invoke-WebRequest -Method POST -Uri "$baseUrl/api/v1/external-monitor-probe/push" -Headers $testHeaders -Body $pushBody -ContentType 'application/json' -UseBasicParsing
+    Write-Host "Push-Test OK (HTTP $($pushResponse.StatusCode))"
+} catch {
+    $detail = $_.Exception.Message
+    if ($_.Exception.Response -and $_.Exception.Response.GetResponseStream()) {
+        try {
+            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $detail = "$detail | $($reader.ReadToEnd())"
+            $reader.Close()
+        } catch {
+            $detail = $_.Exception.Message
+        }
+    }
+    throw "Push-Endpunkt-Test fehlgeschlagen: $detail"
+}
+
 Write-Host 'Probe-Testlauf...'
-$testArgs = @(
-    '-NoProfile',
-    '-ExecutionPolicy', 'Bypass',
-    '-File', $ScriptPath,
-    '-ConfigFile', $ConfigFile,
-    '-RunOnce'
-)
-$testProc = Start-Process -FilePath 'powershell.exe' -ArgumentList $testArgs -Wait -PassThru -NoNewWindow
-if ($testProc.ExitCode -ne 0) {
-    throw "Probe-Lauf fehlgeschlagen (Exit $($testProc.ExitCode)). Details siehe Ausgabe oben."
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath -ConfigFile $ConfigFile -RunOnce
+if ($LASTEXITCODE -ne 0) {
+    throw "Probe-Lauf fehlgeschlagen (Exit $LASTEXITCODE). Details siehe Ausgabe oben."
 }
 
 Write-Host 'Geplante Aufgabe anlegen...'
