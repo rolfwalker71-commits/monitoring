@@ -1644,6 +1644,11 @@ fi
 # Mirror update payloads to /updates so agents can update from SERVER_URL.
 mirror_update_payloads
 repair_deploy_if_integrity_failed || true
+if [ ! -f "$TARGET_DIR/server/external_monitors.py" ]; then
+  echo "FEHLER: server/external_monitors.py fehlt – receiver.py startet nicht (v1.8.0 Deploy-Luecke)." >&2
+  echo "Bitte pull-server-only.sh erneut ausfuehren (>= v1.8.1)." >&2
+  exit 1
+fi
 if [ -f "$TARGET_DIR/scripts/watch-inventur-job.sh" ]; then
   chmod 0755 "$TARGET_DIR/scripts/watch-inventur-job.sh"
 fi

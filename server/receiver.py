@@ -16,6 +16,7 @@ import secrets
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import threading
 import socket
@@ -43,6 +44,10 @@ except Exception:
     webpush = None  # type: ignore[assignment]
     _WEB_PUSH_AVAILABLE = False
 
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 from external_monitors import (
     create_external_monitor,
     create_probe_site,
@@ -57,7 +62,6 @@ from external_monitors import (
     wake_external_monitor_worker,
 )
 
-BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
