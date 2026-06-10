@@ -523,6 +523,8 @@ const state = {
   externalMonitors: [],
   externalMonitorSummary: { total: 0, up: 0, down: 0, degraded: 0, unknown: 0, cert_warn: 0 },
   selectedExternalMonitorId: null,
+  sidebarMode: "hosts",
+  sidebarModeToggleWired: false,
   serviceMonitorListDelegatedWired: false,
   dbReportsTotal: null,
   dbReportsTotalSeeded: false,
@@ -1033,6 +1035,7 @@ async function loadUserPreferences() {
     state.hostInterestHostExclusions = parsedHostExclusions;
     state.hostInterestHosts = getEffectiveHostInterestHosts();
     state.hostInterestsLoadedFor = String(state.authDisplayName || state.authUser || "").trim();
+    syncHostInterestModeControls();
     updateCriticalTrendsMetricsCheckboxes();
     renderHostInterestsEditor();
   } catch (_error) {
@@ -3475,8 +3478,9 @@ async function ensureAuthenticatedSession() {
       // Load user preferences in background — does not block hosts from rendering.
       // Re-render host list once prefs arrive so hostInterestMode filter is applied.
       loadUserPreferences().then(() => {
+        syncHostInterestModeControls();
         if (state.hosts && state.hosts.length > 0) {
-          renderHosts(state.hosts);
+          void applyHostFiltersLocally({ preserveScroll: true });
         }
       });
     }
@@ -3824,6 +3828,7 @@ async function loadUserProfile(force = false) {
             .filter((item) => item.length > 0)
         );
         syncEffectiveHostInterestSelection();
+        syncHostInterestModeControls();
       }
     } catch (_error) {
       // Keep existing in-memory preferences if loading fails.
@@ -10556,11 +10561,24 @@ function splitHosts(hosts) {
 }
 
 function hasActiveHostFilters() {
+  const interestMode = normalizeHostInterestMode(state.hostInterestMode);
   return Boolean(
     String(state.hostSearchQuery || "").trim().length > 0
     || String(state.hostOsFilter || "all") !== "all"
     || String(state.hostCountryFilter || "all") !== "all"
+    || (interestMode === "interested_only" && state.hostInterestHosts.size > 0)
   );
+}
+
+function describeHostFilterMismatch(hosts) {
+  const interestMode = normalizeHostInterestMode(state.hostInterestMode);
+  if (interestMode === "interested_only" && state.hostInterestHosts.size > 0) {
+    return "Keine Hosts entsprechen «Nur interessante». In den Host-Filtern «Alle Hosts» wählen oder Host-Interessen anpassen.";
+  }
+  if (Array.isArray(hosts) && hosts.length > 0 && hasActiveHostFilters()) {
+    return "Keine Hosts passen zum Suchfilter.";
+  }
+  return "Keine Hosts vorhanden.";
 }
 
 async function applyHostFiltersLocally(options = {}) {
@@ -13315,6 +13333,7 @@ function wireHostListInteractions() {
 
     const previousScrollTop = hostList.scrollTop;
     state.selectedExternalMonitorId = null;
+    setSidebarMode("hosts");
     state.selectedHost = hostname;
     state.selectedHostUid = hostUid;
     state.selectedDisplayName = item.querySelector("strong")?.textContent || hostname;
@@ -13501,7 +13520,7 @@ function renderHosts(hosts) {
   const { visibleHosts, hiddenHosts } = splitHosts(hosts);
 
   if (visibleHosts.length === 0 && hiddenHosts.length === 0) {
-    hostList.innerHTML = "<p class=\"muted\">Keine Hosts passen zum Suchfilter.</p>";
+    hostList.innerHTML = `<p class="muted">${escapeHtml(describeHostFilterMismatch(hosts))}</p>`;
     renderHostIconFilters(hosts);
     return;
   }
@@ -20766,6 +20785,46 @@ async function loadSystemOverview() {
   }
 }
 
+function setSidebarMode(mode) {
+  const nextMode = mode === "services" ? "services" : "hosts";
+  state.sidebarMode = nextMode;
+  const hostsPanel = document.getElementById("sidebarHostsPanel");
+  const servicesPanel = document.getElementById("sidebarServicesPanel");
+  const hostsButton = document.getElementById("sidebarModeHostsButton");
+  const servicesButton = document.getElementById("sidebarModeServicesButton");
+  const addButton = document.getElementById("addExternalMonitorButton");
+  if (hostsPanel) {
+    hostsPanel.classList.toggle("hidden", nextMode !== "hosts");
+  }
+  if (servicesPanel) {
+    servicesPanel.classList.toggle("hidden", nextMode !== "services");
+  }
+  if (hostsButton) {
+    hostsButton.classList.toggle("active", nextMode === "hosts");
+    hostsButton.setAttribute("aria-selected", nextMode === "hosts" ? "true" : "false");
+  }
+  if (servicesButton) {
+    servicesButton.classList.toggle("active", nextMode === "services");
+    servicesButton.setAttribute("aria-selected", nextMode === "services" ? "true" : "false");
+  }
+  if (addButton) {
+    addButton.classList.toggle("hidden", nextMode !== "services" || !state.isAdmin);
+  }
+}
+
+function wireSidebarModeToggle() {
+  if (state.sidebarModeToggleWired) {
+    return;
+  }
+  document.getElementById("sidebarModeHostsButton")?.addEventListener("click", () => {
+    setSidebarMode("hosts");
+  });
+  document.getElementById("sidebarModeServicesButton")?.addEventListener("click", () => {
+    setSidebarMode("services");
+  });
+  state.sidebarModeToggleWired = true;
+}
+
 function formatExternalMonitorTypeLabel(monitor) {
   const monitorType = asText(monitor?.monitor_type, "http").toLowerCase();
   const typeLabels = { http: "HTTPS", tcp: "TCP", ssl_cert: "SSL" };
@@ -20926,6 +20985,7 @@ function selectExternalMonitor(monitorId) {
   if (!numericId || numericId === Number(state.selectedExternalMonitorId || 0)) {
     return;
   }
+  setSidebarMode("services");
   state.selectedExternalMonitorId = numericId;
   state.selectedHost = "";
   state.selectedHostUid = "";
@@ -21022,10 +21082,7 @@ async function loadExternalMonitors(options = {}) {
 }
 
 function updateExternalMonitorAdminUi() {
-  const addButton = document.getElementById("addExternalMonitorButton");
-  if (addButton) {
-    addButton.classList.toggle("hidden", !state.isAdmin);
-  }
+  setSidebarMode(state.sidebarMode || "hosts");
 }
 
 async function openExternalMonitorCreateDialog() {
@@ -21094,3 +21151,5 @@ async function openExternalMonitorCreateDialog() {
 document.getElementById("addExternalMonitorButton")?.addEventListener("click", () => {
   void openExternalMonitorCreateDialog();
 });
+wireSidebarModeToggle();
+setSidebarMode("hosts");

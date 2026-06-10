@@ -1364,18 +1364,22 @@
         <div id="layout" class="layout">
           <aside class="hosts-column">
             <div class="hosts-column-scroll">
-              <div class="sidebar-card-header">
-                <h3>🖥️ Hosts</h3>
-              </div>
-              <div class="host-list-shell">
-                <div id="hostList" class="host-list"></div>
-              </div>
-              <div class="sidebar-card-header sidebar-card-header--services">
-                <h3>🔗 Services</h3>
+              <div class="sidebar-card-header sidebar-card-header--toggle">
+                <div class="sidebar-mode-toggle" role="tablist" aria-label="Sidebar Ansicht">
+                  <button id="sidebarModeHostsButton" type="button" class="sidebar-mode-btn active" role="tab" aria-selected="true" data-sidebar-mode="hosts">🖥️ Hosts</button>
+                  <button id="sidebarModeServicesButton" type="button" class="sidebar-mode-btn" role="tab" aria-selected="false" data-sidebar-mode="services">🔗 Services</button>
+                </div>
                 <button id="addExternalMonitorButton" class="btn-secondary btn-secondary--compact hidden" type="button" title="Service-Monitor anlegen (Admin)">＋</button>
               </div>
-              <div class="service-monitor-list-shell">
-                <div id="serviceMonitorList" class="service-monitor-list"></div>
+              <div id="sidebarHostsPanel" class="sidebar-panel sidebar-panel--hosts">
+                <div class="host-list-shell">
+                  <div id="hostList" class="host-list"></div>
+                </div>
+              </div>
+              <div id="sidebarServicesPanel" class="sidebar-panel sidebar-panel--services hidden">
+                <div class="service-monitor-list-shell">
+                  <div id="serviceMonitorList" class="service-monitor-list"></div>
+                </div>
               </div>
               <div id="hostsPrevButton" hidden></div>
               <div id="hostsNextButton" hidden></div>

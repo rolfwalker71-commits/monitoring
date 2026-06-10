@@ -1965,18 +1965,91 @@ body[data-theme="dark"] .live-report-feed-stats {
 }
 
 /* ── External service monitors ── */
-.sidebar-card-header--services {
+.sidebar-card-header--toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 4px;
-  border-top: 1px solid #e2e8f0;
-  padding-top: 10px !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
 }
 
-.sidebar-card-header--services h3 {
-  color: #6d28d9 !important;
+.sidebar-mode-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-mode-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 6px 8px;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.sidebar-mode-btn.active {
+  background: #fff;
+  color: #1e3a5f;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.sidebar-mode-btn[data-sidebar-mode="services"].active {
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+
+.sidebar-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.hosts-column-scroll {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sidebar-panel--hosts .host-list-shell,
+.sidebar-panel--services .service-monitor-list-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+body[data-theme="dark"] .sidebar-mode-toggle {
+  border-color: #475569;
+  background: #1e293b;
+}
+
+body[data-theme="dark"] .sidebar-mode-btn.active {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
+  background: #312e81;
+  color: #e9d5ff;
+}
+
+.service-monitor-list-shell {
+  padding: 0 10px 10px;
 }
 
 .btn-secondary--compact {
@@ -1984,10 +2057,6 @@ body[data-theme="dark"] .live-report-feed-stats {
   padding: 0 8px;
   font-size: 14px;
   line-height: 1;
-}
-
-.service-monitor-list-shell {
-  padding: 0 10px 10px;
 }
 
 .service-monitor-list {
