@@ -21240,12 +21240,129 @@ function externalMonitorStatusBarClass(status) {
   return "status-bar--unknown";
 }
 
+function externalMonitorStatusPulseClass(status) {
+  const normalized = asText(status, "unknown").toLowerCase();
+  if (normalized === "up") return "host-status-pulse--ok";
+  if (normalized === "down") return "host-status-pulse--critical";
+  if (normalized === "degraded") return "host-status-pulse--warning";
+  return "host-status-pulse--unknown";
+}
+
+function externalMonitorSideBarClass(status) {
+  const normalized = asText(status, "unknown").toLowerCase();
+  if (normalized === "up") return "host-version-side-bar--ok";
+  if (normalized === "down") return "host-version-side-bar--critical";
+  if (normalized === "degraded") return "host-version-side-bar--warning";
+  return "host-version-side-bar--unknown";
+}
+
 function externalMonitorHistoryBarClass(status) {
   const normalized = asText(status, "unknown").toLowerCase();
   if (normalized === "up") return "external-monitor-history-bar--up";
   if (normalized === "down") return "external-monitor-history-bar--down";
   if (normalized === "degraded") return "external-monitor-history-bar--degraded";
   return "external-monitor-history-bar--unknown";
+}
+
+function buildExternalMonitorLatencyChartSvg(series, averageMs, width = 640, height = 120) {
+  const points = normalizeSeries(series);
+  if (!points.length) {
+    return "";
+  }
+
+  const color = "#2563eb";
+  const margins = { left: 46, right: 12, top: 12, bottom: 28 };
+  const suffix = " ms";
+  const labelFormatter = (value) => `${Math.round(value)}${suffix}`;
+  const values = points.map((point) => point.value);
+  const minCandidate = Math.min(...values, averageMs);
+  const maxCandidate = Math.max(...values, averageMs);
+  const span = Math.max(1, maxCandidate - minCandidate);
+  const minValue = Math.max(0, minCandidate - span * 0.08);
+  const maxValue = maxCandidate + span * 0.12;
+  const frame = buildChartFrame(width, height, margins);
+  const range = maxValue - minValue;
+  const safeRange = range === 0 ? 1 : range;
+  const toSvgY = (val) => {
+    const clamped = Math.max(minValue, Math.min(maxValue, val));
+    return frame.top + (1 - (clamped - minValue) / safeRange) * frame.height;
+  };
+  const guides = buildYAxisGuides(width, height, minValue, maxValue, {
+    margins,
+    tickCount: 4,
+    labelFormatter,
+  });
+  const timeLabels = buildXAxisTimeLabels(points, width, height, { margins });
+  const avgY = toSvgY(averageMs).toFixed(2);
+  const avgLine = `<line class="external-monitor-latency-avg-line" x1="${frame.left.toFixed(2)}" y1="${avgY}" x2="${(frame.left + frame.width).toFixed(2)}" y2="${avgY}" aria-hidden="true"></line>`;
+  const avgLabel = `<text class="chart-axis-label external-monitor-latency-avg-label" x="${(frame.left + frame.width + 2).toFixed(2)}" y="${(Number(avgY) + 3.5).toFixed(2)}" text-anchor="start">Ø</text>`;
+
+  if (points.length === 1) {
+    const singleY = toSvgY(points[0].value).toFixed(2);
+    const singleTime = formatUtcPlus2(points[0].time_utc);
+    const valueText = `${Math.round(points[0].value)} ms`;
+    return `<svg class="sparkline external-monitor-latency-sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Latenzverlauf">
+      ${guides}
+      ${timeLabels}
+      ${avgLine}
+      ${avgLabel}
+      <circle class="chart-point" cx="${(frame.left + frame.width / 2).toFixed(2)}" cy="${singleY}" r="3.6" fill="${color}"><title>${escapeHtml(valueText)} (${escapeHtml(singleTime)})</title></circle>
+    </svg>`;
+  }
+
+  const polyline = buildPolylinePoints(points, width, height, minValue, maxValue, margins);
+  const area = buildAreaPolygonPoints(points, width, height, minValue, maxValue, margins);
+  const markers = buildPointMarkers(points, width, height, minValue, maxValue, color, "Latenz", margins);
+  const gradientId = `external-monitor-latency-area-${sparklineGradientSequence++}`;
+
+  return `<svg class="sparkline external-monitor-latency-sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Latenzverlauf">
+    <defs>
+      <linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.22" />
+        <stop offset="65%" stop-color="${color}" stop-opacity="0.08" />
+        <stop offset="100%" stop-color="${color}" stop-opacity="0.02" />
+      </linearGradient>
+    </defs>
+    ${guides}
+    ${timeLabels}
+    <polygon class="chart-area" fill="url(#${gradientId})" points="${area}" />
+    <polyline fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${polyline}" />
+    ${avgLine}
+    ${avgLabel}
+    ${markers}
+  </svg>`;
+}
+
+function renderExternalMonitorLatencyChart(historyRows) {
+  const latencySeries = (Array.isArray(historyRows) ? historyRows : [])
+    .map((entry) => {
+      const responseMs = Number(entry?.response_ms);
+      if (!Number.isFinite(responseMs) || responseMs < 0) {
+        return null;
+      }
+      return {
+        time_utc: asText(entry.checked_at_utc, ""),
+        value: responseMs,
+      };
+    })
+    .filter(Boolean);
+
+  if (!latencySeries.length) {
+    return '<p class="muted external-monitor-latency-empty">Keine Latenzdaten im gewählten Zeitraum.</p>';
+  }
+
+  const averageMs = latencySeries.reduce((sum, point) => sum + point.value, 0) / latencySeries.length;
+  const chartSvg = buildExternalMonitorLatencyChartSvg(latencySeries, averageMs);
+  return `
+    <div class="external-monitor-latency-chart">
+      <div class="external-monitor-latency-chart-head">
+        <span class="label">Latenzverlauf</span>
+        <span class="value">Ø ${Math.round(averageMs)} ms · ${latencySeries.length} Messungen</span>
+      </div>
+      ${chartSvg}
+      <p class="muted external-monitor-latency-legend">Gestrichelte Linie = Mittelwert (Ø)</p>
+    </div>
+  `;
 }
 
 function summarizeExternalMonitorHistory(historyRows) {
@@ -21319,6 +21436,7 @@ function renderExternalMonitorHistoryChart(historyRows, monitor) {
         </div>
       </div>
       <div class="external-monitor-history-bars" role="img" aria-label="Prüfverlauf">${barsHtml}</div>
+      ${renderExternalMonitorLatencyChart(rows)}
       <div class="external-monitor-history-chart-meta">
         <span>Intervall: ${intervalMin} Min.</span>
         <span>${escapeHtml(rangeLabel)}</span>
@@ -21343,18 +21461,36 @@ function renderServiceMonitorCard(monitor) {
   const probeSource = asText(monitor?.probe_source, "server").toLowerCase();
   const sourceLabel = probeSource === "push" ? "Intern · Push-Probe" : "Extern · Server";
   const linkedHostHtml = renderLinkedHostForServiceCard(monitor);
+  const serviceName = asText(monitor?.name, "Service");
+  const lastCheckClock = formatHostLastReportClock(monitor?.last_checked_at_utc);
+  const statusTitle = `${status.toUpperCase()} · ${formatExternalMonitorLatency(monitor)}`;
+  const sideBarTitle = `Service-Status: ${statusTitle}`;
   return `
-    <article class="service-monitor-card${selectedClass}" tabindex="0" role="button" data-service-monitor-id="${monitorId}">
-      <div class="status-bar ${externalMonitorStatusBarClass(status)}"></div>
-      <div class="service-monitor-type">${escapeHtml(formatExternalMonitorTypeLabel(monitor))}</div>
-      <div class="service-monitor-name">${escapeHtml(asText(monitor?.name, "Service"))}</div>
-      <div class="service-monitor-meta">
-        <span class="state state--${escapeHtml(status)}">${escapeHtml(status.toUpperCase())}</span>
-        <span class="latency">${escapeHtml(formatExternalMonitorLatency(monitor))}</span>
+    <article class="host-item service-monitor-card${selectedClass}" tabindex="0" role="button" data-service-monitor-id="${monitorId}">
+      <div class="host-version-side-bar ${externalMonitorSideBarClass(status)}" title="${escapeHtml(sideBarTitle)}" aria-hidden="true"></div>
+      <div class="host-card-main">
+        <div class="host-customer-title-line service-monitor-type-line">
+          <span class="host-customer-row host-customer-row--top">
+            <span class="host-customer-line">${escapeHtml(formatExternalMonitorTypeLabel(monitor))}</span>
+          </span>
+        </div>
+        <div class="host-designation-row">
+          <span class="host-detail-line">${escapeHtml(serviceName)}</span>
+          <span class="host-detail-clock" title="${escapeHtml(lastCheckClock.title)}">${escapeHtml(lastCheckClock.label)}</span>
+        </div>
+        ${linkedHostHtml}
+        <div class="host-tech-line">
+          <span class="host-tech-row host-tech-row--host">
+            <span class="${externalMonitorStatusPulseClass(status)}" aria-hidden="true"></span>
+            <span class="host-meta-v" title="${escapeHtml(statusTitle)}">${escapeHtml(status.toUpperCase())}</span>
+          </span>
+          <span class="host-tech-row host-tech-row--ip">
+            <span class="host-meta-v" title="Latenz">${escapeHtml(formatExternalMonitorLatency(monitor))}</span>
+          </span>
+        </div>
+        ${certHtml}
+        <div class="service-monitor-source">${escapeHtml(sourceLabel)}</div>
       </div>
-      ${linkedHostHtml}
-      ${certHtml}
-      <div class="service-monitor-source">${escapeHtml(sourceLabel)}</div>
     </article>
   `;
 }
@@ -21462,28 +21598,32 @@ function renderExternalMonitorDetail(monitor) {
       <h5>Prüfverlauf</h5>
       ${historyChartHtml}
     </div>
-    <div class="external-monitor-panel">
-      <h5>Konfiguration</h5>
-      <table class="external-monitor-table">
-        <tbody>
-          <tr><td>Typ</td><td>${escapeHtml(formatExternalMonitorTypeLabel(monitor))}</td></tr>
-          <tr><td>Quelle</td><td>${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Intern (Push-Probe)" : "Extern (Server)")}</td></tr>
-          <tr><td>Intervall</td><td>${escapeHtml(String(formatExternalMonitorIntervalMinutes(monitor)))} Min.</td></tr>
-          <tr><td>Erwartung</td><td>${monitor.expected_status != null ? `HTTP ${escapeHtml(String(monitor.expected_status))}` : "-"}${monitor.keyword ? ` · Keyword „${escapeHtml(monitor.keyword)}“` : ""}</td></tr>
-          ${isExternalMonitorTlsVerifyApplicable(monitor.monitor_type) ? `<tr><td>TLS-Prüfung</td><td>${escapeHtml(formatExternalMonitorTlsVerifyLabel(monitor))}</td></tr>` : ""}
-          <tr><td>Verknüpfter Host</td><td>${renderLinkedHostDetailCell(monitor)}</td></tr>
-          ${isPushProbe && probeSiteId ? `<tr><td>Probe-Stelle</td><td>#${probeSiteId} — ${escapeHtml(resolveProbeSiteName(probeSiteId))}</td></tr>` : ""}
-        </tbody>
-      </table>
-    </div>
+    <details class="external-monitor-panel external-monitor-panel--collapsible">
+      <summary>Konfiguration</summary>
+      <div class="external-monitor-panel-body">
+        <table class="external-monitor-table">
+          <tbody>
+            <tr><td>Typ</td><td>${escapeHtml(formatExternalMonitorTypeLabel(monitor))}</td></tr>
+            <tr><td>Quelle</td><td>${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Intern (Push-Probe)" : "Extern (Server)")}</td></tr>
+            <tr><td>Intervall</td><td>${escapeHtml(String(formatExternalMonitorIntervalMinutes(monitor)))} Min.</td></tr>
+            <tr><td>Erwartung</td><td>${monitor.expected_status != null ? `HTTP ${escapeHtml(String(monitor.expected_status))}` : "-"}${monitor.keyword ? ` · Keyword „${escapeHtml(monitor.keyword)}“` : ""}</td></tr>
+            ${isExternalMonitorTlsVerifyApplicable(monitor.monitor_type) ? `<tr><td>TLS-Prüfung</td><td>${escapeHtml(formatExternalMonitorTlsVerifyLabel(monitor))}</td></tr>` : ""}
+            <tr><td>Verknüpfter Host</td><td>${renderLinkedHostDetailCell(monitor)}</td></tr>
+            ${isPushProbe && probeSiteId ? `<tr><td>Probe-Stelle</td><td>#${probeSiteId} — ${escapeHtml(resolveProbeSiteName(probeSiteId))}</td></tr>` : ""}
+          </tbody>
+        </table>
+      </div>
+    </details>
     ${pushProbePanelHtml}
-    <div class="external-monitor-panel">
-      <h5>Letzte Prüfungen</h5>
-      <table class="external-monitor-table">
-        <thead><tr><th>Zeit</th><th>Status</th><th>Latenz</th><th>Fehler</th></tr></thead>
-        <tbody>${historyHtml}</tbody>
-      </table>
-    </div>
+    <details class="external-monitor-panel external-monitor-panel--collapsible">
+      <summary>Letzte Prüfungen</summary>
+      <div class="external-monitor-panel-body">
+        <table class="external-monitor-table">
+          <thead><tr><th>Zeit</th><th>Status</th><th>Latenz</th><th>Fehler</th></tr></thead>
+          <tbody>${historyHtml}</tbody>
+        </table>
+      </div>
+    </details>
   `;
 }
 

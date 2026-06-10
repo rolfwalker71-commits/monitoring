@@ -23,6 +23,7 @@
 /* Unified card surfaces (host list, KPIs, report meta, panels) */
 .host-list article.host-item,
 .hosts-column .host-item,
+.service-monitor-list article.host-item,
 .meta-groups .meta-group,
 .metric-card,
 .overview-sap-chip,
@@ -38,13 +39,15 @@
 }
 
 .host-list article.host-item:hover,
-.hosts-column .host-item:hover {
+.hosts-column .host-item:hover,
+.service-monitor-list article.host-item:hover {
   border-color: #a8b9cc !important;
   box-shadow: var(--dr-card-shadow-hover) !important;
 }
 
 .host-list article.host-item.selected,
-.hosts-column .host-item.selected {
+.hosts-column .host-item.selected,
+.service-monitor-list article.host-item.selected {
   border-color: #93c5fd !important;
   box-shadow: var(--dr-card-shadow-hover) !important;
   background: #fff !important;
@@ -1970,8 +1973,8 @@ body[data-theme="dark"] .live-report-feed-stats {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding-top: 8px !important;
-  padding-bottom: 8px !important;
+  padding: 8px 10px !important;
+  box-sizing: border-box;
 }
 
 .sidebar-mode-toggle {
@@ -1982,8 +1985,11 @@ body[data-theme="dark"] .live-report-feed-stats {
   border-radius: 10px;
   border: 1px solid #cbd5e1;
   background: #f8fafc;
-  flex: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .sidebar-mode-btn {
@@ -2009,8 +2015,8 @@ body[data-theme="dark"] .live-report-feed-stats {
 }
 
 .sidebar-mode-btn[data-sidebar-mode="services"].active {
-  background: #f5f3ff;
-  color: #5b21b6;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .sidebar-panel {
@@ -2031,6 +2037,13 @@ body[data-theme="dark"] .live-report-feed-stats {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  padding: 0 10px 10px;
+  box-sizing: border-box;
+  scrollbar-gutter: stable;
+}
+
+.sidebar-panel--hosts .host-list {
+  padding-right: 0;
 }
 
 body[data-theme="dark"] .sidebar-mode-toggle {
@@ -2044,12 +2057,8 @@ body[data-theme="dark"] .sidebar-mode-btn.active {
 }
 
 body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
-  background: #312e81;
-  color: #e9d5ff;
-}
-
-.service-monitor-list-shell {
-  padding: 0 10px 10px;
+  background: #1e3a5f;
+  color: #bfdbfe;
 }
 
 .btn-secondary--compact {
@@ -2061,78 +2070,32 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 
 .service-monitor-list {
   display: grid;
-  gap: 7px;
+  gap: var(--space-2);
 }
 
-.service-monitor-card {
+.service-monitor-list article {
   position: relative;
-  border: 1px solid #ddd6fe;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #fff 0%, #faf5ff 100%);
-  padding: 9px 11px 9px 10px;
+}
+
+.service-monitor-list article.host-item {
+  padding: 10px 12px !important;
   cursor: pointer;
 }
 
-.service-monitor-card.selected {
-  border-color: #a78bfa;
-  box-shadow: inset 0 0 0 1px #c4b5fd, 0 0 0 2px rgba(124, 58, 237, 0.12);
+.service-monitor-type-line {
+  padding-right: 0 !important;
 }
 
-.service-monitor-card .status-bar {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 4px;
-  border-radius: 0 10px 10px 0;
-}
-
-.service-monitor-card .status-bar--up { background: #16a34a; }
-.service-monitor-card .status-bar--down { background: #dc2626; }
-.service-monitor-card .status-bar--degraded { background: #d97706; }
-.service-monitor-card .status-bar--unknown { background: #94a3b8; }
-
-.service-monitor-type {
+.service-monitor-type-line .host-customer-line {
   font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #7c3aed;
-  margin-bottom: 3px;
+  color: #64748b;
 }
-
-.service-monitor-name {
-  font-size: 12px;
-  font-weight: 800;
-  color: #312e81;
-  margin-bottom: 4px;
-  line-height: 1.2;
-}
-
-.service-monitor-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 9.5px;
-  color: #6b7280;
-}
-
-.service-monitor-meta .latency {
-  font-family: "IBM Plex Mono", monospace;
-}
-
-.service-monitor-meta .state {
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.service-monitor-meta .state--up { color: #16a34a; }
-.service-monitor-meta .state--down { color: #dc2626; }
-.service-monitor-meta .state--degraded { color: #d97706; }
-.service-monitor-meta .state--unknown { color: #94a3b8; }
 
 .service-monitor-cert {
-  margin-top: 5px;
+  margin-top: 4px;
   font-size: 9px;
   padding: 2px 6px;
   border-radius: 4px;
@@ -2144,9 +2107,9 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 .service-monitor-cert--warn { background: #fef3c7; color: #92400e; }
 
 .service-monitor-source {
-  margin-top: 4px;
+  margin-top: 3px;
   font-size: 8.5px;
-  color: #8b5cf6;
+  color: #7188a3;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -2170,7 +2133,7 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6d28d9;
+  color: #475569;
 }
 
 .host-linked-monitors-summary {
@@ -2192,9 +2155,9 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   max-width: 100%;
   padding: 2px 6px;
   border-radius: 6px;
-  border: 1px solid #ddd6fe;
-  background: #f5f3ff;
-  color: #4c1d95;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
   font-size: 9px;
   font-weight: 700;
   cursor: pointer;
@@ -2316,8 +2279,8 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .header-stat-chip-services-ok {
-  border-color: #c4b5fd !important;
-  background: #f5f3ff !important;
+  border-color: #bfdbfe !important;
+  background: #eff6ff !important;
 }
 
 .header-stat-chip-services-down {
@@ -2338,9 +2301,9 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .external-monitor-detail-header {
-  border: 1px solid #ddd6fe;
+  border: 1px solid var(--dr-card-border);
   border-radius: 12px;
-  background: linear-gradient(180deg, #fff 0%, #faf5ff 100%);
+  background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
   padding: 14px 16px;
 }
 
@@ -2361,7 +2324,7 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 .external-monitor-detail-header h4 {
   margin: 0 0 4px;
   font-size: 20px;
-  color: #312e81;
+  color: #1e3a5f;
 }
 
 .external-monitor-detail-header .sub {
@@ -2479,7 +2442,7 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 
 .external-monitor-metric {
   border: 1px solid #d1dfed;
-  border-left: 4px solid #7c3aed;
+  border-left: 4px solid #2563eb;
   border-radius: 10px;
   background: #fff;
   padding: 10px;
@@ -2519,6 +2482,91 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   margin: 0 0 10px;
   font-size: 13px;
   color: #274b71;
+}
+
+.external-monitor-panel--collapsible {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.external-monitor-panel--collapsible > summary {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #274b71;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.external-monitor-panel--collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.external-monitor-panel--collapsible > summary::before {
+  content: "▸";
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1;
+}
+
+.external-monitor-panel--collapsible[open] > summary::before {
+  content: "▾";
+}
+
+.external-monitor-panel--collapsible .external-monitor-panel-body {
+  margin-top: 10px;
+}
+
+.external-monitor-latency-chart {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.external-monitor-latency-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.external-monitor-latency-chart-head .label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.external-monitor-latency-chart-head .value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a5f;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.external-monitor-latency-chart .sparkline {
+  margin: 0;
+}
+
+.external-monitor-latency-avg-line {
+  stroke: #0ea5e9;
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+  opacity: 0.85;
+}
+
+.external-monitor-latency-empty {
+  margin: 0;
+  font-size: 11px;
+}
+
+.external-monitor-latency-legend {
+  margin: 0;
+  font-size: 10px;
 }
 
 .external-monitor-table {
@@ -2616,17 +2664,14 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   resize: vertical;
 }
 
-body[data-theme="dark"] .service-monitor-card {
-  border-color: #5b21b6;
-  background: linear-gradient(180deg, #1e1b4b 0%, #172554 100%);
+body[data-theme="dark"] .service-monitor-type-line .host-customer-line {
+  color: #94a3b8;
 }
 
-body[data-theme="dark"] .service-monitor-name { color: #e9d5ff; }
-
 body[data-theme="dark"] .host-linked-monitor-chip {
-  border-color: #5b21b6;
-  background: #312e81;
-  color: #e9d5ff;
+  border-color: #334155;
+  background: #1e293b;
+  color: #e2e8f0;
 }
 
 body[data-theme="dark"] .host-linked-monitor-chip--up {
@@ -2661,8 +2706,24 @@ body[data-theme="dark"] .external-monitor-linked-host-link {
   color: #93c5fd;
 }
 body[data-theme="dark"] .external-monitor-detail-header {
-  border-color: #5b21b6;
-  background: linear-gradient(180deg, #1e1b4b 0%, #172554 100%);
+  border-color: #334155;
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+}
+
+body[data-theme="dark"] .external-monitor-detail-header h4 {
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .external-monitor-panel--collapsible > summary {
+  color: #cbd5e1;
+}
+
+body[data-theme="dark"] .external-monitor-latency-chart-head .value {
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .external-monitor-latency-avg-line {
+  stroke: #38bdf8;
 }
 
 body[data-theme="dark"] .external-monitor-history-chart-stat {
