@@ -72,7 +72,20 @@ def _parse_cert_not_after(cert: dict) -> tuple[str, int | None]:
 
 
 def hash_probe_token(token: str) -> str:
-    return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
+    return hashlib.sha256(str(token or "").strip().encode("utf-8")).hexdigest()
+
+
+def extract_probe_token_from_headers(headers: Any) -> str:
+    get_header = getattr(headers, "get", None)
+    if not callable(get_header):
+        return ""
+    direct = str(get_header("X-Probe-Token", "") or "").strip()
+    if direct:
+        return direct
+    auth = str(get_header("Authorization", "") or "").strip()
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return ""
 
 
 def generate_probe_token() -> str:

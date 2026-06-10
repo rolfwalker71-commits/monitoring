@@ -33,6 +33,7 @@ probe_log() {
 fetch_config() {
   curl "${CURL_ARGS[@]}" \
     -H "X-Probe-Token: ${PROBE_TOKEN}" \
+    -H "Authorization: Bearer ${PROBE_TOKEN}" \
     -H "Accept: application/json" \
     "${SERVER_URL%/}/api/v1/external-monitor-probe/config"
 }
@@ -42,6 +43,7 @@ push_results() {
   curl "${CURL_ARGS[@]}" \
     -X POST \
     -H "X-Probe-Token: ${PROBE_TOKEN}" \
+    -H "Authorization: Bearer ${PROBE_TOKEN}" \
     -H "Content-Type: application/json" \
     --data-binary "$payload" \
     "${SERVER_URL%/}/api/v1/external-monitor-probe/push"

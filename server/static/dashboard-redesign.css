@@ -2549,6 +2549,17 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   background: #f8fbff;
 }
 
+.external-monitor-probe-workflow {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.external-monitor-probe-workflow li {
+  margin-bottom: 4px;
+}
+
 .external-monitor-probe-script-meta {
   display: flex;
   flex-wrap: wrap;

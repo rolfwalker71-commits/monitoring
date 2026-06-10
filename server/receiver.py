@@ -51,6 +51,7 @@ if str(BASE_DIR) not in sys.path:
 from external_monitors import (
     create_external_monitor,
     create_probe_site,
+    extract_probe_token_from_headers,
     external_monitor_summary,
     get_probe_config,
     init_external_monitor_tables,
@@ -20730,7 +20731,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/external-monitor-probe/config":
-            probe_token = str(self.headers.get("X-Probe-Token", "") or "").strip()
+            probe_token = extract_probe_token_from_headers(self.headers)
             if not probe_token:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
                 return
@@ -25396,7 +25397,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/external-monitor-probe/push":
-            probe_token = str(self.headers.get("X-Probe-Token", "") or "").strip()
+            probe_token = extract_probe_token_from_headers(self.headers)
             if not probe_token:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
                 return

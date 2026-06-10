@@ -32,6 +32,8 @@ function Read-ProbeConfig {
     if (-not $cfg.ServerUrl -or -not $cfg.ProbeToken) {
         throw "ServerUrl and ProbeToken required in $Path"
     }
+    $cfg.ServerUrl = ([string]$cfg.ServerUrl).Trim()
+    $cfg.ProbeToken = ([string]$cfg.ProbeToken).Trim()
     return $cfg
 }
 
@@ -183,8 +185,10 @@ function Invoke-ProbeCycle {
     if ($Cfg.PSObject.Properties.Name -contains 'TlsInsecure') {
         $tlsInsecure = [bool]$Cfg.TlsInsecure
     }
+    $probeToken = ([string]$Cfg.ProbeToken).Trim()
     $headers = @{
-        'X-Probe-Token' = [string]$Cfg.ProbeToken
+        'X-Probe-Token' = $probeToken
+        'Authorization' = "Bearer $probeToken"
         'Accept' = 'application/json'
     }
     $configResponse = Invoke-ProbeRequest -Method Get -Url "$baseUrl/api/v1/external-monitor-probe/config" -Headers $headers -TlsInsecure:$tlsInsecure

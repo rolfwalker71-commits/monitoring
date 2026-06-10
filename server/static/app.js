@@ -21641,9 +21641,11 @@ $TaskName = 'MonitoringPushProbe'
 
 New-Item -ItemType Directory -Force -Path $ProbeDir | Out-Null
 
-@'
+$configContent = @'
 ${configJson}
-'@ | Set-Content -LiteralPath $ConfigFile -Encoding UTF8
+'@
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($ConfigFile, $configContent, $utf8NoBom)
 
 Invoke-WebRequest -Uri '${serverUrl}/updates/client/windows/monitor_probe.ps1' -OutFile $ScriptPath -UseBasicParsing
 
@@ -21713,7 +21715,12 @@ async function openProbeScriptGeneratorDialog(probeSiteId, options = {}) {
         <button type="button" class="btn-secondary btn-secondary--compact" data-action="cancel">Schließen</button>
       </div>
       <div class="chart-drill-body host-meta-modal-body">
-        <p class="settings-helper-text">Ein Probe-Skript pro Host/Netzwerkstandort. Mehrere Dienste auf dem gleichen Host nutzen dieselbe Probe-Stelle — das Skript prüft alle zugeordneten URLs in jedem Lauf. Windows: Tab <strong>Windows</strong> wählen, als <code>monitoring-probe-setup.ps1</code> speichern und als Administrator ausführen. Fehler 401 = Probe-Token prüfen oder neu generieren.</p>
+        <ol class="external-monitor-probe-workflow">
+          <li>Token prüfen (wird nur hier und im Skript im Klartext angezeigt — nicht später aus dem Infoboard abrufbar).</li>
+          <li>Tab <strong>Windows</strong> oder <strong>Linux</strong> wählen.</li>
+          <li>Skript kopieren oder als Datei speichern, auf dem Ziel-Host ablegen und dort ausführen.</li>
+          <li>Das Setup-Skript schreibt die Config und installiert die Probe — Copy allein reicht nicht.</li>
+        </ol>
         <div class="external-monitor-probe-script-meta">
           <span>Probe-ID: ${Number(probeSiteId)}</span>
           <span>Dienste: ${monitors.length}</span>
@@ -21725,8 +21732,10 @@ async function openProbeScriptGeneratorDialog(probeSiteId, options = {}) {
           <input id="probeScriptTokenInput" type="text" placeholder="mprb_…" value="${escapeHtml(probeToken)}" />
         </label>
         <div class="external-monitor-probe-script-actions">
+          <button type="button" class="btn-secondary btn-secondary--compact" data-action="copy-probe-token">Token kopieren</button>
           <button type="button" class="btn-secondary btn-secondary--compact" data-action="rotate-probe-token">Token neu generieren</button>
         </div>
+        <p class="settings-helper-text">Nach „Token neu generieren“ sind ältere Skripte und probe.json ungültig. Fehler 401 = Token erneuern, Skript neu generieren und Setup erneut ausführen.</p>
         <div class="external-monitor-probe-os-toggle" role="tablist">
           <button type="button" class="external-monitor-probe-os-btn ${activeOs === "linux" ? "active" : ""}" data-probe-os="linux">Linux</button>
           <button type="button" class="external-monitor-probe-os-btn ${activeOs === "windows" ? "active" : ""}" data-probe-os="windows">Windows</button>
@@ -21737,6 +21746,7 @@ async function openProbeScriptGeneratorDialog(probeSiteId, options = {}) {
         </label>
         <div class="host-meta-modal-actions">
           <button type="button" class="btn-secondary" data-action="cancel">Schließen</button>
+          <button type="button" class="btn-secondary" data-action="download-probe-script">Als Datei speichern</button>
           <button type="button" class="btn-primary" data-action="copy-probe-script">In Zwischenablage kopieren</button>
         </div>
       </div>
@@ -21771,6 +21781,35 @@ async function openProbeScriptGeneratorDialog(probeSiteId, options = {}) {
       });
       refreshOutput();
     });
+  });
+  modal.querySelector('[data-action="copy-probe-token"]')?.addEventListener("click", async () => {
+    const tokenValue = asText(tokenInput?.value, "").trim();
+    if (!tokenValue) {
+      window.alert("Kein Token vorhanden. Bitte zuerst Token neu generieren.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(tokenValue);
+      window.alert("Probe-Token in die Zwischenablage kopiert.");
+    } catch (_error) {
+      tokenInput?.focus();
+      tokenInput?.select();
+      window.alert("Bitte Token markieren und manuell kopieren (Strg/Cmd+C).");
+    }
+  });
+  modal.querySelector('[data-action="download-probe-script"]')?.addEventListener("click", () => {
+    const text = asText(outputEl?.value, "");
+    if (!text) {
+      return;
+    }
+    const filename = activeOs === "windows" ? "monitoring-probe-setup.ps1" : "monitoring-probe-setup.sh";
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
   });
   modal.querySelector('[data-action="rotate-probe-token"]')?.addEventListener("click", async () => {
     try {
