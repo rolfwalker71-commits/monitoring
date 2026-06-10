@@ -340,13 +340,19 @@ def update_external_monitor(conn: sqlite3.Connection, monitor_id: int, payload: 
         "timeout_sec": ("timeout_sec", lambda v: max(3, min(120, int(v or 15)))),
         "enabled": ("enabled", lambda v: 1 if v else 0),
     }
+    interval_changed = False
     for key, (column, transform) in mapping.items():
         if key in payload:
             fields.append(f"{column} = ?")
             values.append(transform(payload[key]))
+            if key == "interval_sec":
+                interval_changed = True
     if not fields:
         monitors = list_external_monitors(conn, monitor_id=monitor_id)
         return monitors[0] if monitors else None
+    if interval_changed:
+        fields.append("next_check_at_utc = ?")
+        values.append(utc_now_iso())
     fields.append("updated_at_utc = ?")
     values.append(utc_now_iso())
     values.append(monitor_id)

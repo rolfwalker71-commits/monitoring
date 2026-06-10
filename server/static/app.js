@@ -20840,6 +20840,14 @@ function formatExternalMonitorTypeLabel(monitor) {
   return `${typeLabels[monitorType] || monitorType.toUpperCase()}${suffix}`;
 }
 
+function formatExternalMonitorIntervalMinutes(monitor) {
+  const intervalSec = Number(monitor?.interval_sec);
+  if (!Number.isFinite(intervalSec) || intervalSec <= 0) {
+    return 5;
+  }
+  return Math.max(1, Math.round(intervalSec / 60));
+}
+
 function formatExternalMonitorLatency(monitor) {
   const responseMs = Number(monitor?.last_response_ms);
   if (Number.isFinite(responseMs) && responseMs >= 0) {
@@ -21109,7 +21117,7 @@ function renderExternalMonitorHistoryChart(historyRows, monitor) {
     return '<p class="muted external-monitor-history-empty">Noch keine Prüfungen — das Diagramm erscheint nach der ersten Messung.</p>';
   }
   const summary = summarizeExternalMonitorHistory(rows);
-  const intervalMin = Math.max(1, Math.round(Number(monitor?.interval_sec || 1800) / 60));
+  const intervalMin = formatExternalMonitorIntervalMinutes(monitor);
   const rangeLabel = `${formatExternalMonitorHistoryTimestamp(rows[0]?.checked_at_utc)} – ${formatExternalMonitorHistoryTimestamp(rows[rows.length - 1]?.checked_at_utc)}`;
   const barsHtml = rows.map((entry) => {
     const status = asText(entry.status, "unknown").toLowerCase();
@@ -21267,7 +21275,7 @@ function renderExternalMonitorDetail(monitor) {
         <tbody>
           <tr><td>Typ</td><td>${escapeHtml(formatExternalMonitorTypeLabel(monitor))}</td></tr>
           <tr><td>Quelle</td><td>${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Intern (Push-Probe)" : "Extern (Server)")}</td></tr>
-          <tr><td>Intervall</td><td>${escapeHtml(String(Math.max(30, Number(monitor.interval_sec || 300) / 60)))} Min.</td></tr>
+          <tr><td>Intervall</td><td>${escapeHtml(String(formatExternalMonitorIntervalMinutes(monitor)))} Min.</td></tr>
           <tr><td>Erwartung</td><td>${monitor.expected_status != null ? `HTTP ${escapeHtml(String(monitor.expected_status))}` : "-"}${monitor.keyword ? ` · Keyword „${escapeHtml(monitor.keyword)}“` : ""}</td></tr>
           <tr><td>Verknüpfter Host</td><td>${renderLinkedHostDetailCell(monitor)}</td></tr>
         </tbody>
@@ -21418,7 +21426,7 @@ async function openExternalMonitorEditorDialog(monitor) {
     return null;
   }
   const monitorType = asText(monitor.monitor_type, "http").toLowerCase();
-  const intervalMin = Math.max(1, Math.round(Number(monitor.interval_sec || 1800) / 60));
+  const intervalMin = formatExternalMonitorIntervalMinutes(monitor);
   const probeSource = asText(monitor.probe_source, "server").toLowerCase();
   const probeSourceLabel = probeSource === "push" ? "Intern (Push-Probe)" : "Extern (Server)";
   const linkedHostIdentity = asText(monitor.related_host_uid, "").trim();
@@ -21654,7 +21662,7 @@ async function openExternalMonitorCreateDialog() {
     monitor_type: "http",
     probe_source: probeSource,
     probe_site_id: probeSiteId,
-    interval_sec: 300,
+    interval_sec: 1800,
     expected_status: 200,
   };
   const response = await fetch("/api/v1/external-monitors", {
