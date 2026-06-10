@@ -9,10 +9,10 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260608a"
+PULL_SCRIPT_VERSION="20260610a"
 # Bump when FILES_LIST changes (must match script_guardian entries).
-PULL_FILES_MANIFEST="scripts-35-v1"
-PULL_FILES_EXPECTED_COUNT=35
+PULL_FILES_MANIFEST="scripts-37-v1"
+PULL_FILES_EXPECTED_COUNT=37
 _DEPLOY_MAIN_SHA_CACHED=""
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
@@ -923,7 +923,8 @@ mirror_update_payloads() {
   cp -f "$TARGET_DIR/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
   cp -f "$TARGET_DIR/client/windows/script_guardian.ps1" "$TARGET_DIR/updates/client/windows/script_guardian.ps1"
   cp -f "$TARGET_DIR/client/linux/script_guardian.sh" "$TARGET_DIR/updates/client/linux/script_guardian.sh"
-  chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/script_guardian.sh" 2>/dev/null || true
+  cp -f "$TARGET_DIR/client/linux/monitor_probe.sh" "$TARGET_DIR/updates/client/linux/monitor_probe.sh"
+  chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/script_guardian.sh" "$TARGET_DIR/updates/client/linux/monitor_probe.sh" 2>/dev/null || true
 }
 
 collect_ps1_embedded_version() {
@@ -1570,6 +1571,7 @@ export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF O
 
 FILES_LIST="
 server/receiver.py
+server/external_monitors.py
 server/static/index.html
 server/static/app.js
 server/static/styles.css
@@ -1604,6 +1606,7 @@ client/linux/collect_and_send.sh
 client/linux/install_agent.sh
 client/linux/self_update.sh
 client/linux/script_guardian.sh
+client/linux/monitor_probe.sh
 "
 
 # Parallele downloads: standardmaessig bis zu 8 gleichzeitig
@@ -1649,6 +1652,9 @@ if [ -f "$TARGET_DIR/scripts/check-monitoring-health.sh" ]; then
 fi
 if [ -f "$TARGET_DIR/scripts/dedupe-ingest-reports.sh" ]; then
   chmod 0755 "$TARGET_DIR/scripts/dedupe-ingest-reports.sh"
+fi
+if [ -f "$TARGET_DIR/client/linux/monitor_probe.sh" ]; then
+  chmod 0755 "$TARGET_DIR/client/linux/monitor_probe.sh"
 fi
 
 # Selbst-Update am Ende: immer branch main (nie REF=a9edd8e o.ae. – sonst 29-Dateien-Skript zurueck).

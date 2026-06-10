@@ -241,6 +241,17 @@ if ! atomic_install_file "$tmp_dir/AGENT_VERSION" "$AGENT_VERSION_FILE" "0644"; 
   exit 1
 fi
 
+if download_update_file "client/linux/monitor_probe.sh" "$tmp_dir/monitor_probe.sh" >/dev/null \
+  && bash -n "$tmp_dir/monitor_probe.sh" 2>/dev/null; then
+  if atomic_install_file "$tmp_dir/monitor_probe.sh" "$INSTALL_DIR/monitor_probe.sh" "0755"; then
+    guardian_log "OK refreshed monitor_probe.sh"
+  else
+    guardian_log "WARN monitor_probe install failed"
+  fi
+else
+  guardian_log "SKIP monitor_probe (not available on update server)"
+fi
+
 date +%s > "$LAST_RUN_FILE" 2>/dev/null || true
 
 if version_is_valid "$remote_version" && version_is_valid "$local_version" && version_is_newer "$remote_version" "$local_version"; then
