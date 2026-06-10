@@ -55,6 +55,7 @@ from external_monitors import (
     verify_probe_site_token,
     external_monitor_summary,
     get_probe_config,
+    resolve_probe_config,
     init_external_monitor_tables,
     list_external_monitors,
     list_probe_sites,
@@ -20738,12 +20739,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
                 return
             with sqlite3.connect(DB_PATH) as conn:
-                config = get_probe_config(conn, probe_token)
-                if not config:
-                    self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid_probe_token"})
-                    return
+                status_code, payload = resolve_probe_config(conn, probe_token)
                 conn.commit()
-            self._send_json(HTTPStatus.OK, config)
+            self._send_json(status_code, payload)
             return
 
         if parsed.path == "/api/v1/hosts":
@@ -25396,6 +25394,27 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     **result,
                 },
             )
+            return
+
+        if path == "/api/v1/external-monitor-probe/config":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            probe_token = extract_probe_token(self.headers, body=payload if isinstance(payload, dict) else None)
+            if not probe_token:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                status_code, response_payload = resolve_probe_config(conn, probe_token)
+                conn.commit()
+            self._send_json(status_code, response_payload)
             return
 
         if path == "/api/v1/external-monitor-probe/push":

@@ -21666,6 +21666,33 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
 Invoke-WebRequest -Uri '${serverUrl}/updates/client/windows/monitor_probe.ps1' -OutFile $ScriptPath -UseBasicParsing
 
+Write-Host 'Probe-Token gegen API testen (POST)...'
+$cfg = Get-Content -LiteralPath $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
+$probeToken = ([string]$cfg.ProbeToken).Trim()
+$baseUrl = ([string]$cfg.ServerUrl).TrimEnd('/')
+$testHeaders = @{
+    'X-Probe-Token' = $probeToken
+    'Authorization' = "Bearer $probeToken"
+    'Accept' = 'application/json'
+}
+$testBody = (@{ probe_token = $probeToken } | ConvertTo-Json -Compress)
+try {
+    $testResponse = Invoke-WebRequest -Method POST -Uri "$baseUrl/api/v1/external-monitor-probe/config" -Headers $testHeaders -Body $testBody -ContentType 'application/json' -UseBasicParsing
+    Write-Host "Token-Test OK (HTTP $($testResponse.StatusCode))"
+} catch {
+    $detail = $_.Exception.Message
+    if ($_.Exception.Response -and $_.Exception.Response.GetResponseStream()) {
+        try {
+            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $detail = "$detail | $($reader.ReadToEnd())"
+            $reader.Close()
+        } catch {
+            $detail = $_.Exception.Message
+        }
+    }
+    throw "Probe-Token-Test fehlgeschlagen: $detail"
+}
+
 Write-Host 'Probe-Testlauf...'
 $testArgs = @(
     '-NoProfile',
@@ -21676,7 +21703,7 @@ $testArgs = @(
 )
 $testProc = Start-Process -FilePath 'powershell.exe' -ArgumentList $testArgs -Wait -PassThru -NoNewWindow
 if ($testProc.ExitCode -ne 0) {
-    throw "Probe-Test fehlgeschlagen (Exit $($testProc.ExitCode)). 401 = Probe-Token ungueltig. Token in '$ConfigFile' pruefen oder im Infoboard neu generieren."
+    throw "Probe-Lauf fehlgeschlagen (Exit $($testProc.ExitCode)). Details siehe Ausgabe oben."
 }
 
 Write-Host 'Geplante Aufgabe anlegen...'

@@ -208,9 +208,9 @@ function Invoke-ProbeCycle {
         'Authorization' = "Bearer $probeToken"
         'Accept' = 'application/json'
     }
-    $encodedToken = [System.Uri]::EscapeDataString($probeToken)
-    $configUrl = "$baseUrl/api/v1/external-monitor-probe/config?probe_token=$encodedToken"
-    $configResponse = Invoke-ProbeRequest -Method Get -Url $configUrl -Headers $headers -TlsInsecure:$tlsInsecure
+    $configUrl = "$baseUrl/api/v1/external-monitor-probe/config"
+    $configBody = (@{ probe_token = $probeToken } | ConvertTo-Json -Compress)
+    $configResponse = Invoke-ProbeRequest -Method Post -Url $configUrl -Headers $headers -Body $configBody -TlsInsecure:$tlsInsecure
     $config = $configResponse.Content | ConvertFrom-Json
     $monitors = @($config.monitors)
     if ($monitors.Count -eq 0) {

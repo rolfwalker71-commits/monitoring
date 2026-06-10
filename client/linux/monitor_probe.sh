@@ -31,13 +31,16 @@ probe_log() {
 }
 
 fetch_config() {
-  local encoded_token
-  encoded_token="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "${PROBE_TOKEN}")"
+  local request_body
+  request_body="$(PROBE_TOKEN_VALUE="${PROBE_TOKEN}" python3 -c 'import json,os; print(json.dumps({"probe_token": os.environ["PROBE_TOKEN_VALUE"]}, separators=(",", ":")))')"
   curl "${CURL_ARGS[@]}" \
+    -X POST \
     -H "X-Probe-Token: ${PROBE_TOKEN}" \
     -H "Authorization: Bearer ${PROBE_TOKEN}" \
+    -H "Content-Type: application/json" \
     -H "Accept: application/json" \
-    "${SERVER_URL%/}/api/v1/external-monitor-probe/config?probe_token=${encoded_token}"
+    --data-binary "$request_body" \
+    "${SERVER_URL%/}/api/v1/external-monitor-probe/config"
 }
 
 push_results() {

@@ -735,6 +735,13 @@ def _resolve_probe_site(conn: sqlite3.Connection, token: str) -> sqlite3.Row | N
     ).fetchone()
 
 
+def resolve_probe_config(conn: sqlite3.Connection, token: str) -> tuple[int, dict[str, Any]]:
+    config = get_probe_config(conn, token)
+    if not config:
+        return 401, {"error": "invalid_probe_token"}
+    return 200, config
+
+
 def get_probe_config(conn: sqlite3.Connection, token: str) -> dict[str, Any] | None:
     site = _resolve_probe_site(conn, token)
     if not site:
