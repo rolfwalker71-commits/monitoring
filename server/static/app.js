@@ -1719,6 +1719,8 @@ async function refreshDashboard(options = {}) {
     }
 
     await Promise.all([hostsPromise, kpiPromise]);
+    // Service cards resolve linked hosts from state.hosts — re-render after hosts are loaded.
+    renderServiceMonitors();
     if (state.selectedHost || state.selectedHostUid) {
       if (force) {
         try {
@@ -14158,6 +14160,7 @@ async function loadHosts(options = {}) {
     }
 
     renderHosts(hosts);
+    renderServiceMonitors();
     if (preserveScroll && hostList) {
       hostList.scrollTop = previousScrollTop;
     }
