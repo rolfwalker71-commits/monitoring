@@ -579,6 +579,11 @@ def parse_int(query: dict, key: str, default: int, min_value: int, max_value: in
     return max(min_value, min(value, max_value))
 
 
+def parse_query_flag(query: dict, key: str) -> bool:
+    raw = str((query.get(key) or [""])[0] or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
 def parse_positive_int(value: object, default: int = 0, max_value: int = 365) -> int:
     try:
         parsed = int(str(value or "").strip())
@@ -10113,11 +10118,11 @@ def _canonical_identities_by_cluster(conn: sqlite3.Connection) -> dict[str, dict
     return _canonical_identities_by_cluster_from_rows(_latest_report_rows_by_host_key(conn))
 
 
-def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
+def collect_inactive_hosts(conn: sqlite3.Connection, hours: int, *, force_refresh: bool = False) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
     now_utc = datetime.now(timezone.utc)
 
-    rows, _, canonical_by_cluster, _ = _get_latest_identity_context(conn)
+    rows, _, canonical_by_cluster, _ = _get_latest_identity_context(conn, force_refresh=force_refresh)
     row_by_host_uid = {str(row[0] or "").strip(): row for row in rows if str(row[0] or "").strip()}
     open_alert_counts = _bulk_open_alert_counts_by_host_key(conn)
     display_name_overrides: dict[str, str] = {}
@@ -10571,8 +10576,9 @@ def _build_hosts_endpoint_response(
     *,
     limit: int,
     offset: int,
+    force_refresh: bool = False,
 ) -> dict[str, object]:
-    identity_rows, _, _, _ = _get_latest_identity_context(conn)
+    identity_rows, _, _, _ = _get_latest_identity_context(conn, force_refresh=force_refresh)
     sorted_rows = _sort_identity_rows_for_hosts_list(identity_rows)
     total_hosts = len(sorted_rows)
     page_rows = sorted_rows[offset : offset + limit]
@@ -20680,16 +20686,23 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+            force_refresh = parse_query_flag(query, "nocache")
             cache_key = f"hosts:{limit}:{offset}"
-            cached_data = _read_cache_get(cache_key)
-            if isinstance(cached_data, dict):
-                self._send_json(HTTPStatus.OK, cached_data)
-                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
-                _finish_endpoint_timer(endpoint_timer, meta=f"limit={limit} offset={offset} cache=hit")
-                return
+            if not force_refresh:
+                cached_data = _read_cache_get(cache_key)
+                if isinstance(cached_data, dict):
+                    self._send_json(HTTPStatus.OK, cached_data)
+                    _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                    _finish_endpoint_timer(endpoint_timer, meta=f"limit={limit} offset={offset} cache=hit")
+                    return
             try:
                 with sqlite_connect_read() as conn:
-                    response_data = _build_hosts_endpoint_response(conn, limit=limit, offset=offset)
+                    response_data = _build_hosts_endpoint_response(
+                        conn,
+                        limit=limit,
+                        offset=offset,
+                        force_refresh=force_refresh,
+                    )
             except sqlite3.OperationalError as exc:
                 if _sqlite_operational_error_is_lock(exc):
                     self._send_json(
@@ -21191,15 +21204,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             endpoint_timer = _new_endpoint_timer("/api/v1/inactive-hosts")
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=3, min_value=1, max_value=24 * 30)
+            force_refresh = parse_query_flag(query, "nocache")
             cache_key = f"inactive-hosts:{hours}"
-            cached_data = _read_cache_get(cache_key)
-            if isinstance(cached_data, dict):
-                self._send_json(HTTPStatus.OK, cached_data)
-                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
-                _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=hit")
-                return
+            if not force_refresh:
+                cached_data = _read_cache_get(cache_key)
+                if isinstance(cached_data, dict):
+                    self._send_json(HTTPStatus.OK, cached_data)
+                    _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                    _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=hit")
+                    return
             with sqlite_connect_read() as conn:
-                inactive = collect_inactive_hosts(conn, hours)
+                inactive = collect_inactive_hosts(conn, hours, force_refresh=force_refresh)
             _mark_endpoint_timer(endpoint_timer, "db+compute")
 
             response_data = {

@@ -1686,7 +1686,7 @@ async function refreshDashboard(options = {}) {
       state.deferredDashboardTasksInFlight = true;
       kpiPromise = Promise.allSettled([
         loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
-        loadInactiveHosts({ updateList: false }),
+        loadInactiveHosts({ updateList: false, bustCache: force }),
         loadWebclientVersion(),
         loadCriticalTrends({ updateList: false }),
       ])
@@ -1701,7 +1701,7 @@ async function refreshDashboard(options = {}) {
         });
     }
 
-    await hostsPromise;
+    await Promise.all([hostsPromise, kpiPromise]);
     if (state.selectedHost || state.selectedHostUid) {
       if (force) {
         try {
@@ -1718,7 +1718,7 @@ async function refreshDashboard(options = {}) {
         });
       }
     }
-    void kpiPromise;
+    updateHeaderStatChips();
 
     if (state.viewMode === "settings") {
       try {
@@ -13939,7 +13939,7 @@ async function loadHosts(options = {}) {
 
   try {
     const bustCache = Boolean(options && options.bustCache);
-    const cacheBust = bustCache ? `&_=${Date.now()}` : "";
+    const cacheBust = bustCache ? `&nocache=1&_=${Date.now()}` : "";
     const url = `/api/v1/hosts?limit=${state.hostLimit}&offset=${state.hostOffset}${cacheBust}`;
     const response = await fetch(url, { credentials: "same-origin", cache: "no-store" });
     if (!response.ok) {
@@ -15575,6 +15575,7 @@ function renderInactiveHosts(data) {
 
 async function loadInactiveHosts(options = {}) {
   const updateList = options.updateList !== false;
+  const bustCache = Boolean(options && options.bustCache);
   const listEl = document.getElementById("inactiveHostsList");
   const tabButton = document.getElementById("inactiveHostsTabButton");
   if (updateList && !listEl) return;
@@ -15583,8 +15584,10 @@ async function loadInactiveHosts(options = {}) {
     listEl.innerHTML = "<p class=\"muted\">Lade Daten…</p>";
   }
   try {
-    const response = await fetch(`/api/v1/inactive-hosts?hours=${state.inactiveHostsHours}`, {
+    const cacheBust = bustCache ? `&nocache=1&_=${Date.now()}` : "";
+    const response = await fetch(`/api/v1/inactive-hosts?hours=${state.inactiveHostsHours}${cacheBust}`, {
       credentials: "same-origin",
+      cache: "no-store",
     });
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
@@ -15608,6 +15611,9 @@ async function loadInactiveHosts(options = {}) {
   } catch (error) {
     if (updateList && listEl) {
       listEl.innerHTML = `<p class="muted">${escapeHtml(formatApiLoadError(error?.message, "Inaktive Hosts"))}</p>`;
+    }
+    if (bustCache) {
+      console.warn("loadInactiveHosts failed after nocache refresh:", error);
     }
   }
 }
@@ -18986,7 +18992,7 @@ function wireEvents() {
     if (!ok) {
       return;
     }
-    void refreshDashboard({ preserveScroll: false });
+    void refreshDashboard({ preserveScroll: false, force: true });
     startAutoRefreshTimer();
   });
 
@@ -18998,7 +19004,7 @@ function wireEvents() {
     if (!ok) {
       return;
     }
-    void refreshDashboard({ preserveScroll: false });
+    void refreshDashboard({ preserveScroll: false, force: true });
     startAutoRefreshTimer();
   });
 
@@ -19190,7 +19196,7 @@ function wireEvents() {
   });
 
   document.getElementById("refreshButton").addEventListener("click", async () => {
-    await refreshDashboard({ preserveScroll: false });
+    await refreshDashboard({ preserveScroll: false, force: true });
     updateAutoRefreshStatus(new Date());
     if (autoRefreshCurrentIntervalSec > 0) startAutoRefreshTimer();
   });
@@ -19576,7 +19582,7 @@ async function init() {
   } else if (startRoute) {
     await applyStartRoute(startRoute);
   }
-  await refreshDashboard({ preserveScroll: false });
+  await refreshDashboard({ preserveScroll: false, force: true });
   try {
     await refreshHeaderReportsTotalLive();
   } catch (error) {
