@@ -15,9 +15,9 @@ Bump `AGENT_VERSION` **only** when the **Linux or Windows agent** changes:
 - `client/windows/` (e.g. `collect_and_send.ps1`, `collect_and_scan_sap_tables.ps1`, …)
 - mirrored agent payloads under `/updates` when those files change
 
-Server/UI-only changes, other `client/` tooling, or docs: leave `AGENT_VERSION` unchanged.
+Server/UI-only changes, other `client/` tooling (e.g. `monitor_probe`), or docs: leave `AGENT_VERSION` unchanged.
 
-`BUILD_VERSION` and `AGENT_VERSION` may diverge (e.g. BUILD `1.7.491`, AGENT `1.7.490`). Do not bump `AGENT_VERSION` just to keep them in sync.
+`BUILD_VERSION` and `AGENT_VERSION` may diverge when only the server/UI ships (e.g. BUILD `1.8.15`, AGENT stays `1.8.14`). Do **not** bump `AGENT_VERSION` just to keep it equal to `BUILD_VERSION`. Do **not** reset `AGENT_VERSION` downward.
 
 When Windows agent scripts change, also sync embedded fallback:
 
