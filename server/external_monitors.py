@@ -321,7 +321,12 @@ def _monitor_select_sql() -> str:
     """
 
 
-def list_external_monitors(conn: sqlite3.Connection, *, monitor_id: int | None = None) -> list[dict[str, Any]]:
+def list_external_monitors(
+    conn: sqlite3.Connection,
+    *,
+    monitor_id: int | None = None,
+    include_history: bool = False,
+) -> list[dict[str, Any]]:
     conn.row_factory = sqlite3.Row
     if monitor_id is not None:
         row = conn.execute(_monitor_select_sql() + " WHERE m.id = ?", (int(monitor_id),)).fetchone()
@@ -331,7 +336,7 @@ def list_external_monitors(conn: sqlite3.Connection, *, monitor_id: int | None =
     rows = conn.execute(
         _monitor_select_sql() + " ORDER BY m.enabled DESC, m.name COLLATE NOCASE ASC, m.id ASC",
     ).fetchall()
-    return [_row_to_monitor_dict(row) for row in rows]
+    return [_row_to_monitor_dict(row, include_history=include_history, conn=conn) for row in rows]
 
 
 def list_service_definitions(conn: sqlite3.Connection) -> list[dict[str, Any]]:

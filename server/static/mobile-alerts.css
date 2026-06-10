@@ -944,6 +944,11 @@ body {
     background: #9a4d28;
     border-color: #c96a35;
   }
+
+  .service-mobile-history-scroll {
+    background: color-mix(in srgb, var(--panel) 72%, #0f172a);
+    border-color: #334155;
+  }
 }
 
 .service-mobile-pill-row {
@@ -1017,11 +1022,107 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.service-mobile-linked {
-  font-size: 0.76rem;
+.service-mobile-history {
+  margin: 6px 0 8px;
+}
+
+.service-mobile-history--empty {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+}
+
+.service-mobile-history-empty {
+  font-size: 0.68rem;
+  font-weight: 700;
   color: var(--muted);
-  margin-bottom: 8px;
-  word-break: break-word;
+}
+
+.service-mobile-history-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 88%, #f8fafc);
+  padding: 4px 4px 2px;
+}
+
+.service-mobile-history-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.service-mobile-history-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 100%;
+}
+
+.service-mobile-history-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 14px;
+  min-width: 14px;
+  opacity: 0;
+  transform: scaleY(0);
+  transform-origin: bottom center;
+}
+
+.service-mobile-card--focused .service-mobile-history-col {
+  animation: serviceMobileHistoryColPop 0.16s ease forwards;
+  animation-delay: calc(var(--bar-index) * (2000ms / max(var(--bar-count) - 1, 1)));
+}
+
+.service-mobile-history-bar {
+  width: 10px;
+  height: 28px;
+  border-radius: 2px 2px 1px 1px;
+}
+
+.service-mobile-history-bar--up {
+  background: #16a34a;
+}
+
+.service-mobile-history-bar--down {
+  background: #dc2626;
+}
+
+.service-mobile-history-bar--warn {
+  background: #d97706;
+}
+
+.service-mobile-history-bar--unknown {
+  background: #94a3b8;
+}
+
+.service-mobile-history-time {
+  font-size: 0.48rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@keyframes serviceMobileHistoryColPop {
+  0% {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scaleY(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
 }
 
 .service-mobile-status-row {

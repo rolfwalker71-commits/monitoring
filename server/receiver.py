@@ -20725,8 +20725,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             monitor_id_raw = str(query.get("monitor_id", [""])[0] or "").strip()
             monitor_id = int(monitor_id_raw) if monitor_id_raw.isdigit() else None
+            include_history_raw = str(query.get("include_history", [""])[0] or "").strip().lower()
+            include_history = include_history_raw in ("1", "true", "yes")
             with sqlite_connect_read() as conn:
-                monitors = list_external_monitors(conn, monitor_id=monitor_id)
+                monitors = list_external_monitors(
+                    conn,
+                    monitor_id=monitor_id,
+                    include_history=include_history,
+                )
             self._send_json(HTTPStatus.OK, {"monitors": monitors, "count": len(monitors)})
             return
 

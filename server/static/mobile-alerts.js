@@ -4406,6 +4406,76 @@ function isMobileExternalMonitorOnline(monitor) {
   return mobileAsText(monitor?.last_status, "unknown").toLowerCase() === "up";
 }
 
+function mobileExternalMonitorHistoryBarClass(status) {
+  const normalized = mobileAsText(status, "unknown").toLowerCase();
+  if (normalized === "up") return "service-mobile-history-bar--up";
+  if (normalized === "down") return "service-mobile-history-bar--down";
+  if (normalized === "degraded") return "service-mobile-history-bar--warn";
+  return "service-mobile-history-bar--unknown";
+}
+
+function formatMobileExternalMonitorHistoryClock(value) {
+  const text = mobileAsText(value, "");
+  if (!text) return "--:--";
+  const parsed = new Date(text.includes("T") ? text : text.replace(" ", "T") + (text.endsWith("Z") ? "" : "Z"));
+  if (Number.isNaN(parsed.getTime())) return "--:--";
+  return parsed.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function buildMobileServiceHistorySectionHtml(monitor) {
+  const history = Array.isArray(monitor?.history) ? monitor.history.slice().reverse() : [];
+  if (!history.length) {
+    return '<div class="service-mobile-history service-mobile-history--empty"><span class="service-mobile-history-empty">Noch keine Prüfungen</span></div>';
+  }
+  const barCount = history.length;
+  const colsHtml = history.map((entry, index) => {
+    const status = mobileAsText(entry?.status, "unknown").toLowerCase();
+    const barClass = mobileExternalMonitorHistoryBarClass(status);
+    const clock = formatMobileExternalMonitorHistoryClock(entry?.checked_at_utc);
+    const latency = entry?.response_ms != null ? entry.response_ms + " ms" : "—";
+    const title = clock + " · " + status.toUpperCase() + " · " + latency;
+    return (
+      '<div class="service-mobile-history-col" style="--bar-index: ' + index + ';" title="' + mobileEsc(title) + '">'
+      + '<div class="service-mobile-history-bar ' + barClass + '" aria-hidden="true"></div>'
+      + '<time class="service-mobile-history-time">' + mobileEsc(clock) + "</time>"
+      + "</div>"
+    );
+  }).join("");
+  return (
+    '<div class="service-mobile-history" style="--bar-count: ' + barCount + ';">'
+    + '<div class="service-mobile-history-scroll" role="img" aria-label="Verfügbarkeitsverlauf">'
+    + '<div class="service-mobile-history-bars">' + colsHtml + "</div>"
+    + "</div></div>"
+  );
+}
+
+function restartMobileServiceHistoryAnimation(card) {
+  if (!card) return;
+  card.classList.remove("service-mobile-card--focused");
+  void card.offsetWidth;
+  card.classList.add("service-mobile-card--focused");
+}
+
+function updateMobileServiceCardHistory(index, monitor) {
+  const list = document.getElementById("servicesList");
+  if (!list || !monitor) return;
+  const card = list.querySelector('.service-mobile-card[data-service-index="' + index + '"]');
+  if (!card) return;
+  const nextHtml = buildMobileServiceHistorySectionHtml(monitor);
+  const existing = card.querySelector(".service-mobile-history");
+  if (existing) {
+    existing.outerHTML = nextHtml;
+  } else {
+    const statusRow = card.querySelector(".service-mobile-status-row");
+    if (statusRow) {
+      statusRow.insertAdjacentHTML("beforebegin", nextHtml);
+    }
+  }
+  if (state.focusedServiceIndex === index) {
+    restartMobileServiceHistoryAnimation(card);
+  }
+}
+
 function formatMobileExternalMonitorTypeLabel(monitor) {
   const monitorType = mobileAsText(monitor?.monitor_type, "http").toLowerCase();
   const typeLabels = { http: "HTTPS", tcp: "TCP", ssl_cert: "SSL" };
@@ -4495,17 +4565,14 @@ function buildMobileServiceCard(monitor, index) {
     ? '<div class="service-mobile-pill-row"><span class="service-mobile-pill service-mobile-pill--definition">' + mobileEsc(catalogServiceName) + "</span></div>"
     : "";
   const clock = formatHostLastReportClockMobile(monitor?.last_checked_at_utc);
-  const linkedHost = mobileAsText(monitor?.related_host_uid, "");
-  const linkedHtml = linkedHost
-    ? '<div class="service-mobile-linked">Host: ' + mobileEsc(linkedHost) + "</div>"
-    : "";
+  const historyHtml = buildMobileServiceHistorySectionHtml(monitor);
   const statusTitle = status.toUpperCase() + " · " + formatMobileExternalMonitorLatency(monitor);
   return (
     '<article class="service-mobile-card ' + statusClass + '" data-service-id="' + monitorId + '" data-service-index="' + index + '" title="' + mobileEsc(statusTitle) + '">'
     + definitionPillHtml
     + '<div class="service-mobile-type">' + mobileEsc(formatMobileExternalMonitorTypeLabel(monitor)) + "</div>"
     + '<div class="service-mobile-head"><h3 class="service-mobile-name">' + mobileEsc(monitorName) + '</h3><span class="service-mobile-clock" title="' + mobileEsc(clock.title) + '">' + mobileEsc(clock.label) + "</span></div>"
-    + linkedHtml
+    + historyHtml
     + '<div class="service-mobile-status-row"><span class="service-mobile-status"><span class="service-mobile-status-dot ' + dotClass + '" aria-hidden="true"></span>' + mobileEsc(status.toUpperCase()) + '</span><span class="service-mobile-latency">' + mobileEsc(formatMobileExternalMonitorLatency(monitor)) + "</span></div>"
     + '<div class="service-mobile-pill-row service-mobile-pill-row--bottom"><span class="service-mobile-pill ' + sourcePillClass + '">' + mobileEsc(sourcePillLabel) + "</span></div>"
     + "</article>"
@@ -4584,9 +4651,15 @@ async function loadMobileServiceMonitorDetail(monitorId, index) {
     const current = state.lastFilteredServiceMonitors[index];
     if (!current || Number(current.id || 0) !== monitorId) return;
     state.lastFilteredServiceMonitors[index] = Object.assign({}, current, detailed);
+    const merged = state.lastFilteredServiceMonitors[index];
+    const monitorIndex = state.externalMonitors.findIndex((item) => Number(item?.id || 0) === monitorId);
+    if (monitorIndex >= 0) {
+      state.externalMonitors[monitorIndex] = Object.assign({}, state.externalMonitors[monitorIndex], merged);
+    }
+    updateMobileServiceCardHistory(index, merged);
     const panel = document.getElementById("serviceDetailPanel");
     if (panel && state.focusedServiceIndex === index) {
-      panel.innerHTML = buildMobileServiceDetailHtml(state.lastFilteredServiceMonitors[index]);
+      panel.innerHTML = buildMobileServiceDetailHtml(merged);
     }
   } catch (_error) {
     // Detail-Historie ist optional.
@@ -4610,6 +4683,17 @@ function syncFocusedServiceCarouselCard(list) {
     if (distance < bestDistance) {
       bestDistance = distance;
       bestIndex = Number(card.getAttribute("data-service-index") || 0);
+    }
+  });
+  cards.forEach((card) => {
+    const cardIndex = Number(card.getAttribute("data-service-index") || 0);
+    const isFocused = cardIndex === bestIndex;
+    if (isFocused) {
+      if (!card.classList.contains("service-mobile-card--focused") || lastServiceCarouselIndex !== bestIndex) {
+        restartMobileServiceHistoryAnimation(card);
+      }
+    } else {
+      card.classList.remove("service-mobile-card--focused");
     }
   });
   updateServiceDetailPanel(bestIndex);
@@ -4674,7 +4758,7 @@ async function loadMobileExternalMonitors(options = {}) {
   setServicesStatus("Lade Services…");
   try {
     await loadMobileServiceDefinitions();
-    const response = await fetch("/api/v1/external-monitors", { credentials: "same-origin" });
+    const response = await fetch("/api/v1/external-monitors?include_history=1", { credentials: "same-origin" });
     if (response.status === 401) {
       if (!authRetried && (await mobileRecoverSessionAfter401())) {
         state.externalMonitorsLoading = false;
