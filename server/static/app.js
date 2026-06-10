@@ -21910,6 +21910,7 @@ function renderExternalMonitorDetail(monitor) {
         ${probeScriptButtonHtml}
       </div>`
     : "";
+  const catalogServiceName = asText(monitor?.service_definition_name, "").trim();
 
   detailView.innerHTML = `
     <div class="external-monitor-detail-header">
