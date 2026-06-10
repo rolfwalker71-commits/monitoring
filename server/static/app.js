@@ -10737,13 +10737,9 @@ function renderSingleHostCard(host) {
 
   const osIconInfo = resolveHostOsIcon(host.os);
   const countryCode = asText(host.country_code || "", "").toUpperCase();
-  const countryCodeLower = countryCode.toLowerCase();
   const iconName = osIconInfo.iconName;
   const osLabel = osIconInfo.osLabel;
-  const osIcon = `<img src="icons/${iconName}" class="host-os-icon host-os-icon--inline" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
-  const flagIcon = countryCode
-    ? `<img src="icons/${countryCode}.png" class="host-flag-icon host-flag-icon--inline" alt="${countryCode}" title="Land: ${countryCode}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryCodeLower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryCodeLower}.svg';return;}this.style.display='none'">`
-    : "";
+  const osBadgeHtml = `<span class="host-card-os-badge" title="${escapeHtml(asText(host.os))}"><img src="icons/${iconName}" alt="${osLabel}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}"></span>`;
   const mutedAlerts = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
   const hasMutedAlerts = mutedAlerts.length > 0;
   const mutedCollapsed = state.hiddenHostMutedAlertsCollapsed[hostname] !== false;
@@ -10825,7 +10821,7 @@ function renderSingleHostCard(host) {
   const countryCodeHtml = /^[A-Z]{2}$/.test(countryCode)
     ? `<span class="host-card-country-code">${escapeHtml(countryCode)}</span>`
     : "";
-  const cornerIcons = "";
+  const cornerBadgesHtml = `<span class="host-card-corner-badges">${osBadgeHtml}${countryCodeHtml}</span>`;
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span></span></div>`
     : "";
@@ -10893,8 +10889,7 @@ function renderSingleHostCard(host) {
   return `
     <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}${temporaryClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostIdentity)}"${isTemporaryIdentity ? ' title="Temporäre Host-Identität (wenige Reports) – unten angepinnt"' : ""}>
       ${versionSideBarHtml}
-      ${countryCodeHtml}
-      ${cornerIcons}
+      ${cornerBadgesHtml}
       ${customerCardWatermark}
       <div class="host-card-main">
         ${customerTitleLine}

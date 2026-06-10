@@ -444,10 +444,37 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   align-self: center;
 }
 
-.host-card-country-code {
+.host-card-corner-badges {
   position: absolute;
   top: 8px;
   right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  z-index: 3;
+}
+
+.host-card-os-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.host-card-os-badge img {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+  display: block;
+}
+
+.host-card-country-code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -461,6 +488,20 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   letter-spacing: 0.02em;
   line-height: 1;
   color: #64748b;
+  flex-shrink: 0;
+}
+
+.host-list article.host-item .host-card-main {
+  padding-right: 50px;
+}
+
+.host-list article.host-item .host-detail-line {
+  font-size: 10.5px;
+  line-height: 1.2;
+}
+
+.host-list article.host-item .host-detail-clock {
+  font-size: 8px;
 }
 
 .host-tech-row--host .host-meta-v {
@@ -1780,6 +1821,7 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   color: #64748b;
 }
 
+body[data-theme="dark"] .host-card-os-badge,
 body[data-theme="dark"] .host-card-country-code {
   border-color: #475569;
   background: #1e293b;
