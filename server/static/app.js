@@ -21778,14 +21778,21 @@ function formatExternalMonitorHistoryTimestamp(value) {
   return formatReportDateTime(isoValue);
 }
 
+const EXTERNAL_MONITOR_HISTORY_DISPLAY_LIMIT = 80;
+
 function renderExternalMonitorHistoryChart(historyRows, monitor) {
-  const rows = Array.isArray(historyRows) ? historyRows.slice().reverse() : [];
+  const rawRows = Array.isArray(historyRows) ? historyRows : [];
+  const rows = rawRows.slice().reverse();
   if (!rows.length) {
     return '<p class="muted external-monitor-history-empty">Noch keine Prüfungen — das Diagramm erscheint nach der ersten Messung.</p>';
   }
   const summary = summarizeExternalMonitorHistory(rows);
   const intervalMin = formatExternalMonitorIntervalMinutes(monitor);
+  const atHistoryWindowLimit = rawRows.length >= EXTERNAL_MONITOR_HISTORY_DISPLAY_LIMIT;
   const rangeLabel = `${formatExternalMonitorHistoryTimestamp(rows[0]?.checked_at_utc)} – ${formatExternalMonitorHistoryTimestamp(rows[rows.length - 1]?.checked_at_utc)}`;
+  const windowHint = atHistoryWindowLimit
+    ? ` · neueste ${EXTERNAL_MONITOR_HISTORY_DISPLAY_LIMIT} Prüfungen, ältere ausgeblendet`
+    : "";
   const latencyScale = computeExternalMonitorLatencyScale(rows);
   const pointCount = rows.length;
   const statusCellsHtml = rows.map((entry) => {
@@ -21848,7 +21855,7 @@ function renderExternalMonitorHistoryChart(historyRows, monitor) {
       </div>
       <div class="external-monitor-history-chart-meta">
         <span>Intervall: ${intervalMin} Min.</span>
-        <span>${escapeHtml(rangeLabel)}</span>
+        <span>${escapeHtml(rangeLabel)}${escapeHtml(windowHint)} · links älter, rechts neuer</span>
       </div>
       <div class="external-monitor-history-legend">
         <span><i class="external-monitor-history-legend-swatch external-monitor-history-bar--up"></i> OK</span>

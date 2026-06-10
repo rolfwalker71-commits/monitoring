@@ -4426,13 +4426,13 @@ function formatMobileServiceHistoryBarDetail(entry) {
 }
 
 function buildMobileServiceHistorySectionHtml(monitor) {
-  const history = Array.isArray(monitor?.history)
-    ? monitor.history.slice(0, MOBILE_SERVICE_HISTORY_BAR_LIMIT).slice().reverse()
-    : [];
+  const rawHistory = Array.isArray(monitor?.history) ? monitor.history : [];
+  const history = rawHistory.slice(0, MOBILE_SERVICE_HISTORY_BAR_LIMIT).slice().reverse();
   if (!history.length) {
     return '<div class="service-mobile-history service-mobile-history--empty"><span class="service-mobile-history-empty">Noch keine Prüfungen</span></div>';
   }
   const barCount = history.length;
+  const atHistoryWindowLimit = rawHistory.length >= MOBILE_SERVICE_HISTORY_BAR_LIMIT;
   const colsHtml = history.map((entry, index) => {
     const status = mobileAsText(entry?.status, "unknown").toLowerCase();
     const barClass = mobileExternalMonitorHistoryBarClass(status);
@@ -4445,21 +4445,22 @@ function buildMobileServiceHistorySectionHtml(monitor) {
       + "</div>"
     );
   }).join("");
-  const firstWhen = formatReportDateTimeMobile(history[0]?.checked_at_utc);
-  const lastWhen = formatReportDateTimeMobile(history[history.length - 1]?.checked_at_utc);
-  const rangeHtml = firstWhen === lastWhen
-    ? '<div class="service-mobile-history-range"><time class="service-mobile-history-range-time">' + mobileEsc(firstWhen) + "</time></div>"
-    : (
+  const rangeHtml = barCount > 1
+    ? (
       '<div class="service-mobile-history-range">'
-      + '<time class="service-mobile-history-range-time service-mobile-history-range-time--start">' + mobileEsc(firstWhen) + "</time>"
-      + '<time class="service-mobile-history-range-time service-mobile-history-range-time--end">' + mobileEsc(lastWhen) + "</time>"
+      + '<time class="service-mobile-history-range-time">' + mobileEsc(formatReportDateTimeMobile(history[0]?.checked_at_utc)) + "</time>"
       + "</div>"
-    );
+    )
+    : "";
+  const windowHintHtml = atHistoryWindowLimit
+    ? '<div class="service-mobile-history-window-hint">Neueste ' + MOBILE_SERVICE_HISTORY_BAR_LIMIT + " Prüfungen · ältere ausgeblendet</div>"
+    : "";
   return (
     '<div class="service-mobile-history" style="--bar-count: ' + barCount + ';">'
-    + '<div class="service-mobile-history-scroll" aria-label="Verfügbarkeitsverlauf">'
+    + '<div class="service-mobile-history-scroll" aria-label="Verfügbarkeitsverlauf, älteste Prüfung links, neueste rechts">'
     + '<div class="service-mobile-history-bars">' + colsHtml + "</div>"
     + rangeHtml
+    + windowHintHtml
     + "</div>"
     + '<div class="service-mobile-history-hint" hidden></div>'
     + "</div>"
