@@ -13598,7 +13598,7 @@ function wireHostListInteractions() {
       return;
     }
 
-    if (target.closest(".host-mini-action, .host-license-info-badge, .host-license-dot, [data-action='toggle-muted-list'], [data-action='unmute-alert'], [data-action='select-linked-monitor']")) {
+    if (target.closest(".host-mini-action, .host-license-info-badge, .host-license-dot, .host-linked-monitors, [data-action='toggle-muted-list'], [data-action='unmute-alert'], [data-action='select-linked-monitor']")) {
       return;
     }
 
@@ -21478,6 +21478,45 @@ function summarizeLinkedMonitorStatuses(monitors) {
   return { total: rows.length, up, down, degraded, unknown, problemCount };
 }
 
+function normalizeLinkedMonitorStatus(status) {
+  const normalized = asText(status, "unknown").toLowerCase();
+  if (normalized === "up" || normalized === "down" || normalized === "degraded") {
+    return normalized;
+  }
+  return "unknown";
+}
+
+function resolveWorstLinkedMonitorStatus(monitors) {
+  const rows = Array.isArray(monitors) ? monitors : [];
+  let worst = "unknown";
+  const rank = { down: 4, degraded: 3, unknown: 2, up: 1 };
+  rows.forEach((monitor) => {
+    const status = normalizeLinkedMonitorStatus(monitor?.last_status);
+    if ((rank[status] || 0) > (rank[worst] || 0)) {
+      worst = status;
+    }
+  });
+  return worst;
+}
+
+function groupLinkedMonitorsByCatalog(monitors) {
+  const groups = new Map();
+  (Array.isArray(monitors) ? monitors : []).forEach((monitor) => {
+    const catalogName = asText(monitor?.service_definition_name, "").trim() || "Ohne Service";
+    if (!groups.has(catalogName)) {
+      groups.set(catalogName, []);
+    }
+    groups.get(catalogName).push(monitor);
+  });
+  return Array.from(groups.entries())
+    .sort((left, right) => String(left[0]).localeCompare(String(right[0]), "de", { sensitivity: "base", numeric: true }))
+    .map(([catalogName, items]) => ({
+      catalogName,
+      monitors: [...items].sort((left, right) => asText(left?.name, "").localeCompare(asText(right?.name, ""), "de", { sensitivity: "base", numeric: true })),
+      status: resolveWorstLinkedMonitorStatus(items),
+    }));
+}
+
 function renderLinkedMonitorsForHostCard(hostIdentity) {
   const linkedMonitors = getLinkedMonitorsForHost(hostIdentity);
   if (!linkedMonitors.length) {
@@ -21490,17 +21529,29 @@ function renderLinkedMonitorsForHostCard(hostIdentity) {
   } else {
     summaryParts.push("alle OK");
   }
-  const chipsHtml = linkedMonitors.map((monitor) => {
-    const monitorId = Number(monitor?.id || 0);
-    const status = asText(monitor?.last_status, "unknown").toLowerCase();
-    const monitorName = asText(monitor?.name, "Service");
-    const latency = formatExternalMonitorLatency(monitor);
-    const title = `${monitorName}: ${status.toUpperCase()}${latency !== "-" ? ` · ${latency}` : ""}`;
-    return `<button type="button" class="host-linked-monitor-chip host-linked-monitor-chip--${escapeHtml(status)}" data-action="select-linked-monitor" data-monitor-id="${monitorId}" title="${escapeHtml(title)}">
-      <span class="host-linked-monitor-dot" aria-hidden="true"></span>
-      <span class="host-linked-monitor-name">${escapeHtml(monitorName)}</span>
-      <span class="host-linked-monitor-state">${escapeHtml(status.toUpperCase())}</span>
-    </button>`;
+  const groups = groupLinkedMonitorsByCatalog(linkedMonitors);
+  const groupsHtml = groups.map((group) => {
+    const groupStatus = normalizeLinkedMonitorStatus(group.status);
+    const autoOpen = groupStatus === "down" || groupStatus === "degraded";
+    const itemsHtml = group.monitors.map((monitor) => {
+      const monitorId = Number(monitor?.id || 0);
+      const status = normalizeLinkedMonitorStatus(monitor?.last_status);
+      const monitorName = asText(monitor?.name, "Service");
+      const latency = formatExternalMonitorLatency(monitor);
+      const catalogName = asText(monitor?.service_definition_name, "").trim();
+      const title = `${catalogName ? `${catalogName} · ` : ""}${monitorName}${latency !== "-" ? ` · ${latency}` : ""}`;
+      return `<button type="button" class="host-linked-monitor-item host-linked-monitor-item--${escapeHtml(status)}" data-action="select-linked-monitor" data-monitor-id="${monitorId}" title="${escapeHtml(title)}">
+        <span class="host-linked-monitor-item-name">${escapeHtml(monitorName)}</span>
+      </button>`;
+    }).join("");
+    return `<details class="host-linked-monitor-group host-linked-monitor-group--${escapeHtml(groupStatus)}"${autoOpen ? " open" : ""}>
+      <summary class="host-linked-monitor-group-summary" title="${escapeHtml(group.catalogName)}">
+        <span class="host-linked-monitor-group-dot" aria-hidden="true"></span>
+        <span class="host-linked-monitor-group-name">${escapeHtml(group.catalogName)}</span>
+        <span class="host-linked-monitor-group-count">(${group.monitors.length})</span>
+      </summary>
+      <div class="host-linked-monitor-group-items">${itemsHtml}</div>
+    </details>`;
   }).join("");
   return `
     <div class="host-linked-monitors">
@@ -21508,7 +21559,7 @@ function renderLinkedMonitorsForHostCard(hostIdentity) {
         <span class="host-linked-monitors-title">Services</span>
         <span class="host-linked-monitors-summary">${summary.total} · ${escapeHtml(summaryParts.join(", "))}</span>
       </div>
-      <div class="host-linked-monitor-chips">${chipsHtml}</div>
+      <div class="host-linked-monitor-groups">${groupsHtml}</div>
     </div>
   `;
 }
