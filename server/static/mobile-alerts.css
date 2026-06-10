@@ -184,10 +184,60 @@ body {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+.mobile-mode-toggle {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--line) 18%, var(--panel));
+}
+
+.mobile-mode-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 7px 8px;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.mobile-mode-btn.active {
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(20, 45, 77, 0.1);
+}
+
+.mobile-mode-btn[data-mobile-mode="services"].active {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--accent);
+}
+
 .kpi-strip-wrap {
   margin-top: 12px;
   display: grid;
   gap: 5px;
+}
+
+.kpi-strip--services {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.kpi-service-up strong {
+  color: var(--ok);
+}
+
+.kpi-service-down strong {
+  color: var(--critical);
 }
 
 .kpi-strip {
@@ -780,11 +830,281 @@ body {
 
 .alerts-carousel .alert-card,
 .alerts-carousel .skeleton-card,
-.alerts-carousel .carousel-empty {
+.alerts-carousel .carousel-empty,
+.services-carousel .service-mobile-card,
+.services-carousel .carousel-empty {
   flex: 0 0 min(88vw, 392px);
   align-self: flex-start;
   scroll-snap-align: center;
   scroll-snap-stop: always;
+}
+
+.services-carousel-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 -12px;
+  padding: 10px 0 calc(12px + var(--safe-bottom));
+  background: var(--panel);
+}
+
+.services-list.services-carousel {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  gap: 10px;
+  padding: 2px 14px 4px;
+  background: transparent;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.services-list.services-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.service-filter-bar {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.service-filter-field {
+  display: grid;
+  gap: 4px;
+}
+
+.service-filter-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.service-filter-select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 8px 10px;
+}
+
+.service-status-chips {
+  margin: 0;
+}
+
+.service-mobile-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 10px 12px 8px;
+  box-shadow: none;
+  min-height: 148px;
+}
+
+.service-mobile-card--up {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.service-mobile-card--down {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.service-mobile-card--warn {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.service-mobile-card--unknown {
+  background: color-mix(in srgb, var(--line) 24%, var(--panel));
+  border-color: var(--line);
+}
+
+@media (prefers-color-scheme: dark) {
+  .service-mobile-card--up {
+    background: #14532d;
+    border-color: #166534;
+  }
+
+  .service-mobile-card--down {
+    background: #7f1d1d;
+    border-color: #991b1b;
+  }
+
+  .service-mobile-card--warn {
+    background: #78350f;
+    border-color: #92400e;
+  }
+}
+
+.service-mobile-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.service-mobile-pill-row--bottom {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.service-mobile-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+.service-mobile-pill--definition {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.service-mobile-pill--intern {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.service-mobile-pill--extern {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.service-mobile-type {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.service-mobile-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.service-mobile-name {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.2;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.service-mobile-clock {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.service-mobile-linked {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.service-mobile-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.service-mobile-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.service-mobile-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.service-mobile-status-dot--up {
+  background: var(--ok);
+}
+
+.service-mobile-status-dot--down {
+  background: var(--critical);
+}
+
+.service-mobile-status-dot--warn {
+  background: var(--warning);
+}
+
+.service-mobile-latency {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.service-detail-panel {
+  margin: 0 14px 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.service-detail-title {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.service-detail-facts {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.service-detail-facts div {
+  display: grid;
+  grid-template-columns: 108px 1fr;
+  gap: 6px;
+  font-size: 0.76rem;
+}
+
+.service-detail-facts dt {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.service-detail-facts dd {
+  margin: 0;
+  word-break: break-word;
 }
 
 .alert-card {

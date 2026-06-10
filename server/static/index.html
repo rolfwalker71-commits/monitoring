@@ -1374,6 +1374,7 @@
                   <button id="sidebarModeHostsButton" type="button" class="sidebar-mode-btn active" role="tab" aria-selected="true" data-sidebar-mode="hosts">🖥️ Hosts</button>
                   <button id="sidebarModeServicesButton" type="button" class="sidebar-mode-btn" role="tab" aria-selected="false" data-sidebar-mode="services">🔗 Services</button>
                 </div>
+                <button id="manageServiceDefinitionsButton" class="btn-secondary btn-secondary--compact hidden" type="button" title="Service-Katalog verwalten (Admin)">⚙️</button>
                 <button id="addExternalMonitorButton" class="btn-secondary btn-secondary--compact hidden" type="button" title="Service-Monitor anlegen (Admin)">＋</button>
               </div>
               <div id="sidebarHostsPanel" class="sidebar-panel sidebar-panel--hosts">
@@ -1382,6 +1383,16 @@
                 </div>
               </div>
               <div id="sidebarServicesPanel" class="sidebar-panel sidebar-panel--services hidden">
+                <div class="service-monitor-toolbar">
+                  <select id="serviceMonitorFilterDefinitionSelect" class="service-monitor-filter-select" aria-label="Nach Service filtern">
+                    <option value="">Alle Services</option>
+                  </select>
+                  <select id="serviceMonitorFilterStatusSelect" class="service-monitor-filter-select" aria-label="Nach Status filtern">
+                    <option value="all">Alle Status</option>
+                    <option value="online">Online</option>
+                    <option value="offline">Offline</option>
+                  </select>
+                </div>
                 <div class="service-monitor-list-shell">
                   <div id="serviceMonitorList" class="service-monitor-list"></div>
                 </div>

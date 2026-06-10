@@ -50,7 +50,9 @@ if str(BASE_DIR) not in sys.path:
 
 from external_monitors import (
     create_external_monitor,
+    create_service_definition,
     delete_external_monitor,
+    delete_service_definition,
     create_probe_site,
     decode_probe_push_results,
     extract_probe_token,
@@ -61,11 +63,13 @@ from external_monitors import (
     init_external_monitor_tables,
     list_external_monitors,
     list_probe_sites,
+    list_service_definitions,
     push_probe_results,
     rotate_probe_site_token,
     start_external_monitor_worker,
     test_external_monitor_now,
     update_external_monitor,
+    update_service_definition,
     wake_external_monitor_worker,
 )
 
@@ -20726,6 +20730,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"monitors": monitors, "count": len(monitors)})
             return
 
+        if parsed.path == "/api/v1/service-definitions":
+            if not self._require_web_session():
+                return
+            with sqlite_connect_read() as conn:
+                definitions = list_service_definitions(conn)
+            self._send_json(HTTPStatus.OK, {"service_definitions": definitions, "count": len(definitions)})
+            return
+
         if parsed.path == "/api/v1/external-monitor-probe-sites":
             if not self._require_admin_session():
                 return
@@ -25564,6 +25576,74 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     conn.commit()
                 wake_external_monitor_worker()
                 self._send_json(HTTPStatus.OK, {"deleted": True, "id": monitor_id})
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            return
+
+        if path == "/api/v1/service-definitions":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            definition_id_raw = payload.get("id")
+            name = str(payload.get("name") or "").strip()
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    if definition_id_raw not in (None, "", 0):
+                        definition = update_service_definition(conn, int(definition_id_raw), name)
+                        if not definition:
+                            self._send_json(HTTPStatus.NOT_FOUND, {"error": "service definition not found"})
+                            return
+                    else:
+                        definition = create_service_definition(conn, name)
+                    conn.commit()
+                self._send_json(HTTPStatus.OK, {"service_definition": definition})
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            return
+
+        if path == "/api/v1/service-definition-delete":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            definition_id_raw = payload.get("id")
+            try:
+                definition_id = int(definition_id_raw)
+            except (TypeError, ValueError):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "id required"})
+                return
+            if definition_id <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "id required"})
+                return
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    deleted = delete_service_definition(conn, definition_id)
+                    if not deleted:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"error": "service definition not found"})
+                        return
+                    conn.commit()
+                self._send_json(HTTPStatus.OK, {"deleted": True, "id": definition_id})
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except Exception as exc:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
             return

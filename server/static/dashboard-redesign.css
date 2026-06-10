@@ -46,8 +46,7 @@
 }
 
 .host-list article.host-item.selected,
-.hosts-column .host-item.selected,
-.service-monitor-list article.host-item.selected {
+.hosts-column .host-item.selected {
   border-color: #93c5fd !important;
   box-shadow: var(--dr-card-shadow-hover) !important;
   background: #fff !important;
@@ -2083,6 +2082,131 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   line-height: 1;
 }
 
+.service-monitor-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  padding: 0 0 8px;
+}
+
+.service-monitor-filter-select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 6px 8px;
+}
+
+.service-monitor-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.service-monitor-pill-row--top {
+  margin-bottom: 4px;
+}
+
+.service-monitor-pill-row--bottom {
+  margin-top: 4px;
+}
+
+.service-monitor-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.service-monitor-pill--definition {
+  color: #1e3a5f;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.service-monitor-pill--intern {
+  color: #166534;
+  background: #ecfdf5;
+  border-color: #86efac;
+}
+
+.service-monitor-pill--extern {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.service-monitor-card.service-monitor-card--up {
+  background: #f0fdf4 !important;
+  border-color: #86efac !important;
+}
+
+.service-monitor-card.service-monitor-card--down {
+  background: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+}
+
+.service-monitor-card.service-monitor-card--warn {
+  background: #fffbeb !important;
+  border-color: #fcd34d !important;
+}
+
+.service-monitor-card.service-monitor-card--unknown {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+.service-monitor-card.selected.service-monitor-card--up {
+  box-shadow: inset 0 0 0 1px #4ade80, var(--dr-card-shadow-hover) !important;
+}
+
+.service-monitor-card.selected.service-monitor-card--down {
+  box-shadow: inset 0 0 0 1px #f87171, var(--dr-card-shadow-hover) !important;
+}
+
+.service-monitor-card.selected.service-monitor-card--warn {
+  box-shadow: inset 0 0 0 1px #fbbf24, var(--dr-card-shadow-hover) !important;
+}
+
+.service-monitor-card.selected.service-monitor-card--unknown {
+  box-shadow: inset 0 0 0 1px #93c5fd, var(--dr-card-shadow-hover) !important;
+}
+
+.service-definition-create-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.service-definition-table-wrap {
+  overflow: auto;
+}
+
+.service-definition-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.service-definition-name-input {
+  width: 100%;
+  min-width: 0;
+}
+
 .service-monitor-list {
   display: grid;
   gap: var(--space-2);
@@ -2121,13 +2245,48 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 .service-monitor-cert--ok { background: #dcfce7; color: #166534; }
 .service-monitor-cert--warn { background: #fef3c7; color: #92400e; }
 
-.service-monitor-source {
-  margin-top: 3px;
-  font-size: 8.5px;
-  color: #7188a3;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+body[data-theme="dark"] .service-monitor-filter-select {
+  border-color: #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .service-monitor-pill--definition {
+  color: #bfdbfe;
+  background: #1e3a5f;
+  border-color: #334155;
+}
+
+body[data-theme="dark"] .service-monitor-pill--intern {
+  color: #bbf7d0;
+  background: #14532d;
+  border-color: #166534;
+}
+
+body[data-theme="dark"] .service-monitor-pill--extern {
+  color: #bfdbfe;
+  background: #1e3a5f;
+  border-color: #334155;
+}
+
+body[data-theme="dark"] .service-monitor-card.service-monitor-card--up {
+  background: #14532d !important;
+  border-color: #166534 !important;
+}
+
+body[data-theme="dark"] .service-monitor-card.service-monitor-card--down {
+  background: #7f1d1d !important;
+  border-color: #991b1b !important;
+}
+
+body[data-theme="dark"] .service-monitor-card.service-monitor-card--warn {
+  background: #78350f !important;
+  border-color: #92400e !important;
+}
+
+body[data-theme="dark"] .service-monitor-card.service-monitor-card--unknown {
+  background: #1e293b !important;
+  border-color: #334155 !important;
 }
 
 .host-linked-monitors {

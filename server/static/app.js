@@ -521,6 +521,9 @@ const state = {
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
   externalMonitors: [],
+  serviceDefinitions: [],
+  serviceMonitorFilterDefinitionId: "",
+  serviceMonitorFilterStatus: "all",
   externalMonitorSummary: { total: 0, up: 0, down: 0, degraded: 0, unknown: 0, cert_warn: 0 },
   probeSites: [],
   probeSiteTokenById: {},
@@ -529,6 +532,8 @@ const state = {
   sidebarModeToggleWired: false,
   externalMonitorDetailWired: false,
   serviceMonitorListDelegatedWired: false,
+  serviceMonitorFiltersWired: false,
+  serviceDefinitionsDialogWired: false,
   dbReportsTotal: null,
   dbReportsTotalSeeded: false,
   dbReportsLastHour: 0,
@@ -18516,10 +18521,9 @@ function wireEvents() {
   const toggleSystemOverviewSortModeButton = document.getElementById("toggleSystemOverviewSortModeButton");
   if (toggleSystemOverviewSortModeButton) {
     toggleSystemOverviewSortModeButton.addEventListener("click", async () => {
-      state.systemOverviewSortMode = state.systemOverviewSortMode === "addon-customer-os"
-        ? "country-os-host"
-        : "addon-customer-os";
+      state.systemOverviewSortMode = getNextSystemOverviewSortMode(state.systemOverviewSortMode);
       updateSystemOverviewSortModeButton();
+      updateSystemOverviewSearchInputMode();
       await loadSystemOverview();
     });
   }
@@ -19990,14 +19994,89 @@ function updateSystemOverviewAddonsToggleButton() {
   button.setAttribute("aria-pressed", expanded ? "true" : "false");
 }
 
+const SYSTEM_OVERVIEW_SORT_MODES = ["country-os-host", "sap-release-country-customer", "addon-customer-os"];
+
+function normalizeSystemOverviewSortMode(value) {
+  const mode = String(value || "").trim();
+  return SYSTEM_OVERVIEW_SORT_MODES.includes(mode) ? mode : "country-os-host";
+}
+
+function getNextSystemOverviewSortMode(current) {
+  const mode = normalizeSystemOverviewSortMode(current);
+  const index = SYSTEM_OVERVIEW_SORT_MODES.indexOf(mode);
+  return SYSTEM_OVERVIEW_SORT_MODES[(index + 1) % SYSTEM_OVERVIEW_SORT_MODES.length];
+}
+
+function getSystemOverviewSortModeLabel(mode) {
+  const normalized = normalizeSystemOverviewSortMode(mode);
+  if (normalized === "addon-customer-os") {
+    return "AddOn > Version > Kunde";
+  }
+  if (normalized === "sap-release-country-customer") {
+    return "SAP Release > Land > Kunde";
+  }
+  return "Land > Kunde";
+}
+
+function isSystemOverviewAddonSortMode(mode = state.systemOverviewSortMode) {
+  return normalizeSystemOverviewSortMode(mode) === "addon-customer-os";
+}
+
+function isSystemOverviewSapReleaseSortMode(mode = state.systemOverviewSortMode) {
+  return normalizeSystemOverviewSortMode(mode) === "sap-release-country-customer";
+}
+
+function compareSystemOverviewSapReleaseGroupKeys(left, right) {
+  const unknownValues = new Set(["-", "Unbekannt", "unbekannt", ""]);
+  const leftUnknown = unknownValues.has(String(left || "").trim());
+  const rightUnknown = unknownValues.has(String(right || "").trim());
+  if (leftUnknown && !rightUnknown) {
+    return 1;
+  }
+  if (!leftUnknown && rightUnknown) {
+    return -1;
+  }
+  return String(left || "").localeCompare(String(right || ""), "de", { sensitivity: "base", numeric: true });
+}
+
+function resolveSystemOverviewSapReleaseGroupKey(host, sapVersionMap) {
+  const display = String(resolveSapReleaseDisplay(host?.sap_release, sapVersionMap) || "").trim();
+  return display && display !== "-" ? display : "Unbekannt";
+}
+
+function hostEntryMatchesSystemOverviewSearch(entry, searchQuery, sapVersionMap) {
+  const query = String(searchQuery || "").trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+  const host = entry?.host;
+  const payload = host && typeof host.payload === "object" ? host.payload : {};
+  const addonText = collectSystemOverviewAddonSearchText(payload);
+  const sapReleaseDisplay = resolveSapReleaseDisplay(host?.sap_release, sapVersionMap);
+  const haystack = [
+    host?.hostname,
+    host?.display_name,
+    host?.sap_release,
+    sapReleaseDisplay,
+    payload?.display_name,
+    payload?.hostname,
+    payload?.agent_id,
+    entry?.customer,
+    entry?.osName,
+    entry?.country,
+    addonText,
+  ].map((value) => String(value || "").toLowerCase()).join(" ");
+  return haystack.includes(query);
+}
+
 function updateSystemOverviewSortModeButton() {
   const button = document.getElementById("toggleSystemOverviewSortModeButton");
   if (!button) {
     return;
   }
-  const addonMode = state.systemOverviewSortMode === "addon-customer-os";
-  button.textContent = addonMode ? "Sort: AddOn > Version > Kunde" : "Sort: Land > Kunde";
-  button.setAttribute("aria-pressed", addonMode ? "true" : "false");
+  const mode = normalizeSystemOverviewSortMode(state.systemOverviewSortMode);
+  button.textContent = "Sort: " + getSystemOverviewSortModeLabel(mode);
+  button.setAttribute("aria-pressed", mode !== "country-os-host" ? "true" : "false");
 }
 
 function updateSystemOverviewSearchInputMode() {
@@ -20005,10 +20084,10 @@ function updateSystemOverviewSearchInputMode() {
   if (!input) {
     return;
   }
-  const addonMode = state.systemOverviewSortMode === "addon-customer-os";
-  input.placeholder = addonMode
+  const mode = normalizeSystemOverviewSortMode(state.systemOverviewSortMode);
+  input.placeholder = mode === "addon-customer-os"
     ? "AddOn-Name filtern..."
-    : "Host/Kunde/OS/AddOn suchen...";
+    : "Host/Kunde/OS/AddOn/SAP Release suchen...";
 }
 
 function collectSystemOverviewHostAddonLabels(host) {
@@ -20603,31 +20682,19 @@ async function loadSystemOverview() {
       .filter(([country]) => activeCountryFilter === "all" || String(country).toUpperCase() === activeCountryFilter)
       .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
-    const isAddonSortMode = state.systemOverviewSortMode === "addon-customer-os";
+    const sortMode = normalizeSystemOverviewSortMode(state.systemOverviewSortMode);
+    const isAddonSortMode = sortMode === "addon-customer-os";
+    const isSapReleaseSortMode = sortMode === "sap-release-country-customer";
     const filteredHostEntries = [];
     filteredEntries.forEach(([country, osMap]) => {
       Object.entries(osMap || {}).forEach(([osName, customerMap]) => {
         Object.entries(customerMap || {}).forEach(([customer, hosts]) => {
           (Array.isArray(hosts) ? hosts : []).forEach((host) => {
-            const payload = host && typeof host.payload === "object" ? host.payload : {};
-            if (!isAddonSortMode && searchQuery) {
-              const addonText = collectSystemOverviewAddonSearchText(payload);
-              const haystack = [
-                host?.hostname,
-                host?.display_name,
-                payload?.display_name,
-                payload?.hostname,
-                payload?.agent_id,
-                customer,
-                osName,
-                country,
-                addonText,
-              ].map((v) => String(v || "").toLowerCase()).join(" ");
-              if (!haystack.includes(searchQuery)) {
-                return;
-              }
+            const entry = { country, osName, customer, host };
+            if (!isAddonSortMode && !hostEntryMatchesSystemOverviewSearch(entry, searchQuery, SAP_B1_VERSION_MAP)) {
+              return;
             }
-            filteredHostEntries.push({ country, osName, customer, host });
+            filteredHostEntries.push(entry);
           });
         });
       });
@@ -20753,72 +20820,133 @@ async function loadSystemOverview() {
           `;
         })
         .join("");
-    } else {
-      treeHtml = filteredEntries
-        .map(([country, osMap], countryIndex) => {
-          const countryCode = country;
-          const flagIconPath = getCountryFlagIconPath(countryCode);
-          const flagImg = flagIconPath ? `<img src="${flagIconPath}" alt="${escapeHtml(country)}" class="so-country-flag" />` : "";
+    } else if (isSapReleaseSortMode) {
+      const sapReleaseMap = new Map();
 
-          const customerMapByCountry = new Map();
-          Object.entries(osMap || {}).forEach(([osName, customerMap]) => {
-            Object.entries(customerMap || {}).forEach(([customer, hosts]) => {
-              const matchingHosts = (Array.isArray(hosts) ? hosts : []).filter((host) => {
-                const payload = host && typeof host.payload === "object" ? host.payload : {};
-                const addonText = collectSystemOverviewAddonSearchText(payload);
-                const haystack = [
-                  host?.hostname,
-                  host?.display_name,
-                  payload?.display_name,
-                  payload?.hostname,
-                  payload?.agent_id,
-                  customer,
-                  osName,
-                  country,
-                  addonText,
-                ].map((v) => String(v || "").toLowerCase()).join(" ");
-                if (!searchQuery) {
-                  return true;
-                }
-                return haystack.includes(searchQuery);
-              });
+      filteredHostEntries.forEach((entry) => {
+        const sapReleaseKey = resolveSystemOverviewSapReleaseGroupKey(entry.host, SAP_B1_VERSION_MAP);
+        if (!sapReleaseMap.has(sapReleaseKey)) {
+          sapReleaseMap.set(sapReleaseKey, new Map());
+        }
+        const countryMap = sapReleaseMap.get(sapReleaseKey);
+        const countryKey = String(entry.country || "—");
+        if (!countryMap.has(countryKey)) {
+          countryMap.set(countryKey, new Map());
+        }
+        const customerMap = countryMap.get(countryKey);
+        const customerKey = String(entry.customer || "-");
+        if (!customerMap.has(customerKey)) {
+          customerMap.set(customerKey, []);
+        }
+        customerMap.get(customerKey).push(entry);
+      });
 
-              if (!matchingHosts.length) {
-                return;
-              }
+      treeHtml = Array.from(sapReleaseMap.entries())
+        .sort((left, right) => compareSystemOverviewSapReleaseGroupKeys(left[0], right[0]))
+        .map(([sapRelease, countryMap], sapReleaseIndex) => {
+          const countrySections = Array.from(countryMap.entries())
+            .sort((left, right) => String(left[0]).localeCompare(String(right[0]), "de", { sensitivity: "base", numeric: true }))
+            .map(([country, customerMap], countryIndex) => {
+              const flagIconPath = getCountryFlagIconPath(country);
+              const flagImg = flagIconPath ? `<img src="${flagIconPath}" alt="${escapeHtml(country)}" class="so-country-flag" />` : "";
 
-              const customerKey = String(customer || "-");
-              if (!customerMapByCountry.has(customerKey)) {
-                customerMapByCountry.set(customerKey, new Map());
-              }
-              const osMapForCustomer = customerMapByCountry.get(customerKey);
-              if (!osMapForCustomer.has(osName)) {
-                osMapForCustomer.set(osName, []);
-              }
-              osMapForCustomer.get(osName).push(...matchingHosts);
-            });
-          });
-
-          const customerSections = Array.from(customerMapByCountry.entries())
-            .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
-            .map(([customer, osMapForCustomer], customerIndex) => {
-              const customerHostEntries = Array.from(osMapForCustomer.entries())
-                .flatMap(([osName, hostsForOs]) => (Array.isArray(hostsForOs) ? hostsForOs : []).map((host) => ({ host, osName })))
-                .sort((left, right) => String(left.host?.display_name || left.host?.hostname || "").localeCompare(String(right.host?.display_name || right.host?.hostname || ""), "de", { sensitivity: "base", numeric: true }));
-
-              if (!customerHostEntries.length) {
-                return "";
-              }
-
-              const rowHtml = customerHostEntries
-                .map((entry) => formatSystemOverviewTableRow(entry.host, entry.osName, customer, SAP_B1_VERSION_MAP, true, searchQuery))
+              const customerSections = Array.from(customerMap.entries())
+                .sort((left, right) => String(left[0]).localeCompare(String(right[0]), "de", { sensitivity: "base", numeric: true }))
+                .map(([customer, entries], customerIndex) => {
+                  const sortedEntries = [...entries].sort((left, right) => String(left.host?.display_name || left.host?.hostname || "").localeCompare(String(right.host?.display_name || right.host?.hostname || ""), "de", { sensitivity: "base", numeric: true }));
+                  const rowHtml = sortedEntries
+                    .map((entry) => formatSystemOverviewTableRow(entry.host, entry.osName, entry.customer, SAP_B1_VERSION_MAP, true, searchQuery))
+                    .join("");
+                  const customerIndicators = buildSystemOverviewCustomerDataIndicators(sortedEntries.map((entry) => entry.host));
+                  const customerIndicatorHtml = customerIndicators.emojiText
+                    ? `<span class="so-customer-data-indicators" title="${escapeHtml(customerIndicators.titleText)}">${escapeHtml(customerIndicators.emojiText)}</span>`
+                    : "";
+                  const customerId = `so-sap-customer-${sapReleaseIndex}-${countryIndex}-${customerIndex}`;
+                  return `
+                    <section class="system-overview-country-group">
+                      <button class="system-overview-toggle system-overview-toggle--customer" type="button" data-target-id="${customerId}" aria-expanded="false">
+                        <span class="system-overview-chevron">▶</span>
+                        <span class="so-country-header">👥 ${escapeHtml(customer)}${customerIndicatorHtml} (${sortedEntries.length})</span>
+                      </button>
+                      <div id="${customerId}" class="system-overview-customer-list hidden">
+                        <div class="system-overview-table-wrap">
+                          <table class="system-overview-table">
+                            <thead>
+                              <tr>
+                                <th>Host</th>
+                                <th>OS</th>
+                                <th>CPU</th>
+                                <th>RAM / Modell</th>
+                                <th>SAP / DB</th>
+                                <th>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>${rowHtml}</tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </section>
+                  `;
+                })
                 .join("");
 
-              const customerHostCount = Array.from(osMapForCustomer.values()).reduce(
-                (sum, hostList) => sum + (Array.isArray(hostList) ? hostList.length : 0),
-                0,
-              );
-              const customerIndicators = buildSystemOverviewCustomerDataIndicators(customerHostEntries.map((entry) => entry.host));
+              const countryEntryCount = Array.from(customerMap.values()).reduce((sum, entries) => sum + entries.length, 0);
+              const countryId = `so-sap-country-${sapReleaseIndex}-${countryIndex}`;
+              return `
+                <section class="system-overview-country-group">
+                  <button class="system-overview-toggle" type="button" data-target-id="${countryId}" aria-expanded="false">
+                    <span class="system-overview-chevron">▶</span>
+                    <span class="so-country-header">${flagImg} ${escapeHtml(country)} (${countryEntryCount})</span>
+                  </button>
+                  <div id="${countryId}" class="system-overview-os-list hidden">${customerSections}</div>
+                </section>
+              `;
+            })
+            .join("");
+
+          const sapReleaseEntryCount = Array.from(countryMap.values())
+            .reduce((sum, customerMap) => sum + Array.from(customerMap.values()).reduce((innerSum, entries) => innerSum + entries.length, 0), 0);
+          const sapReleaseId = `so-sap-release-${sapReleaseIndex}`;
+          return `
+            <section class="system-overview-country-group">
+              <button class="system-overview-toggle" type="button" data-target-id="${sapReleaseId}" aria-expanded="false">
+                <span class="system-overview-chevron">▶</span>
+                <span class="so-country-header">📦 ${escapeHtml(sapRelease)} (${sapReleaseEntryCount})</span>
+              </button>
+              <div id="${sapReleaseId}" class="system-overview-os-list hidden">${countrySections}</div>
+            </section>
+          `;
+        })
+        .join("");
+    } else {
+      const countryMap = new Map();
+      filteredHostEntries.forEach((entry) => {
+        const countryKey = String(entry.country || "—");
+        if (!countryMap.has(countryKey)) {
+          countryMap.set(countryKey, new Map());
+        }
+        const customerMap = countryMap.get(countryKey);
+        const customerKey = String(entry.customer || "-");
+        if (!customerMap.has(customerKey)) {
+          customerMap.set(customerKey, []);
+        }
+        customerMap.get(customerKey).push(entry);
+      });
+
+      treeHtml = Array.from(countryMap.entries())
+        .sort((left, right) => String(left[0]).localeCompare(String(right[0]), "de", { sensitivity: "base", numeric: true }))
+        .map(([country, customerMap], countryIndex) => {
+          const flagIconPath = getCountryFlagIconPath(country);
+          const flagImg = flagIconPath ? `<img src="${flagIconPath}" alt="${escapeHtml(country)}" class="so-country-flag" />` : "";
+
+          const customerSections = Array.from(customerMap.entries())
+            .sort((left, right) => String(left[0]).localeCompare(String(right[0]), "de", { sensitivity: "base", numeric: true }))
+            .map(([customer, entries], customerIndex) => {
+              const sortedEntries = [...entries].sort((left, right) => String(left.host?.display_name || left.host?.hostname || "").localeCompare(String(right.host?.display_name || right.host?.hostname || ""), "de", { sensitivity: "base", numeric: true }));
+              const rowHtml = sortedEntries
+                .map((entry) => formatSystemOverviewTableRow(entry.host, entry.osName, entry.customer, SAP_B1_VERSION_MAP, true, searchQuery))
+                .join("");
+              const customerIndicators = buildSystemOverviewCustomerDataIndicators(sortedEntries.map((entry) => entry.host));
               const customerIndicatorHtml = customerIndicators.emojiText
                 ? `<span class="so-customer-data-indicators" title="${escapeHtml(customerIndicators.titleText)}">${escapeHtml(customerIndicators.emojiText)}</span>`
                 : "";
@@ -20827,7 +20955,7 @@ async function loadSystemOverview() {
                 <section class="system-overview-country-group">
                   <button class="system-overview-toggle system-overview-toggle--customer" type="button" data-target-id="${customerId}" aria-expanded="false">
                     <span class="system-overview-chevron">▶</span>
-                    <span class="so-country-header">👥 ${escapeHtml(customer)}${customerIndicatorHtml} (${customerHostCount})</span>
+                    <span class="so-country-header">👥 ${escapeHtml(customer)}${customerIndicatorHtml} (${sortedEntries.length})</span>
                   </button>
                   <div id="${customerId}" class="system-overview-customer-list hidden">
                     <div class="system-overview-table-wrap">
@@ -20856,12 +20984,13 @@ async function loadSystemOverview() {
             return "";
           }
 
+          const countryEntryCount = Array.from(customerMap.values()).reduce((sum, entries) => sum + entries.length, 0);
           const countryId = `so-country-${countryIndex}`;
           return `
             <section class="system-overview-country-group">
               <button class="system-overview-toggle" type="button" data-target-id="${countryId}" aria-expanded="true">
                 <span class="system-overview-chevron">▼</span>
-                <span class="so-country-header">${flagImg} ${escapeHtml(country)}</span>
+                <span class="so-country-header">${flagImg} ${escapeHtml(country)} (${countryEntryCount})</span>
               </button>
               <div id="${countryId}" class="system-overview-os-list">${customerSections}</div>
             </section>
@@ -20872,9 +21001,7 @@ async function loadSystemOverview() {
     }
 
     if (statsEl) {
-      const modeLabel = state.systemOverviewSortMode === "addon-customer-os"
-        ? "Sicht: AddOn > Version > Kunde"
-        : "Sicht: Land > Kunde";
+      const modeLabel = "Sicht: " + getSystemOverviewSortModeLabel(sortMode);
       const chips = [
         `${displayedHostCount} Systeme`,
         modeLabel,
@@ -20927,6 +21054,262 @@ async function loadSystemOverview() {
   }
 }
 
+function serviceMonitorCardStatusClass(status) {
+  const normalized = asText(status, "unknown").toLowerCase();
+  if (normalized === "up") return "service-monitor-card--up";
+  if (normalized === "down") return "service-monitor-card--down";
+  if (normalized === "degraded") return "service-monitor-card--warn";
+  return "service-monitor-card--unknown";
+}
+
+function isExternalMonitorOnline(monitor) {
+  return asText(monitor?.last_status, "unknown").toLowerCase() === "up";
+}
+
+function filterServiceMonitorsForSidebar(monitors) {
+  const items = Array.isArray(monitors) ? monitors.filter((item) => item?.enabled !== false) : [];
+  const definitionFilter = asText(state.serviceMonitorFilterDefinitionId, "").trim();
+  const statusFilter = asText(state.serviceMonitorFilterStatus, "all").toLowerCase();
+  return items.filter((monitor) => {
+    const definitionId = asText(monitor?.service_definition_id, "").trim();
+    if (definitionFilter && definitionId !== definitionFilter) {
+      return false;
+    }
+    if (statusFilter === "online") {
+      return isExternalMonitorOnline(monitor);
+    }
+    if (statusFilter === "offline") {
+      return !isExternalMonitorOnline(monitor);
+    }
+    return true;
+  });
+}
+
+function buildServiceDefinitionOptions(selectedId = "") {
+  const selected = asText(selectedId, "").trim();
+  const definitions = Array.isArray(state.serviceDefinitions) ? state.serviceDefinitions : [];
+  const options = definitions
+    .map((definition) => {
+      const definitionId = Number(definition?.id || 0);
+      const label = asText(definition?.name, `Service #${definitionId}`);
+      const isSelected = selected && String(definitionId) === selected ? "selected" : "";
+      return `<option value="${definitionId}" ${isSelected}>${escapeHtml(label)}</option>`;
+    })
+    .join("");
+  return `<option value="">— Kein Service —</option>${options}`;
+}
+
+function renderServiceMonitorFilterOptions() {
+  const selectEl = document.getElementById("serviceMonitorFilterDefinitionSelect");
+  if (!selectEl) {
+    return;
+  }
+  const current = asText(state.serviceMonitorFilterDefinitionId, "");
+  const definitions = Array.isArray(state.serviceDefinitions) ? state.serviceDefinitions : [];
+  const options = definitions
+    .map((definition) => {
+      const definitionId = String(Number(definition?.id || 0));
+      const label = asText(definition?.name, `Service #${definitionId}`);
+      const selected = current === definitionId ? "selected" : "";
+      return `<option value="${definitionId}" ${selected}>${escapeHtml(label)}</option>`;
+    })
+    .join("");
+  selectEl.innerHTML = `<option value="">Alle Services</option>${options}`;
+}
+
+async function loadServiceDefinitions(options = {}) {
+  if (!state.isAuthenticated) {
+    return;
+  }
+  const response = await fetch("/api/v1/service-definitions", { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  state.serviceDefinitions = Array.isArray(data.service_definitions) ? data.service_definitions : [];
+  renderServiceMonitorFilterOptions();
+  if (!options.silent) {
+    renderServiceMonitors();
+  }
+}
+
+function wireServiceMonitorFilters() {
+  if (state.serviceMonitorFiltersWired) {
+    return;
+  }
+  const definitionSelect = document.getElementById("serviceMonitorFilterDefinitionSelect");
+  const statusSelect = document.getElementById("serviceMonitorFilterStatusSelect");
+  definitionSelect?.addEventListener("change", () => {
+    state.serviceMonitorFilterDefinitionId = asText(definitionSelect.value, "").trim();
+    renderServiceMonitors();
+  });
+  statusSelect?.addEventListener("change", () => {
+    state.serviceMonitorFilterStatus = asText(statusSelect.value, "all").trim() || "all";
+    renderServiceMonitors();
+  });
+  if (statusSelect) {
+    statusSelect.value = asText(state.serviceMonitorFilterStatus, "all");
+  }
+  state.serviceMonitorFiltersWired = true;
+}
+
+async function openServiceDefinitionsDialog() {
+  if (!state.isAdmin) {
+    return;
+  }
+  await loadServiceDefinitions({ silent: true }).catch((error) => {
+    console.warn("loadServiceDefinitions failed:", error);
+  });
+
+  const renderRows = () => {
+    const definitions = Array.isArray(state.serviceDefinitions) ? state.serviceDefinitions : [];
+    if (!definitions.length) {
+      return '<tr><td colspan="3" class="muted">Noch keine Services definiert.</td></tr>';
+    }
+    return definitions.map((definition) => {
+      const definitionId = Number(definition?.id || 0);
+      const monitorCount = Number(definition?.monitor_count || 0);
+      const usageLabel = monitorCount ? `${monitorCount} Monitor${monitorCount === 1 ? "" : "e"}` : "—";
+      return `
+        <tr data-service-definition-id="${definitionId}">
+          <td><input type="text" class="service-definition-name-input" value="${escapeHtml(asText(definition.name, ""))}" aria-label="Service-Bezeichnung"></td>
+          <td>${escapeHtml(usageLabel)}</td>
+          <td class="service-definition-actions">
+            <button type="button" class="btn-secondary btn-secondary--compact" data-action="save-service-definition">Speichern</button>
+            <button type="button" class="btn-secondary btn-secondary--compact" data-action="delete-service-definition">Löschen</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  };
+
+  const modal = document.createElement("div");
+  modal.className = "host-meta-modal";
+  modal.innerHTML = `<div class="host-meta-modal-backdrop"></div>
+    <div class="host-meta-modal-inner" role="dialog" aria-modal="true" aria-label="Service-Katalog">
+      <div class="chart-drill-header">
+        <div class="chart-drill-title">Service-Katalog</div>
+        <button type="button" class="btn-secondary btn-secondary--compact" data-action="cancel">Schließen</button>
+      </div>
+      <div class="chart-drill-body host-meta-modal-body">
+        <p class="settings-helper-text">Services hier einmal definieren und danach Monitor-Karten zuweisen. Das Monitor-Feld „Bezeichnung“ bleibt zusätzlich erhalten.</p>
+        <div class="service-definition-create-row">
+          <input id="serviceDefinitionCreateNameInput" type="text" placeholder="Neuer Service, z.B. SAP Web Client" />
+          <button type="button" class="btn-primary" data-action="create-service-definition">Hinzufügen</button>
+        </div>
+        <div class="service-definition-table-wrap">
+          <table class="external-monitor-table service-definition-table">
+            <thead><tr><th>Bezeichnung</th><th>Verwendung</th><th></th></tr></thead>
+            <tbody id="serviceDefinitionTableBody">${renderRows()}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  const close = () => modal.remove();
+  const refreshTable = () => {
+    const bodyEl = modal.querySelector("#serviceDefinitionTableBody");
+    if (bodyEl) {
+      bodyEl.innerHTML = renderRows();
+    }
+  };
+
+  modal.querySelector(".host-meta-modal-backdrop")?.addEventListener("click", close);
+  modal.querySelector('[data-action="cancel"]')?.addEventListener("click", close);
+  modal.querySelector('[data-action="create-service-definition"]')?.addEventListener("click", async () => {
+    const name = asText(modal.querySelector("#serviceDefinitionCreateNameInput")?.value, "").trim();
+    if (!name) {
+      window.alert("Bitte eine Service-Bezeichnung angeben.");
+      return;
+    }
+    const response = await fetch("/api/v1/service-definitions", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      window.alert(asText(data.error, "Service konnte nicht angelegt werden."));
+      return;
+    }
+    modal.querySelector("#serviceDefinitionCreateNameInput").value = "";
+    await loadServiceDefinitions({ silent: true });
+    refreshTable();
+    renderServiceMonitorFilterOptions();
+  });
+
+  modal.addEventListener("click", async (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const actionButton = target?.closest("[data-action='save-service-definition'], [data-action='delete-service-definition']");
+    if (!actionButton) {
+      return;
+    }
+    const row = actionButton.closest("[data-service-definition-id]");
+    const definitionId = Number(row?.getAttribute("data-service-definition-id") || 0);
+    if (!definitionId) {
+      return;
+    }
+    if (actionButton.getAttribute("data-action") === "save-service-definition") {
+      const name = asText(row?.querySelector(".service-definition-name-input")?.value, "").trim();
+      if (!name) {
+        window.alert("Bezeichnung darf nicht leer sein.");
+        return;
+      }
+      const response = await fetch("/api/v1/service-definitions", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: definitionId, name }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        window.alert(asText(data.error, "Service konnte nicht gespeichert werden."));
+        return;
+      }
+      await loadServiceDefinitions({ silent: true });
+      await loadExternalMonitors({ silent: true });
+      refreshTable();
+      return;
+    }
+    if (!window.confirm("Service wirklich löschen?")) {
+      return;
+    }
+    const response = await fetch("/api/v1/service-definition-delete", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: definitionId }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      window.alert(asText(data.error, "Service konnte nicht gelöscht werden."));
+      return;
+    }
+    if (String(state.serviceMonitorFilterDefinitionId) === String(definitionId)) {
+      state.serviceMonitorFilterDefinitionId = "";
+      const definitionSelect = document.getElementById("serviceMonitorFilterDefinitionSelect");
+      if (definitionSelect) {
+        definitionSelect.value = "";
+      }
+    }
+    await loadServiceDefinitions({ silent: true });
+    await loadExternalMonitors({ silent: true });
+    refreshTable();
+  });
+}
+
+function wireServiceDefinitionsAdminUi() {
+  if (state.serviceDefinitionsDialogWired) {
+    return;
+  }
+  document.getElementById("manageServiceDefinitionsButton")?.addEventListener("click", () => {
+    void openServiceDefinitionsDialog();
+  });
+  state.serviceDefinitionsDialogWired = true;
+}
+
 function setSidebarMode(mode) {
   const nextMode = mode === "services" ? "services" : "hosts";
   state.sidebarMode = nextMode;
@@ -20935,6 +21318,7 @@ function setSidebarMode(mode) {
   const hostsButton = document.getElementById("sidebarModeHostsButton");
   const servicesButton = document.getElementById("sidebarModeServicesButton");
   const addButton = document.getElementById("addExternalMonitorButton");
+  const manageDefinitionsButton = document.getElementById("manageServiceDefinitionsButton");
   if (hostsPanel) {
     hostsPanel.classList.toggle("hidden", nextMode !== "hosts");
   }
@@ -20949,8 +21333,12 @@ function setSidebarMode(mode) {
     servicesButton.classList.toggle("active", nextMode === "services");
     servicesButton.setAttribute("aria-selected", nextMode === "services" ? "true" : "false");
   }
+  const showServiceAdmin = nextMode === "services" && state.isAdmin;
   if (addButton) {
-    addButton.classList.toggle("hidden", nextMode !== "services" || !state.isAdmin);
+    addButton.classList.toggle("hidden", !showServiceAdmin);
+  }
+  if (manageDefinitionsButton) {
+    manageDefinitionsButton.classList.toggle("hidden", !showServiceAdmin);
   }
 }
 
@@ -21304,16 +21692,8 @@ function formatExternalMonitorHistoryTimestamp(value) {
   if (!value) {
     return "-";
   }
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return asText(value, "-");
-  }
-  return date.toLocaleString("de-CH", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const isoValue = value instanceof Date ? value.toISOString() : asText(value, "");
+  return formatReportDateTime(isoValue);
 }
 
 function renderExternalMonitorHistoryChart(historyRows, monitor) {
@@ -21401,28 +21781,33 @@ function renderServiceMonitorCard(monitor) {
   const monitorId = Number(monitor?.id || 0);
   const selectedClass = monitorId === Number(state.selectedExternalMonitorId || 0) ? " selected" : "";
   const status = asText(monitor?.last_status, "unknown").toLowerCase();
+  const statusClass = serviceMonitorCardStatusClass(status);
   const certInfo = formatExternalMonitorCertDaysLeft(monitor?.last_cert_days_left);
   const certHtml = certInfo.cardLabel
     ? `<span class="service-monitor-cert ${certInfo.warn ? "service-monitor-cert--warn" : "service-monitor-cert--ok"}">${escapeHtml(certInfo.cardLabel)}</span>`
     : "";
   const probeSource = asText(monitor?.probe_source, "server").toLowerCase();
-  const sourceLabel = probeSource === "push" ? "Intern · Push-Probe" : "Extern · Server";
+  const sourcePillClass = probeSource === "push" ? "service-monitor-pill--intern" : "service-monitor-pill--extern";
+  const sourcePillLabel = probeSource === "push" ? "Intern" : "Extern";
   const linkedHostHtml = renderLinkedHostForServiceCard(monitor);
-  const serviceName = asText(monitor?.name, "Service");
+  const monitorName = asText(monitor?.name, "Monitor");
+  const catalogServiceName = asText(monitor?.service_definition_name, "").trim();
+  const definitionPillHtml = catalogServiceName
+    ? `<div class="service-monitor-pill-row service-monitor-pill-row--top"><span class="service-monitor-pill service-monitor-pill--definition">${escapeHtml(catalogServiceName)}</span></div>`
+    : "";
   const lastCheckClock = formatHostLastReportClock(monitor?.last_checked_at_utc);
   const statusTitle = `${status.toUpperCase()} · ${formatExternalMonitorLatency(monitor)}`;
-  const sideBarTitle = `Service-Status: ${statusTitle}`;
   return `
-    <article class="host-item service-monitor-card${selectedClass}" tabindex="0" role="button" data-service-monitor-id="${monitorId}">
-      <div class="host-version-side-bar ${externalMonitorSideBarClass(status)}" title="${escapeHtml(sideBarTitle)}" aria-hidden="true"></div>
+    <article class="host-item service-monitor-card ${statusClass}${selectedClass}" tabindex="0" role="button" data-service-monitor-id="${monitorId}" title="${escapeHtml(statusTitle)}">
       <div class="host-card-main">
+        ${definitionPillHtml}
         <div class="host-customer-title-line service-monitor-type-line">
           <span class="host-customer-row host-customer-row--top">
             <span class="host-customer-line">${escapeHtml(formatExternalMonitorTypeLabel(monitor))}</span>
           </span>
         </div>
         <div class="host-designation-row">
-          <span class="host-detail-line">${escapeHtml(serviceName)}</span>
+          <span class="host-detail-line">${escapeHtml(monitorName)}</span>
           <span class="host-detail-clock" title="${escapeHtml(lastCheckClock.title)}">${escapeHtml(lastCheckClock.label)}</span>
         </div>
         ${linkedHostHtml}
@@ -21436,7 +21821,9 @@ function renderServiceMonitorCard(monitor) {
           </span>
         </div>
         ${certHtml}
-        <div class="service-monitor-source">${escapeHtml(sourceLabel)}</div>
+        <div class="service-monitor-pill-row service-monitor-pill-row--bottom">
+          <span class="service-monitor-pill ${sourcePillClass}">${escapeHtml(sourcePillLabel)}</span>
+        </div>
       </div>
     </article>
   `;
@@ -21447,9 +21834,14 @@ function renderServiceMonitors() {
   if (!listEl) {
     return;
   }
-  const monitors = Array.isArray(state.externalMonitors) ? state.externalMonitors.filter((item) => item?.enabled !== false) : [];
-  if (!monitors.length) {
+  const allMonitors = Array.isArray(state.externalMonitors) ? state.externalMonitors.filter((item) => item?.enabled !== false) : [];
+  const monitors = filterServiceMonitorsForSidebar(allMonitors);
+  if (!allMonitors.length) {
     listEl.innerHTML = '<p class="muted">Keine Service-Monitore konfiguriert.</p>';
+    return;
+  }
+  if (!monitors.length) {
+    listEl.innerHTML = '<p class="muted">Keine Service-Monitore für den aktuellen Filter.</p>';
     return;
   }
   listEl.innerHTML = monitors.map(renderServiceMonitorCard).join("");
@@ -21481,7 +21873,7 @@ function renderExternalMonitorDetail(monitor) {
   const historyHtml = historyTableRows.length
     ? historyTableRows.map((entry) => `
         <tr>
-          <td>${escapeHtml(formatAutoRefreshTimestamp(entry.checked_at_utc ? new Date(entry.checked_at_utc) : null) || asText(entry.checked_at_utc, "-"))}</td>
+          <td>${escapeHtml(formatReportDateTime(entry.checked_at_utc))}</td>
           <td>${escapeHtml(asText(entry.status, "-").toUpperCase())}</td>
           <td>${escapeHtml(entry.response_ms != null ? `${entry.response_ms} ms` : "-")}</td>
           <td>${escapeHtml(asText(entry.error_message, ""))}</td>
@@ -21514,10 +21906,15 @@ function renderExternalMonitorDetail(monitor) {
       </div>`
     : "";
 
+  const catalogServiceName = asText(monitor.service_definition_name, "").trim();
+  const catalogPillHtml = catalogServiceName
+    ? `<div class="service-monitor-pill-row service-monitor-pill-row--top"><span class="service-monitor-pill service-monitor-pill--definition">${escapeHtml(catalogServiceName)}</span></div>`
+    : "";
   detailView.innerHTML = `
     <div class="external-monitor-detail-header">
       <div class="external-monitor-detail-header-top">
         <div>
+          ${catalogPillHtml}
           <h4>${escapeHtml(asText(monitor.name, "Service"))}</h4>
           <p class="sub">${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Interner Monitor (Push-Probe) — " : "Externer Monitor — ")}${escapeHtml(asText(monitor.target_url, ""))}</p>
         </div>
@@ -21538,7 +21935,7 @@ function renderExternalMonitorDetail(monitor) {
       <div class="external-monitor-metric">
         <div class="label">Latenz</div>
         <div class="value">${escapeHtml(formatExternalMonitorLatency(monitor))}</div>
-        <div class="hint">Letzte Prüfung: ${escapeHtml(asText(monitor.last_checked_at_utc, "-"))}</div>
+        <div class="hint">Letzte Prüfung: ${escapeHtml(formatReportDateTime(monitor.last_checked_at_utc))}</div>
       </div>
     </div>
     <div class="external-monitor-panel">
@@ -21550,6 +21947,8 @@ function renderExternalMonitorDetail(monitor) {
       <div class="external-monitor-panel-body">
         <table class="external-monitor-table">
           <tbody>
+            <tr><td>Service (Katalog)</td><td>${catalogServiceName ? escapeHtml(catalogServiceName) : "—"}</td></tr>
+            <tr><td>Bezeichnung (Monitor)</td><td>${escapeHtml(asText(monitor.name, "—"))}</td></tr>
             <tr><td>Typ</td><td>${escapeHtml(formatExternalMonitorTypeLabel(monitor))}</td></tr>
             <tr><td>Quelle</td><td>${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Intern (Push-Probe)" : "Extern (Server)")}</td></tr>
             <tr><td>Intervall</td><td>${escapeHtml(String(formatExternalMonitorIntervalMinutes(monitor)))} Min.</td></tr>
@@ -21718,6 +22117,9 @@ async function loadExternalMonitors(options = {}) {
   }
   await loadExternalMonitorSummary();
   updateExternalMonitorAdminUi();
+  void loadServiceDefinitions({ silent: true }).catch((error) => {
+    console.warn("loadServiceDefinitions failed:", error);
+  });
   if (state.isAdmin) {
     void loadProbeSites(true).catch((error) => {
       console.warn("loadProbeSites failed:", error);
@@ -21727,6 +22129,8 @@ async function loadExternalMonitors(options = {}) {
 
 function updateExternalMonitorAdminUi() {
   setSidebarMode(state.sidebarMode || "hosts");
+  wireServiceMonitorFilters();
+  wireServiceDefinitionsAdminUi();
 }
 
 function getExternalMonitorServerUrl() {
@@ -22156,6 +22560,13 @@ async function openExternalMonitorCreateDialog() {
   if (!state.isAdmin) {
     return;
   }
+  try {
+    await loadServiceDefinitions({ silent: true });
+  } catch (error) {
+    window.alert(formatApiLoadError(error?.message, "Service-Katalog"));
+    return;
+  }
+  const definitionOptions = buildServiceDefinitionOptions();
   let probeSites = [];
   try {
     probeSites = await loadProbeSites(true);
@@ -22190,8 +22601,11 @@ async function openExternalMonitorCreateDialog() {
       </div>
       <div class="chart-drill-body host-meta-modal-body">
         <div class="host-meta-modal-grid">
-          <label>Bezeichnung
-            <input id="externalMonitorCreateNameInput" type="text" placeholder="z.B. SAP Web Client intern" />
+          <label>Service (Katalog)
+            <select id="externalMonitorCreateDefinitionSelect">${definitionOptions}</select>
+          </label>
+          <label>Bezeichnung (Monitor)
+            <input id="externalMonitorCreateNameInput" type="text" placeholder="z.B. Kunde XY / URL-Kurzname" />
           </label>
           <label>Ziel-URL
             <input id="externalMonitorCreateUrlInput" type="text" placeholder="https://intern/... oder host:port" />
@@ -22307,8 +22721,10 @@ async function openExternalMonitorCreateDialog() {
         }
       }
     }
+    const serviceDefinitionId = Number(modal.querySelector("#externalMonitorCreateDefinitionSelect")?.value || 0);
     const payload = {
       name,
+      service_definition_id: serviceDefinitionId > 0 ? serviceDefinitionId : null,
       target_url: targetUrl,
       monitor_type: "http",
       probe_source: probeSource,
@@ -22344,12 +22760,19 @@ async function openExternalMonitorEditorDialog(monitor) {
   if (!state.isAdmin || !monitor) {
     return null;
   }
+  try {
+    await loadServiceDefinitions({ silent: true });
+  } catch (error) {
+    window.alert(formatApiLoadError(error?.message, "Service-Katalog"));
+    return null;
+  }
   const monitorType = asText(monitor.monitor_type, "http").toLowerCase();
   const tlsVerify = monitor.tls_verify !== false;
   const intervalMin = formatExternalMonitorIntervalMinutes(monitor);
   const probeSource = asText(monitor.probe_source, "server").toLowerCase();
   const probeSourceLabel = probeSource === "push" ? "Intern (Push-Probe)" : "Extern (Server)";
   const linkedHostIdentity = asText(monitor.related_host_uid, "").trim();
+  const definitionOptions = buildServiceDefinitionOptions(monitor.service_definition_id);
   const hostOptions = (Array.isArray(state.hosts) ? state.hosts : [])
     .slice()
     .sort((left, right) => asText(left.display_name || left.hostname, "").localeCompare(asText(right.display_name || right.hostname, ""), undefined, { sensitivity: "base" }))
@@ -22376,8 +22799,11 @@ async function openExternalMonitorEditorDialog(monitor) {
       </div>
       <div class="chart-drill-body host-meta-modal-body">
         <div class="host-meta-modal-grid">
-          <label>Bezeichnung
-            <input id="externalMonitorEditNameInput" type="text" placeholder="z.B. Kanadevia Web Client" value="${escapeHtml(asText(monitor.name, ""))}" />
+          <label>Service (Katalog)
+            <select id="externalMonitorEditDefinitionSelect">${definitionOptions}</select>
+          </label>
+          <label>Bezeichnung (Monitor)
+            <input id="externalMonitorEditNameInput" type="text" placeholder="z.B. Kunde XY / URL-Kurzname" value="${escapeHtml(asText(monitor.name, ""))}" />
           </label>
           <label>Ziel-URL
             <input id="externalMonitorEditUrlInput" type="text" placeholder="https://... oder host:port" value="${escapeHtml(asText(monitor.target_url, ""))}" />
@@ -22437,6 +22863,7 @@ async function openExternalMonitorEditorDialog(monitor) {
   const keywordInput = modal.querySelector("#externalMonitorEditKeywordInput");
   const timeoutInput = modal.querySelector("#externalMonitorEditTimeoutInput");
   const hostSelect = modal.querySelector("#externalMonitorEditHostSelect");
+  const definitionSelect = modal.querySelector("#externalMonitorEditDefinitionSelect");
   const enabledInput = modal.querySelector("#externalMonitorEditEnabledInput");
   const tlsVerifyWrap = modal.querySelector("#externalMonitorEditTlsVerifyWrap");
   const tlsVerifySelect = modal.querySelector("#externalMonitorEditTlsVerifySelect");
@@ -22470,8 +22897,10 @@ async function openExternalMonitorEditorDialog(monitor) {
       const intervalMinValue = Math.max(1, Math.min(1440, Number(intervalInput?.value || 30)));
       const expectedStatusRaw = asText(expectedStatusInput?.value, "").trim();
       const expectedStatus = expectedStatusRaw ? Number(expectedStatusRaw) : null;
+      const serviceDefinitionId = Number(definitionSelect?.value || 0);
       close({
         name,
+        service_definition_id: serviceDefinitionId > 0 ? serviceDefinitionId : null,
         target_url: targetUrl,
         monitor_type: asText(typeSelect?.value, "http"),
         interval_sec: intervalMinValue * 60,

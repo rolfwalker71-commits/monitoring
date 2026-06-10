@@ -65,13 +65,24 @@
           <button id="testPushButton" type="button">Test Push senden</button>
           <button id="mobileLogoutButton" type="button">Abmelden</button>
         </div>
-        <div class="kpi-strip-wrap" aria-label="KPI-Übersicht">
+        <div class="mobile-mode-toggle" role="tablist" aria-label="Ansicht wechseln">
+          <button type="button" id="mobileModeHostsButton" class="mobile-mode-btn active" data-mobile-mode="hosts" role="tab" aria-selected="true">Hosts</button>
+          <button type="button" id="mobileModeServicesButton" class="mobile-mode-btn" data-mobile-mode="services" role="tab" aria-selected="false">Services</button>
+        </div>
+        <div id="hostsKpiStrip" class="kpi-strip-wrap" aria-label="KPI-Übersicht">
           <div class="kpi-strip">
             <div class="kpi kpi-critical"><strong id="kpiCritical">0</strong><span>Kritisch</span></div>
             <div class="kpi kpi-warning"><strong id="kpiWarning">0</strong><span>Warning</span></div>
             <div class="kpi kpi-open"><strong id="kpiOpen">0</strong><span>Offen</span></div>
             <button type="button" class="kpi kpi-active kpi-tap" id="kpiActiveNav" title="Aktive Hosts anzeigen (Meldung in der letzten Stunde)"><strong id="kpiActiveHosts">0</strong><span>Aktiv</span></button>
             <button type="button" class="kpi kpi-inactive kpi-tap" id="kpiInactiveNav" title="Inaktive Hosts anzeigen (keine Meldung in der letzten Stunde)"><strong id="kpiInactiveHosts">0</strong><span>Inaktiv</span></button>
+          </div>
+        </div>
+        <div id="servicesKpiStrip" class="kpi-strip-wrap hidden" aria-label="Service-Übersicht">
+          <div class="kpi-strip kpi-strip--services">
+            <div class="kpi kpi-service-total"><strong id="kpiServiceTotal">0</strong><span>Gesamt</span></div>
+            <div class="kpi kpi-service-up"><strong id="kpiServiceOnline">0</strong><span>Online</span></div>
+            <div class="kpi kpi-service-down"><strong id="kpiServiceOffline">0</strong><span>Offline</span></div>
           </div>
         </div>
       </header>
@@ -155,6 +166,27 @@
         </div>
         <p id="inactiveHostsStatusLine" class="status-line">Lade Hosts…</p>
         <section id="inactiveHostsList" class="inactive-hosts-stack" aria-live="polite"></section>
+      </div>
+
+      <div id="servicesHomeView" class="mobile-view hidden" aria-label="Services">
+        <section class="service-filter-bar" aria-label="Service-Filter">
+          <label class="service-filter-field">
+            <span class="service-filter-label">Service</span>
+            <select id="mobileServiceFilterDefinition" class="service-filter-select">
+              <option value="">Alle Services</option>
+            </select>
+          </label>
+          <div class="service-status-chips filter-chips" role="group" aria-label="Status filtern">
+            <button type="button" class="chip active" data-service-status="all">Alle</button>
+            <button type="button" class="chip" data-service-status="online">Online</button>
+            <button type="button" class="chip" data-service-status="offline">Offline</button>
+          </div>
+        </section>
+        <p id="servicesStatusLine" class="status-line">Lade Services…</p>
+        <div class="services-carousel-shell">
+          <section id="servicesList" class="services-list services-carousel" aria-live="polite"></section>
+          <section id="serviceDetailPanel" class="service-detail-panel hidden" aria-label="Service-Details"></section>
+        </div>
       </div>
     </main>
 

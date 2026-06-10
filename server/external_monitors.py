@@ -205,6 +205,16 @@ def init_external_monitor_tables(conn: sqlite3.Connection) -> None:
         ON external_monitor_results(monitor_id, checked_at_utc DESC)
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS service_definitions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            created_at_utc TEXT NOT NULL,
+            updated_at_utc TEXT NOT NULL
+        )
+        """
+    )
     _ensure_external_monitor_columns(conn)
 
 
@@ -216,6 +226,10 @@ def _ensure_external_monitor_columns(conn: sqlite3.Connection) -> None:
     if "tls_verify" not in columns:
         conn.execute(
             "ALTER TABLE external_monitors ADD COLUMN tls_verify INTEGER NOT NULL DEFAULT 1"
+        )
+    if "service_definition_id" not in columns:
+        conn.execute(
+            "ALTER TABLE external_monitors ADD COLUMN service_definition_id INTEGER REFERENCES service_definitions(id)"
         )
 
 
@@ -237,9 +251,14 @@ def _ssl_context(tls_verify: bool) -> ssl.SSLContext:
 
 
 def _row_to_monitor_dict(row: sqlite3.Row, *, include_history: bool = False, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
+    service_definition_id = None
+    if "service_definition_id" in row.keys() and row["service_definition_id"] is not None:
+        service_definition_id = int(row["service_definition_id"])
     data = {
         "id": int(row["id"]),
         "name": str(row["name"] or ""),
+        "service_definition_id": service_definition_id,
+        "service_definition_name": str(row["service_definition_name"] or "") if "service_definition_name" in row.keys() else "",
         "monitor_type": str(row["monitor_type"] or "http"),
         "probe_source": str(row["probe_source"] or "server"),
         "probe_site_id": int(row["probe_site_id"]) if row["probe_site_id"] is not None else None,
@@ -291,24 +310,123 @@ def _row_to_monitor_dict(row: sqlite3.Row, *, include_history: bool = False, con
 def _monitor_select_sql() -> str:
     return """
         SELECT
-            id, name, monitor_type, probe_source, probe_site_id, target_url,
-            customer_id, related_host_uid, interval_sec, expected_status, keyword,
-            timeout_sec, tls_verify, enabled, last_checked_at_utc, last_status, last_response_ms,
-            last_http_status, last_cert_expires_at_utc, last_cert_days_left,
-            last_error_message, next_check_at_utc, created_at_utc, updated_at_utc
-        FROM external_monitors
+            m.id, m.name, m.service_definition_id, sd.name AS service_definition_name,
+            m.monitor_type, m.probe_source, m.probe_site_id, m.target_url,
+            m.customer_id, m.related_host_uid, m.interval_sec, m.expected_status, m.keyword,
+            m.timeout_sec, m.tls_verify, m.enabled, m.last_checked_at_utc, m.last_status, m.last_response_ms,
+            m.last_http_status, m.last_cert_expires_at_utc, m.last_cert_days_left,
+            m.last_error_message, m.next_check_at_utc, m.created_at_utc, m.updated_at_utc
+        FROM external_monitors m
+        LEFT JOIN service_definitions sd ON sd.id = m.service_definition_id
     """
 
 
 def list_external_monitors(conn: sqlite3.Connection, *, monitor_id: int | None = None) -> list[dict[str, Any]]:
     conn.row_factory = sqlite3.Row
     if monitor_id is not None:
-        row = conn.execute(_monitor_select_sql() + " WHERE id = ?", (int(monitor_id),)).fetchone()
+        row = conn.execute(_monitor_select_sql() + " WHERE m.id = ?", (int(monitor_id),)).fetchone()
         if not row:
             return []
         return [_row_to_monitor_dict(row, include_history=True, conn=conn)]
-    rows = conn.execute(_monitor_select_sql() + " ORDER BY enabled DESC, name COLLATE NOCASE ASC, id ASC").fetchall()
+    rows = conn.execute(
+        _monitor_select_sql() + " ORDER BY m.enabled DESC, m.name COLLATE NOCASE ASC, m.id ASC",
+    ).fetchall()
     return [_row_to_monitor_dict(row) for row in rows]
+
+
+def list_service_definitions(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """
+        SELECT
+            sd.id,
+            sd.name,
+            sd.created_at_utc,
+            sd.updated_at_utc,
+            COUNT(m.id) AS monitor_count
+        FROM service_definitions sd
+        LEFT JOIN external_monitors m ON m.service_definition_id = sd.id
+        GROUP BY sd.id, sd.name, sd.created_at_utc, sd.updated_at_utc
+        ORDER BY sd.name COLLATE NOCASE ASC, sd.id ASC
+        """
+    ).fetchall()
+    return [
+        {
+            "id": int(row["id"]),
+            "name": str(row["name"] or ""),
+            "monitor_count": int(row["monitor_count"] or 0),
+            "created_at_utc": str(row["created_at_utc"] or ""),
+            "updated_at_utc": str(row["updated_at_utc"] or ""),
+        }
+        for row in rows
+    ]
+
+
+def create_service_definition(conn: sqlite3.Connection, name: str) -> dict[str, Any]:
+    cleaned = str(name or "").strip()
+    if not cleaned:
+        raise ValueError("name required")
+    now = utc_now_iso()
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO service_definitions (name, created_at_utc, updated_at_utc)
+            VALUES (?, ?, ?)
+            """,
+            (cleaned, now, now),
+        )
+    except sqlite3.IntegrityError as exc:
+        raise ValueError("service name already exists") from exc
+    definition_id = int(cursor.lastrowid)
+    definitions = list_service_definitions(conn)
+    created = next((item for item in definitions if int(item["id"]) == definition_id), None)
+    return created or {"id": definition_id, "name": cleaned, "monitor_count": 0, "created_at_utc": now, "updated_at_utc": now}
+
+
+def update_service_definition(conn: sqlite3.Connection, definition_id: int, name: str) -> dict[str, Any] | None:
+    cleaned = str(name or "").strip()
+    if not cleaned:
+        raise ValueError("name required")
+    existing = conn.execute(
+        "SELECT id FROM service_definitions WHERE id = ?",
+        (int(definition_id),),
+    ).fetchone()
+    if not existing:
+        return None
+    now = utc_now_iso()
+    try:
+        conn.execute(
+            "UPDATE service_definitions SET name = ?, updated_at_utc = ? WHERE id = ?",
+            (cleaned, now, int(definition_id)),
+        )
+    except sqlite3.IntegrityError as exc:
+        raise ValueError("service name already exists") from exc
+    definitions = list_service_definitions(conn)
+    return next((item for item in definitions if int(item["id"]) == int(definition_id)), None)
+
+
+def delete_service_definition(conn: sqlite3.Connection, definition_id: int) -> bool:
+    row = conn.execute(
+        "SELECT id FROM service_definitions WHERE id = ?",
+        (int(definition_id),),
+    ).fetchone()
+    if not row:
+        return False
+    usage_row = conn.execute(
+        "SELECT COUNT(*) FROM external_monitors WHERE service_definition_id = ?",
+        (int(definition_id),),
+    ).fetchone()
+    usage_count = int(usage_row[0] or 0) if usage_row else 0
+    if usage_count > 0:
+        raise ValueError(f"service is assigned to {usage_count} monitor(s)")
+    conn.execute("DELETE FROM service_definitions WHERE id = ?", (int(definition_id),))
+    return True
+
+
+def _normalize_service_definition_id(value: Any) -> int | None:
+    if value in (None, "", 0, "0"):
+        return None
+    return int(value)
 
 
 def external_monitor_summary(conn: sqlite3.Connection) -> dict[str, int]:
@@ -420,16 +538,25 @@ def create_external_monitor(conn: sqlite3.Connection, payload: dict[str, Any]) -
     expected_status_value = int(expected_status) if expected_status not in (None, "") else None
     customer_id = payload.get("customer_id")
     customer_id_value = int(customer_id) if customer_id not in (None, "") else None
+    service_definition_id = _normalize_service_definition_id(payload.get("service_definition_id"))
+    if service_definition_id is not None:
+        definition_row = conn.execute(
+            "SELECT id FROM service_definitions WHERE id = ?",
+            (service_definition_id,),
+        ).fetchone()
+        if not definition_row:
+            raise ValueError("service_definition_id not found")
     cursor = conn.execute(
         """
         INSERT INTO external_monitors (
-            name, monitor_type, probe_source, probe_site_id, target_url, customer_id,
+            name, service_definition_id, monitor_type, probe_source, probe_site_id, target_url, customer_id,
             related_host_uid, interval_sec, expected_status, keyword, timeout_sec,
             tls_verify, enabled, last_status, next_check_at_utc, created_at_utc, updated_at_utc
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?)
         """,
         (
             str(payload.get("name") or "").strip(),
+            service_definition_id,
             monitor_type,
             probe_source,
             probe_site_id_value,
@@ -460,6 +587,10 @@ def update_external_monitor(conn: sqlite3.Connection, monitor_id: int, payload: 
     values: list[Any] = []
     mapping = {
         "name": ("name", lambda v: str(v or "").strip()),
+        "service_definition_id": (
+            "service_definition_id",
+            lambda v: _normalize_service_definition_id(v),
+        ),
         "monitor_type": ("monitor_type", lambda v: str(v or "http").strip().lower()),
         "probe_source": ("probe_source", lambda v: str(v or "server").strip().lower()),
         "probe_site_id": ("probe_site_id", lambda v: int(v) if v not in (None, "") else None),
@@ -479,6 +610,15 @@ def update_external_monitor(conn: sqlite3.Connection, monitor_id: int, payload: 
     interval_changed = False
     for key, (column, transform) in mapping.items():
         if key in payload:
+            if key == "service_definition_id":
+                service_definition_id = transform(payload[key])
+                if service_definition_id is not None:
+                    definition_row = conn.execute(
+                        "SELECT id FROM service_definitions WHERE id = ?",
+                        (service_definition_id,),
+                    ).fetchone()
+                    if not definition_row:
+                        raise ValueError("service_definition_id not found")
             fields.append(f"{column} = ?")
             values.append(transform(payload[key]))
             if key == "interval_sec":
