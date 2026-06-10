@@ -163,9 +163,9 @@ def _row_to_monitor_dict(row: sqlite3.Row, *, include_history: bool = False, con
             FROM external_monitor_results
             WHERE monitor_id = ?
             ORDER BY checked_at_utc DESC, id DESC
-            LIMIT 20
+            LIMIT ?
             """,
-            (data["id"],),
+            (data["id"], EXTERNAL_MONITOR_RESULT_HISTORY_LIMIT),
         ).fetchall()
         data["history"] = [
             {

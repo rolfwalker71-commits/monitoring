@@ -525,6 +525,7 @@ const state = {
   selectedExternalMonitorId: null,
   sidebarMode: "hosts",
   sidebarModeToggleWired: false,
+  externalMonitorDetailWired: false,
   serviceMonitorListDelegatedWired: false,
   dbReportsTotal: null,
   dbReportsTotalSeeded: false,
@@ -20852,6 +20853,98 @@ function externalMonitorStatusBarClass(status) {
   return "status-bar--unknown";
 }
 
+function externalMonitorHistoryBarClass(status) {
+  const normalized = asText(status, "unknown").toLowerCase();
+  if (normalized === "up") return "external-monitor-history-bar--up";
+  if (normalized === "down") return "external-monitor-history-bar--down";
+  if (normalized === "degraded") return "external-monitor-history-bar--degraded";
+  return "external-monitor-history-bar--unknown";
+}
+
+function summarizeExternalMonitorHistory(historyRows) {
+  const rows = Array.isArray(historyRows) ? historyRows : [];
+  if (!rows.length) {
+    return { total: 0, up: 0, down: 0, degraded: 0, unknown: 0, availabilityPct: null };
+  }
+  let up = 0;
+  let down = 0;
+  let degraded = 0;
+  let unknown = 0;
+  rows.forEach((entry) => {
+    const status = asText(entry?.status, "unknown").toLowerCase();
+    if (status === "up") up += 1;
+    else if (status === "down") down += 1;
+    else if (status === "degraded") degraded += 1;
+    else unknown += 1;
+  });
+  const availabilityPct = Math.round((up / rows.length) * 1000) / 10;
+  return { total: rows.length, up, down, degraded, unknown, availabilityPct };
+}
+
+function formatExternalMonitorHistoryTimestamp(value) {
+  if (!value) {
+    return "-";
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return asText(value, "-");
+  }
+  return date.toLocaleString("de-CH", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function renderExternalMonitorHistoryChart(historyRows, monitor) {
+  const rows = Array.isArray(historyRows) ? historyRows.slice().reverse() : [];
+  if (!rows.length) {
+    return '<p class="muted external-monitor-history-empty">Noch keine Prüfungen — das Diagramm erscheint nach der ersten Messung.</p>';
+  }
+  const summary = summarizeExternalMonitorHistory(rows);
+  const intervalMin = Math.max(1, Math.round(Number(monitor?.interval_sec || 1800) / 60));
+  const rangeLabel = `${formatExternalMonitorHistoryTimestamp(rows[0]?.checked_at_utc)} – ${formatExternalMonitorHistoryTimestamp(rows[rows.length - 1]?.checked_at_utc)}`;
+  const barsHtml = rows.map((entry) => {
+    const status = asText(entry.status, "unknown").toLowerCase();
+    const timestamp = formatExternalMonitorHistoryTimestamp(entry.checked_at_utc ? new Date(entry.checked_at_utc) : null);
+    const latency = entry.response_ms != null ? `${entry.response_ms} ms` : "-";
+    const errorText = asText(entry.error_message, "").trim();
+    const title = `${timestamp}: ${status.toUpperCase()}${latency !== "-" ? ` · ${latency}` : ""}${errorText ? ` · ${errorText}` : ""}`;
+    return `<div class="external-monitor-history-bar ${externalMonitorHistoryBarClass(status)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></div>`;
+  }).join("");
+  const availabilityValue = summary.availabilityPct != null ? `${summary.availabilityPct}%` : "-";
+  const failCount = summary.down + summary.degraded;
+  return `
+    <div class="external-monitor-history-chart">
+      <div class="external-monitor-history-chart-summary">
+        <div class="external-monitor-history-chart-stat">
+          <span class="label">Verfügbarkeit</span>
+          <span class="value">${escapeHtml(availabilityValue)}</span>
+        </div>
+        <div class="external-monitor-history-chart-stat">
+          <span class="label">Prüfungen</span>
+          <span class="value">${summary.total}</span>
+        </div>
+        <div class="external-monitor-history-chart-stat">
+          <span class="label">Fehler / Warnung</span>
+          <span class="value">${failCount}</span>
+        </div>
+      </div>
+      <div class="external-monitor-history-bars" role="img" aria-label="Prüfverlauf">${barsHtml}</div>
+      <div class="external-monitor-history-chart-meta">
+        <span>Intervall: ${intervalMin} Min.</span>
+        <span>${escapeHtml(rangeLabel)}</span>
+      </div>
+      <div class="external-monitor-history-legend">
+        <span><i class="external-monitor-history-legend-swatch external-monitor-history-bar--up"></i> OK</span>
+        <span><i class="external-monitor-history-legend-swatch external-monitor-history-bar--down"></i> Fehler</span>
+        <span><i class="external-monitor-history-legend-swatch external-monitor-history-bar--degraded"></i> Warnung</span>
+      </div>
+    </div>
+  `;
+}
+
 function renderServiceMonitorCard(monitor) {
   const monitorId = Number(monitor?.id || 0);
   const selectedClass = monitorId === Number(state.selectedExternalMonitorId || 0) ? " selected" : "";
@@ -20913,8 +21006,10 @@ function renderExternalMonitorDetail(monitor) {
     ? `läuft ab in ${Number(monitor.last_cert_days_left)} Tagen`
     : "kein Zertifikat erkannt";
   const historyRows = Array.isArray(monitor.history) ? monitor.history : [];
-  const historyHtml = historyRows.length
-    ? historyRows.map((entry) => `
+  const historyChartHtml = renderExternalMonitorHistoryChart(historyRows, monitor);
+  const historyTableRows = historyRows.slice(0, 20);
+  const historyHtml = historyTableRows.length
+    ? historyTableRows.map((entry) => `
         <tr>
           <td>${escapeHtml(formatAutoRefreshTimestamp(entry.checked_at_utc ? new Date(entry.checked_at_utc) : null) || asText(entry.checked_at_utc, "-"))}</td>
           <td>${escapeHtml(asText(entry.status, "-").toUpperCase())}</td>
@@ -20923,11 +21018,19 @@ function renderExternalMonitorDetail(monitor) {
         </tr>
       `).join("")
     : '<tr><td colspan="4" class="muted">Noch keine Historie vorhanden.</td></tr>';
+  const editButtonHtml = state.isAdmin
+    ? `<button type="button" class="btn-icon btn-icon--compact" data-action="edit-external-monitor" title="Service bearbeiten (Bezeichnung, URL, Intervall)">✏️</button>`
+    : "";
 
   detailView.innerHTML = `
     <div class="external-monitor-detail-header">
-      <h4>${escapeHtml(asText(monitor.name, "Service"))}</h4>
-      <p class="sub">${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Interner Monitor (Push-Probe) — " : "Externer Monitor — ")}${escapeHtml(asText(monitor.target_url, ""))}</p>
+      <div class="external-monitor-detail-header-top">
+        <div>
+          <h4>${escapeHtml(asText(monitor.name, "Service"))}</h4>
+          <p class="sub">${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Interner Monitor (Push-Probe) — " : "Externer Monitor — ")}${escapeHtml(asText(monitor.target_url, ""))}</p>
+        </div>
+        ${editButtonHtml}
+      </div>
     </div>
     <div class="external-monitor-metrics">
       <div class="external-monitor-metric ${metricClass}">
@@ -20945,6 +21048,10 @@ function renderExternalMonitorDetail(monitor) {
         <div class="value">${escapeHtml(formatExternalMonitorLatency(monitor))}</div>
         <div class="hint">Letzte Prüfung: ${escapeHtml(asText(monitor.last_checked_at_utc, "-"))}</div>
       </div>
+    </div>
+    <div class="external-monitor-panel">
+      <h5>Prüfverlauf</h5>
+      ${historyChartHtml}
     </div>
     <div class="external-monitor-panel">
       <h5>Konfiguration</h5>
@@ -21085,6 +21192,174 @@ function updateExternalMonitorAdminUi() {
   setSidebarMode(state.sidebarMode || "hosts");
 }
 
+async function openExternalMonitorEditorDialog(monitor) {
+  if (!state.isAdmin || !monitor) {
+    return null;
+  }
+  const monitorType = asText(monitor.monitor_type, "http").toLowerCase();
+  const intervalMin = Math.max(1, Math.round(Number(monitor.interval_sec || 1800) / 60));
+  const probeSource = asText(monitor.probe_source, "server").toLowerCase();
+  const probeSourceLabel = probeSource === "push" ? "Intern (Push-Probe)" : "Extern (Server)";
+  const modal = document.createElement("div");
+  modal.className = "host-meta-modal";
+  modal.innerHTML = `<div class="host-meta-modal-backdrop"></div>
+    <div class="host-meta-modal-inner" role="dialog" aria-modal="true" aria-label="Service bearbeiten">
+      <div class="chart-drill-header">
+        <div class="chart-drill-title">Service bearbeiten: ${escapeHtml(asText(monitor.name, "Service"))}</div>
+        <button type="button" class="btn-secondary btn-secondary--compact" data-action="cancel">Schließen</button>
+      </div>
+      <div class="chart-drill-body host-meta-modal-body">
+        <div class="host-meta-modal-grid">
+          <label>Bezeichnung
+            <input id="externalMonitorEditNameInput" type="text" placeholder="z.B. Kanadevia Web Client" value="${escapeHtml(asText(monitor.name, ""))}" />
+          </label>
+          <label>Ziel-URL
+            <input id="externalMonitorEditUrlInput" type="text" placeholder="https://... oder host:port" value="${escapeHtml(asText(monitor.target_url, ""))}" />
+          </label>
+          <label>Prüf-Typ
+            <select id="externalMonitorEditTypeSelect">
+              <option value="http" ${monitorType === "http" ? "selected" : ""}>HTTPS / HTTP</option>
+              <option value="tcp" ${monitorType === "tcp" ? "selected" : ""}>TCP Port</option>
+              <option value="ssl_cert" ${monitorType === "ssl_cert" ? "selected" : ""}>SSL-Zertifikat</option>
+            </select>
+          </label>
+          <label>Intervall (Minuten)
+            <input id="externalMonitorEditIntervalInput" type="number" min="1" max="1440" step="1" value="${intervalMin}" />
+          </label>
+          <label>Erwarteter HTTP-Status (optional)
+            <input id="externalMonitorEditExpectedStatusInput" type="number" min="100" max="599" step="1" placeholder="z.B. 200" value="${monitor.expected_status != null ? escapeHtml(String(monitor.expected_status)) : ""}" />
+          </label>
+          <label>Keyword (optional)
+            <input id="externalMonitorEditKeywordInput" type="text" placeholder="Text der in der Antwort vorkommen muss" value="${escapeHtml(asText(monitor.keyword, ""))}" />
+          </label>
+          <label>Timeout (Sekunden)
+            <input id="externalMonitorEditTimeoutInput" type="number" min="3" max="120" step="1" value="${Math.max(3, Math.min(120, Number(monitor.timeout_sec || 15)))}" />
+          </label>
+          <label>Verknüpfter Host (UID, optional)
+            <input id="externalMonitorEditHostUidInput" type="text" placeholder="host_uid" value="${escapeHtml(asText(monitor.related_host_uid, ""))}" />
+          </label>
+        </div>
+        <label class="external-monitor-edit-enabled">
+          <input id="externalMonitorEditEnabledInput" type="checkbox" ${monitor.enabled !== false ? "checked" : ""} />
+          Monitor aktiv
+        </label>
+        <p class="settings-helper-text">Quelle: ${escapeHtml(probeSourceLabel)} (nicht änderbar). Prüfungen laufen alle ${intervalMin} Minuten.</p>
+        <div class="host-meta-modal-actions">
+          <button type="button" class="btn-secondary" data-action="cancel">Abbrechen</button>
+          <button type="button" class="btn-primary" data-action="save">Speichern</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+
+  const nameInput = modal.querySelector("#externalMonitorEditNameInput");
+  const urlInput = modal.querySelector("#externalMonitorEditUrlInput");
+  const typeSelect = modal.querySelector("#externalMonitorEditTypeSelect");
+  const intervalInput = modal.querySelector("#externalMonitorEditIntervalInput");
+  const expectedStatusInput = modal.querySelector("#externalMonitorEditExpectedStatusInput");
+  const keywordInput = modal.querySelector("#externalMonitorEditKeywordInput");
+  const timeoutInput = modal.querySelector("#externalMonitorEditTimeoutInput");
+  const hostUidInput = modal.querySelector("#externalMonitorEditHostUidInput");
+  const enabledInput = modal.querySelector("#externalMonitorEditEnabledInput");
+
+  return new Promise((resolve) => {
+    const close = (result) => {
+      modal.remove();
+      resolve(result);
+    };
+    modal.querySelector(".host-meta-modal-backdrop")?.addEventListener("click", () => close(null));
+    modal.querySelectorAll('[data-action="cancel"]').forEach((button) => {
+      button.addEventListener("click", () => close(null));
+    });
+    modal.querySelector('[data-action="save"]')?.addEventListener("click", () => {
+      const name = asText(nameInput?.value, "").trim();
+      const targetUrl = asText(urlInput?.value, "").trim();
+      if (!name) {
+        window.alert("Bitte eine Bezeichnung angeben.");
+        return;
+      }
+      if (!targetUrl) {
+        window.alert("Bitte eine Ziel-URL angeben.");
+        return;
+      }
+      const intervalMinValue = Math.max(1, Math.min(1440, Number(intervalInput?.value || 30)));
+      const expectedStatusRaw = asText(expectedStatusInput?.value, "").trim();
+      const expectedStatus = expectedStatusRaw ? Number(expectedStatusRaw) : null;
+      close({
+        name,
+        target_url: targetUrl,
+        monitor_type: asText(typeSelect?.value, "http"),
+        interval_sec: intervalMinValue * 60,
+        expected_status: Number.isFinite(expectedStatus) ? expectedStatus : null,
+        keyword: asText(keywordInput?.value, "").trim(),
+        timeout_sec: Math.max(3, Math.min(120, Number(timeoutInput?.value || 15))),
+        related_host_uid: asText(hostUidInput?.value, "").trim(),
+        enabled: Boolean(enabledInput?.checked),
+      });
+    });
+  });
+}
+
+async function editExternalMonitor(monitorId) {
+  if (!state.isAdmin || !monitorId) {
+    return;
+  }
+  let monitor = null;
+  try {
+    monitor = await loadExternalMonitorDetail(monitorId);
+  } catch (error) {
+    window.alert(formatApiLoadError(error?.message, "Service-Monitor"));
+    return;
+  }
+  if (!monitor) {
+    window.alert("Service-Monitor wurde nicht gefunden.");
+    return;
+  }
+  const formData = await openExternalMonitorEditorDialog(monitor);
+  if (!formData) {
+    return;
+  }
+  const response = await fetch("/api/v1/external-monitors", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: monitorId, ...formData }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    window.alert(asText(data.error, "Service konnte nicht gespeichert werden."));
+    return;
+  }
+  await loadExternalMonitors({ silent: true });
+  if (Number(state.selectedExternalMonitorId) === Number(monitorId)) {
+    const refreshed = data.monitor || await loadExternalMonitorDetail(monitorId);
+    if (refreshed) {
+      renderExternalMonitorDetail(refreshed);
+    }
+  }
+}
+
+function wireExternalMonitorDetailInteractions() {
+  const detailView = document.getElementById("externalMonitorDetailView");
+  if (!detailView || state.externalMonitorDetailWired) {
+    return;
+  }
+  detailView.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const editButton = target ? target.closest('[data-action="edit-external-monitor"]') : null;
+    if (!editButton) {
+      return;
+    }
+    event.preventDefault();
+    const monitorId = Number(state.selectedExternalMonitorId || 0);
+    if (monitorId) {
+      void editExternalMonitor(monitorId);
+    }
+  });
+  state.externalMonitorDetailWired = true;
+}
+
 async function openExternalMonitorCreateDialog() {
   if (!state.isAdmin) {
     return;
@@ -21152,4 +21427,5 @@ document.getElementById("addExternalMonitorButton")?.addEventListener("click", (
   void openExternalMonitorCreateDialog();
 });
 wireSidebarModeToggle();
+wireExternalMonitorDetailInteractions();
 setSidebarMode("hosts");
