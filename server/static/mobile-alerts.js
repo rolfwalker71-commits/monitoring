@@ -4416,20 +4416,13 @@ function mobileExternalMonitorHistoryBarClass(status) {
 
 const MOBILE_SERVICE_HISTORY_BAR_LIMIT = 25;
 
-function formatMobileExternalMonitorHistoryClock(value) {
-  const text = mobileAsText(value, "");
-  if (!text) return "--:--";
-  const parsed = new Date(text.includes("T") ? text : text.replace(" ", "T") + (text.endsWith("Z") ? "" : "Z"));
-  if (Number.isNaN(parsed.getTime())) return "--:--";
-  return parsed.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
-function mobileServiceHistoryTimestampIndices(barCount) {
-  if (barCount <= 0) return new Set();
-  if (barCount === 1) return new Set([0]);
-  const indices = new Set([0, barCount - 1]);
-  indices.add(Math.floor((barCount - 1) / 2));
-  return indices;
+function formatMobileServiceHistoryBarDetail(entry) {
+  const when = formatReportDateTimeMobile(entry?.checked_at_utc);
+  const status = mobileAsText(entry?.status, "unknown").toUpperCase();
+  const latency = entry?.response_ms != null ? entry.response_ms + " ms" : "";
+  const parts = [when, status];
+  if (latency) parts.push(latency);
+  return parts.join(" · ");
 }
 
 function buildMobileServiceHistorySectionHtml(monitor) {
@@ -4440,29 +4433,52 @@ function buildMobileServiceHistorySectionHtml(monitor) {
     return '<div class="service-mobile-history service-mobile-history--empty"><span class="service-mobile-history-empty">Noch keine Prüfungen</span></div>';
   }
   const barCount = history.length;
-  const timestampIndices = mobileServiceHistoryTimestampIndices(barCount);
   const colsHtml = history.map((entry, index) => {
     const status = mobileAsText(entry?.status, "unknown").toLowerCase();
     const barClass = mobileExternalMonitorHistoryBarClass(status);
-    const clock = formatMobileExternalMonitorHistoryClock(entry?.checked_at_utc);
-    const latency = entry?.response_ms != null ? entry.response_ms + " ms" : "—";
-    const title = clock + " · " + status.toUpperCase() + " · " + latency;
-    const timeHtml = timestampIndices.has(index)
-      ? '<time class="service-mobile-history-time">' + mobileEsc(clock) + "</time>"
-      : '<span class="service-mobile-history-time service-mobile-history-time--spacer" aria-hidden="true"></span>';
+    const detailLabel = formatMobileServiceHistoryBarDetail(entry);
     return (
-      '<div class="service-mobile-history-col" style="--bar-index: ' + index + ';" title="' + mobileEsc(title) + '">'
-      + '<div class="service-mobile-history-bar ' + barClass + '" aria-hidden="true"></div>'
-      + timeHtml
+      '<div class="service-mobile-history-col" style="--bar-index: ' + index + ';">'
+      + '<button type="button" class="service-mobile-history-bar ' + barClass + '" data-action="show-service-history-bar"'
+      + ' data-detail-label="' + mobileEsc(detailLabel) + '"'
+      + ' aria-label="' + mobileEsc(detailLabel) + '"></button>'
       + "</div>"
     );
   }).join("");
+  const firstWhen = formatReportDateTimeMobile(history[0]?.checked_at_utc);
+  const lastWhen = formatReportDateTimeMobile(history[history.length - 1]?.checked_at_utc);
+  const rangeHtml = firstWhen === lastWhen
+    ? '<div class="service-mobile-history-range"><time class="service-mobile-history-range-time">' + mobileEsc(firstWhen) + "</time></div>"
+    : (
+      '<div class="service-mobile-history-range">'
+      + '<time class="service-mobile-history-range-time service-mobile-history-range-time--start">' + mobileEsc(firstWhen) + "</time>"
+      + '<time class="service-mobile-history-range-time service-mobile-history-range-time--end">' + mobileEsc(lastWhen) + "</time>"
+      + "</div>"
+    );
   return (
     '<div class="service-mobile-history" style="--bar-count: ' + barCount + ';">'
-    + '<div class="service-mobile-history-scroll" role="img" aria-label="Verfügbarkeitsverlauf">'
+    + '<div class="service-mobile-history-scroll" aria-label="Verfügbarkeitsverlauf">'
     + '<div class="service-mobile-history-bars">' + colsHtml + "</div>"
-    + "</div></div>"
+    + rangeHtml
+    + "</div>"
+    + '<div class="service-mobile-history-hint" hidden></div>'
+    + "</div>"
   );
+}
+
+function handleMobileServiceHistoryBarClick(barButton) {
+  const history = barButton?.closest(".service-mobile-history");
+  if (!history) return;
+  const hint = history.querySelector(".service-mobile-history-hint");
+  const detailLabel = mobileAsText(barButton?.getAttribute("data-detail-label"), "");
+  if (hint && detailLabel) {
+    hint.textContent = detailLabel;
+    hint.hidden = false;
+  }
+  history.querySelectorAll(".service-mobile-history-bar.is-selected").forEach((item) => {
+    item.classList.remove("is-selected");
+  });
+  barButton.classList.add("is-selected");
 }
 
 function restartMobileServiceHistoryAnimation(card) {
@@ -4728,6 +4744,12 @@ function wireServicesCarousel(list) {
   if ("onscrollend" in window) {
     list.addEventListener("scrollend", settle, { passive: true });
   }
+  list.addEventListener("click", (event) => {
+    const barButton = event.target.closest('[data-action="show-service-history-bar"]');
+    if (!barButton || !list.contains(barButton)) return;
+    event.stopPropagation();
+    handleMobileServiceHistoryBarClick(barButton);
+  });
 }
 
 function renderMobileServiceMonitors() {

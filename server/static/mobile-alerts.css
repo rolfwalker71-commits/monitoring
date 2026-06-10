@@ -949,6 +949,10 @@ body {
     background: color-mix(in srgb, var(--panel) 72%, #0f172a);
     border-color: #334155;
   }
+
+  .service-mobile-history-bar.is-selected {
+    outline-color: #60a5fa;
+  }
 }
 
 .service-mobile-pill-row {
@@ -1071,10 +1075,20 @@ body {
 }
 
 .service-mobile-history-bar {
+  display: block;
   width: 100%;
   max-width: 12px;
   height: 28px;
+  border: 0;
+  padding: 0;
   border-radius: 2px 2px 1px 1px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.service-mobile-history-bar.is-selected {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 1px;
 }
 
 .service-mobile-history-bar--up {
@@ -1093,23 +1107,40 @@ body {
   background: #94a3b8;
 }
 
-.service-mobile-history-time {
-  display: block;
-  min-height: 0.55rem;
-  font-size: 0.4rem;
+.service-mobile-history-range {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 0 1px;
+}
+
+.service-mobile-history-range-time {
+  font-size: 0.58rem;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.2;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.service-mobile-history-time--spacer {
-  visibility: hidden;
-  pointer-events: none;
+.service-mobile-history-range-time--end {
+  text-align: right;
+}
+
+.service-mobile-history-hint {
+  margin-top: 4px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--text);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.service-mobile-history-hint[hidden] {
+  display: none;
 }
 
 @keyframes serviceMobileHistoryColPop {
