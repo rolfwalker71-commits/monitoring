@@ -21558,6 +21558,23 @@ async function loadProbeSites(force = false) {
   return state.probeSites;
 }
 
+async function testProbeSiteToken(probeSiteId, token) {
+  const response = await fetch("/api/v1/external-monitor-probe-sites/verify-token", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: Number(probeSiteId || 0),
+      token: asText(token, "").trim(),
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(asText(data.error, `HTTP ${response.status}`));
+  }
+  return Boolean(data.valid);
+}
+
 async function rotateProbeSiteToken(probeSiteId) {
   const response = await fetch("/api/v1/external-monitor-probe-sites/rotate-token", {
     method: "POST",
@@ -21733,6 +21750,7 @@ async function openProbeScriptGeneratorDialog(probeSiteId, options = {}) {
         </label>
         <div class="external-monitor-probe-script-actions">
           <button type="button" class="btn-secondary btn-secondary--compact" data-action="copy-probe-token">Token kopieren</button>
+          <button type="button" class="btn-secondary btn-secondary--compact" data-action="test-probe-token">Token testen</button>
           <button type="button" class="btn-secondary btn-secondary--compact" data-action="rotate-probe-token">Token neu generieren</button>
         </div>
         <p class="settings-helper-text">Nach „Token neu generieren“ sind ältere Skripte und probe.json ungültig. Fehler 401 = Token erneuern, Skript neu generieren und Setup erneut ausführen.</p>
@@ -21781,6 +21799,23 @@ async function openProbeScriptGeneratorDialog(probeSiteId, options = {}) {
       });
       refreshOutput();
     });
+  });
+  modal.querySelector('[data-action="test-probe-token"]')?.addEventListener("click", async () => {
+    const tokenValue = asText(tokenInput?.value, "").trim();
+    if (!tokenValue) {
+      window.alert("Kein Token vorhanden. Bitte zuerst Token neu generieren.");
+      return;
+    }
+    try {
+      const valid = await testProbeSiteToken(probeSiteId, tokenValue);
+      if (valid) {
+        window.alert("Token ist auf dem Infoboard-Server gültig.");
+      } else {
+        window.alert("Token ist auf dem Infoboard-Server ungültig. Bitte „Token neu generieren“, Skript aktualisieren und Setup erneut ausführen.");
+      }
+    } catch (error) {
+      window.alert(`Token-Test fehlgeschlagen: ${error.message}`);
+    }
   });
   modal.querySelector('[data-action="copy-probe-token"]')?.addEventListener("click", async () => {
     const tokenValue = asText(tokenInput?.value, "").trim();

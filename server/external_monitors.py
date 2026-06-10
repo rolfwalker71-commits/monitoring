@@ -88,6 +88,38 @@ def extract_probe_token_from_headers(headers: Any) -> str:
     return ""
 
 
+def extract_probe_token(
+    headers: Any,
+    *,
+    query: dict[str, list[str]] | None = None,
+    body: dict[str, Any] | None = None,
+) -> str:
+    token = extract_probe_token_from_headers(headers)
+    if token:
+        return token
+    if isinstance(body, dict):
+        body_token = str(body.get("probe_token") or "").strip()
+        if body_token:
+            return body_token
+    if isinstance(query, dict):
+        raw_values = query.get("probe_token") or []
+        if raw_values:
+            query_token = str(raw_values[0] or "").strip()
+            if query_token:
+                return query_token
+    return ""
+
+
+def verify_probe_site_token(conn: sqlite3.Connection, site_id: int, token: str) -> bool:
+    row = conn.execute(
+        "SELECT token_hash FROM external_monitor_probe_sites WHERE id = ? AND enabled = 1",
+        (int(site_id),),
+    ).fetchone()
+    if not row:
+        return False
+    return hmac.compare_digest(hash_probe_token(token), str(row[0] or ""))
+
+
 def generate_probe_token() -> str:
     return PROBE_TOKEN_PREFIX + secrets.token_urlsafe(24)
 

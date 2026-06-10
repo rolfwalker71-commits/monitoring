@@ -68,7 +68,24 @@ public class TrustAllCertsPolicy : ICertificatePolicy {
             [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
         }
     }
-    return Invoke-WebRequest @params
+    try {
+        return Invoke-WebRequest @params
+    } catch {
+        $responseBody = ''
+        if ($_.Exception.Response -and $_.Exception.Response.GetResponseStream()) {
+            try {
+                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                $responseBody = $reader.ReadToEnd()
+                $reader.Close()
+            } catch {
+                $responseBody = ''
+            }
+        }
+        if ($responseBody) {
+            throw "$($_.Exception.Message) | response: $responseBody"
+        }
+        throw
+    }
 }
 
 function Test-HttpMonitor {
@@ -191,7 +208,9 @@ function Invoke-ProbeCycle {
         'Authorization' = "Bearer $probeToken"
         'Accept' = 'application/json'
     }
-    $configResponse = Invoke-ProbeRequest -Method Get -Url "$baseUrl/api/v1/external-monitor-probe/config" -Headers $headers -TlsInsecure:$tlsInsecure
+    $encodedToken = [System.Uri]::EscapeDataString($probeToken)
+    $configUrl = "$baseUrl/api/v1/external-monitor-probe/config?probe_token=$encodedToken"
+    $configResponse = Invoke-ProbeRequest -Method Get -Url $configUrl -Headers $headers -TlsInsecure:$tlsInsecure
     $config = $configResponse.Content | ConvertFrom-Json
     $monitors = @($config.monitors)
     if ($monitors.Count -eq 0) {
@@ -214,7 +233,7 @@ function Invoke-ProbeCycle {
             $results += Test-HttpMonitor -MonitorId ([int]$monitor.id) -TargetUrl ([string]$monitor.target_url) -ExpectedStatus $expected -Keyword $keyword -TimeoutSec $timeoutSec -TlsVerify:$tlsVerify
         }
     }
-    $payload = @{ results = $results } | ConvertTo-Json -Compress -Depth 4
+    $payload = @{ probe_token = $probeToken; results = $results } | ConvertTo-Json -Compress -Depth 4
     Invoke-ProbeRequest -Method Post -Url "$baseUrl/api/v1/external-monitor-probe/push" -Headers $headers -Body $payload -TlsInsecure:$tlsInsecure | Out-Null
     Write-ProbeLog "Pushed $($results.Count) result(s)."
 }

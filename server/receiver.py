@@ -51,7 +51,8 @@ if str(BASE_DIR) not in sys.path:
 from external_monitors import (
     create_external_monitor,
     create_probe_site,
-    extract_probe_token_from_headers,
+    extract_probe_token,
+    verify_probe_site_token,
     external_monitor_summary,
     get_probe_config,
     init_external_monitor_tables,
@@ -20731,7 +20732,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/external-monitor-probe/config":
-            probe_token = extract_probe_token_from_headers(self.headers)
+            query = parse_qs(parsed.query)
+            probe_token = extract_probe_token(self.headers, query=query)
             if not probe_token:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
                 return
@@ -25397,10 +25399,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/external-monitor-probe/push":
-            probe_token = extract_probe_token_from_headers(self.headers)
-            if not probe_token:
-                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
-                return
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length <= 0:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
@@ -25410,6 +25408,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 payload = json.loads(raw_body)
             except json.JSONDecodeError:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            probe_token = extract_probe_token(self.headers, body=payload if isinstance(payload, dict) else None)
+            if not probe_token:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
                 return
             results = payload.get("results")
             if not isinstance(results, list):
@@ -25485,6 +25487,34 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             except Exception as exc:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            return
+
+        if path == "/api/v1/external-monitor-probe-sites/verify-token":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            site_id_raw = payload.get("id")
+            token = str(payload.get("token") or "").strip()
+            try:
+                site_id = int(site_id_raw)
+            except (TypeError, ValueError):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "id required"})
+                return
+            if not token:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "token required"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                valid = verify_probe_site_token(conn, site_id, token)
+            self._send_json(HTTPStatus.OK, {"valid": valid, "probe_site_id": site_id})
             return
 
         if path == "/api/v1/external-monitor-probe-sites/rotate-token":
