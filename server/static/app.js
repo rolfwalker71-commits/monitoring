@@ -10865,11 +10865,7 @@ function renderSingleHostCard(host) {
         >
       </div>`
     : "";
-  const linkedMonitorCount = (Array.isArray(state.externalMonitors) ? state.externalMonitors : [])
-    .filter((monitor) => asText(monitor?.related_host_uid, "").trim() === hostIdentity).length;
-  const linkedMonitorsHtml = linkedMonitorCount > 0
-    ? `<div class="host-linked-monitors"><span class="host-linked-monitors-badge">${linkedMonitorCount} externe Check${linkedMonitorCount === 1 ? "" : "s"}</span></div>`
-    : "";
+  const linkedMonitorsHtml = renderLinkedMonitorsForHostCard(hostIdentity);
   const designationBadgeLine = `<div class="host-designation-row"><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span><span class="host-detail-clock" title="${escapeHtml(lastReportClock.title)}">${escapeHtml(lastReportClock.label)}</span></div>`;
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
@@ -13457,7 +13453,18 @@ function wireHostListInteractions() {
       return;
     }
 
-    if (target.closest(".host-mini-action, .host-license-info-badge, .host-license-dot, [data-action='toggle-muted-list'], [data-action='unmute-alert']")) {
+    const linkedMonitorButton = target.closest("[data-action='select-linked-monitor']");
+    if (linkedMonitorButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      const monitorId = Number(linkedMonitorButton.getAttribute("data-monitor-id") || 0);
+      if (monitorId) {
+        selectExternalMonitor(monitorId);
+      }
+      return;
+    }
+
+    if (target.closest(".host-mini-action, .host-license-info-badge, .host-license-dot, [data-action='toggle-muted-list'], [data-action='unmute-alert'], [data-action='select-linked-monitor']")) {
       return;
     }
 
@@ -20845,6 +20852,156 @@ function formatExternalMonitorLatency(monitor) {
   return "-";
 }
 
+function findHostRecordByIdentity(identity) {
+  const needle = asText(identity, "").trim();
+  if (!needle || !Array.isArray(state.hosts)) {
+    return null;
+  }
+  return state.hosts.find((host) => {
+    const hostIdentity = resolveHostIdentity(host);
+    const hostUid = asText(host?.host_uid, "").trim();
+    const hostname = asText(host?.hostname, "").trim();
+    return hostIdentity === needle || hostUid === needle || hostname === needle;
+  }) || null;
+}
+
+function getLinkedMonitorsForHost(hostIdentity) {
+  const identity = asText(hostIdentity, "").trim();
+  if (!identity) {
+    return [];
+  }
+  return (Array.isArray(state.externalMonitors) ? state.externalMonitors : [])
+    .filter((monitor) => monitor?.enabled !== false && asText(monitor?.related_host_uid, "").trim() === identity);
+}
+
+function getHostStatusPulseClass(host) {
+  const lastReportInfo = formatHostLastReportAge(host?.last_report_utc || host?.last_seen_utc);
+  if (lastReportInfo.statusClass === "host-last-report-dot--critical") {
+    return "host-status-pulse host-status-pulse--critical";
+  }
+  if (lastReportInfo.statusClass === "host-last-report-dot--warning") {
+    return "host-status-pulse host-status-pulse--warning";
+  }
+  if (lastReportInfo.statusClass === "host-last-report-dot--ok") {
+    return "host-status-pulse host-status-pulse--ok";
+  }
+  return "host-status-pulse host-status-pulse--unknown";
+}
+
+function summarizeLinkedMonitorStatuses(monitors) {
+  const rows = Array.isArray(monitors) ? monitors : [];
+  let up = 0;
+  let down = 0;
+  let degraded = 0;
+  let unknown = 0;
+  rows.forEach((monitor) => {
+    const status = asText(monitor?.last_status, "unknown").toLowerCase();
+    if (status === "up") up += 1;
+    else if (status === "down") down += 1;
+    else if (status === "degraded") degraded += 1;
+    else unknown += 1;
+  });
+  const problemCount = down + degraded;
+  return { total: rows.length, up, down, degraded, unknown, problemCount };
+}
+
+function renderLinkedMonitorsForHostCard(hostIdentity) {
+  const linkedMonitors = getLinkedMonitorsForHost(hostIdentity);
+  if (!linkedMonitors.length) {
+    return "";
+  }
+  const summary = summarizeLinkedMonitorStatuses(linkedMonitors);
+  const summaryParts = [];
+  if (summary.problemCount > 0) {
+    summaryParts.push(`${summary.problemCount} Problem${summary.problemCount === 1 ? "" : "e"}`);
+  } else {
+    summaryParts.push("alle OK");
+  }
+  const chipsHtml = linkedMonitors.map((monitor) => {
+    const monitorId = Number(monitor?.id || 0);
+    const status = asText(monitor?.last_status, "unknown").toLowerCase();
+    const monitorName = asText(monitor?.name, "Service");
+    const latency = formatExternalMonitorLatency(monitor);
+    const title = `${monitorName}: ${status.toUpperCase()}${latency !== "-" ? ` · ${latency}` : ""}`;
+    return `<button type="button" class="host-linked-monitor-chip host-linked-monitor-chip--${escapeHtml(status)}" data-action="select-linked-monitor" data-monitor-id="${monitorId}" title="${escapeHtml(title)}">
+      <span class="host-linked-monitor-dot" aria-hidden="true"></span>
+      <span class="host-linked-monitor-name">${escapeHtml(monitorName)}</span>
+      <span class="host-linked-monitor-state">${escapeHtml(status.toUpperCase())}</span>
+    </button>`;
+  }).join("");
+  return `
+    <div class="host-linked-monitors">
+      <div class="host-linked-monitors-head">
+        <span class="host-linked-monitors-title">Services</span>
+        <span class="host-linked-monitors-summary">${summary.total} · ${escapeHtml(summaryParts.join(", "))}</span>
+      </div>
+      <div class="host-linked-monitor-chips">${chipsHtml}</div>
+    </div>
+  `;
+}
+
+function renderLinkedHostForServiceCard(monitor) {
+  const hostIdentity = asText(monitor?.related_host_uid, "").trim();
+  if (!hostIdentity) {
+    return "";
+  }
+  const host = findHostRecordByIdentity(hostIdentity);
+  if (!host) {
+    return `
+      <button type="button" class="service-monitor-linked-host service-monitor-linked-host--missing" data-action="select-linked-host" data-host="${escapeHtml(hostIdentity)}" data-host-uid="${escapeHtml(hostIdentity)}" title="Verknüpfter Host (${escapeHtml(hostIdentity)}) — nicht in der Hostliste">
+        <span class="host-status-pulse host-status-pulse--unknown" aria-hidden="true"></span>
+        <span class="service-monitor-linked-host-label">${escapeHtml(hostIdentity)}</span>
+        <span class="service-monitor-linked-host-meta">Host nicht sichtbar</span>
+      </button>
+    `;
+  }
+  const hostname = asText(host.hostname, hostIdentity);
+  const hostUid = resolveHostIdentity(host);
+  const displayLabel = asText(host.display_name || host.hostname, hostname).split(".")[0];
+  const lastReportInfo = formatHostLastReportAge(host.last_report_utc || host.last_seen_utc);
+  const openAlertCount = Number(host.open_alert_count || 0);
+  const metaLabel = openAlertCount > 0
+    ? `${openAlertCount} Alarm${openAlertCount === 1 ? "" : "e"}`
+    : lastReportInfo.label;
+  const title = `Host: ${displayLabel} · ${metaLabel} · ${lastReportInfo.title}`;
+  return `
+    <button type="button" class="service-monitor-linked-host" data-action="select-linked-host" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostUid)}" title="${escapeHtml(title)}">
+      <span class="${getHostStatusPulseClass(host)}" aria-hidden="true"></span>
+      <span class="service-monitor-linked-host-label">${escapeHtml(displayLabel)}</span>
+      <span class="service-monitor-linked-host-meta">${escapeHtml(metaLabel)}</span>
+    </button>
+  `;
+}
+
+function renderLinkedHostDetailCell(monitor) {
+  const hostIdentity = asText(monitor?.related_host_uid, "").trim();
+  if (!hostIdentity) {
+    return "—";
+  }
+  const host = findHostRecordByIdentity(hostIdentity);
+  if (!host) {
+    return `<button type="button" class="external-monitor-linked-host-link" data-action="select-linked-host" data-host="${escapeHtml(hostIdentity)}" data-host-uid="${escapeHtml(hostIdentity)}">${escapeHtml(hostIdentity)}</button>`;
+  }
+  const hostname = asText(host.hostname, hostIdentity);
+  const hostUid = resolveHostIdentity(host);
+  const displayLabel = asText(host.display_name || host.hostname, hostname);
+  const openAlertCount = Number(host.open_alert_count || 0);
+  const hostMeta = openAlertCount > 0 ? ` · ${openAlertCount} Alarm${openAlertCount === 1 ? "" : "e"}` : "";
+  return `<button type="button" class="external-monitor-linked-host-link" data-action="select-linked-host" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostUid)}"><span class="${getHostStatusPulseClass(host)}" aria-hidden="true"></span>${escapeHtml(displayLabel)}${escapeHtml(hostMeta)}</button>`;
+}
+
+function selectHostFromMonitorLink(hostname, hostUid) {
+  const normalizedHost = asText(hostname, "").trim();
+  const normalizedUid = asText(hostUid, "").trim() || normalizedHost;
+  if (!normalizedHost) {
+    return;
+  }
+  state.selectedExternalMonitorId = null;
+  setSidebarMode("hosts");
+  applyServiceMonitorViewMode(false);
+  selectHostFromLiveReportFeed(normalizedHost, normalizedUid);
+}
+
 function externalMonitorStatusBarClass(status) {
   const normalized = asText(status, "unknown").toLowerCase();
   if (normalized === "up") return "status-bar--up";
@@ -20955,6 +21112,7 @@ function renderServiceMonitorCard(monitor) {
     : "";
   const probeSource = asText(monitor?.probe_source, "server").toLowerCase();
   const sourceLabel = probeSource === "push" ? "Intern · Push-Probe" : "Extern · Server";
+  const linkedHostHtml = renderLinkedHostForServiceCard(monitor);
   return `
     <article class="service-monitor-card${selectedClass}" tabindex="0" role="button" data-service-monitor-id="${monitorId}">
       <div class="status-bar ${externalMonitorStatusBarClass(status)}"></div>
@@ -20964,6 +21122,7 @@ function renderServiceMonitorCard(monitor) {
         <span class="state state--${escapeHtml(status)}">${escapeHtml(status.toUpperCase())}</span>
         <span class="latency">${escapeHtml(formatExternalMonitorLatency(monitor))}</span>
       </div>
+      ${linkedHostHtml}
       ${certHtml}
       <div class="service-monitor-source">${escapeHtml(sourceLabel)}</div>
     </article>
@@ -21061,7 +21220,7 @@ function renderExternalMonitorDetail(monitor) {
           <tr><td>Quelle</td><td>${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Intern (Push-Probe)" : "Extern (Server)")}</td></tr>
           <tr><td>Intervall</td><td>${escapeHtml(String(Math.max(30, Number(monitor.interval_sec || 300) / 60)))} Min.</td></tr>
           <tr><td>Erwartung</td><td>${monitor.expected_status != null ? `HTTP ${escapeHtml(String(monitor.expected_status))}` : "-"}${monitor.keyword ? ` · Keyword „${escapeHtml(monitor.keyword)}“` : ""}</td></tr>
-          <tr><td>Verknüpfter Host</td><td>${escapeHtml(asText(monitor.related_host_uid, "—") || "—")}</td></tr>
+          <tr><td>Verknüpfter Host</td><td>${renderLinkedHostDetailCell(monitor)}</td></tr>
         </tbody>
       </table>
     </div>
@@ -21121,8 +21280,21 @@ function wireServiceMonitorListInteractions() {
   }
   listEl.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target : null;
+    const linkedHostButton = target ? target.closest("[data-action='select-linked-host']") : null;
+    if (linkedHostButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectHostFromMonitorLink(
+        linkedHostButton.getAttribute("data-host") || "",
+        linkedHostButton.getAttribute("data-host-uid") || "",
+      );
+      return;
+    }
     const card = target ? target.closest(".service-monitor-card") : null;
     if (!card) {
+      return;
+    }
+    if (target?.closest("[data-action='select-linked-host']")) {
       return;
     }
     const monitorId = Number(card.getAttribute("data-service-monitor-id") || 0);
@@ -21200,6 +21372,23 @@ async function openExternalMonitorEditorDialog(monitor) {
   const intervalMin = Math.max(1, Math.round(Number(monitor.interval_sec || 1800) / 60));
   const probeSource = asText(monitor.probe_source, "server").toLowerCase();
   const probeSourceLabel = probeSource === "push" ? "Intern (Push-Probe)" : "Extern (Server)";
+  const linkedHostIdentity = asText(monitor.related_host_uid, "").trim();
+  const hostOptions = (Array.isArray(state.hosts) ? state.hosts : [])
+    .slice()
+    .sort((left, right) => asText(left.display_name || left.hostname, "").localeCompare(asText(right.display_name || right.hostname, ""), undefined, { sensitivity: "base" }))
+    .map((host) => {
+      const hostIdentity = resolveHostIdentity(host);
+      const label = asText(host.display_name || host.hostname, hostIdentity);
+      const hostname = asText(host.hostname, "");
+      const suffix = hostname && hostname !== label ? ` (${hostname})` : "";
+      const selected = hostIdentity === linkedHostIdentity ? "selected" : "";
+      return `<option value="${escapeHtml(hostIdentity)}" ${selected}>${escapeHtml(`${label}${suffix}`)}</option>`;
+    })
+    .join("");
+  const hasUnknownLinkedHost = linkedHostIdentity && !(Array.isArray(state.hosts) ? state.hosts : []).some((host) => resolveHostIdentity(host) === linkedHostIdentity);
+  const unknownHostOption = hasUnknownLinkedHost
+    ? `<option value="${escapeHtml(linkedHostIdentity)}" selected>${escapeHtml(linkedHostIdentity)} (aktuell, nicht in Liste)</option>`
+    : "";
   const modal = document.createElement("div");
   modal.className = "host-meta-modal";
   modal.innerHTML = `<div class="host-meta-modal-backdrop"></div>
@@ -21235,8 +21424,12 @@ async function openExternalMonitorEditorDialog(monitor) {
           <label>Timeout (Sekunden)
             <input id="externalMonitorEditTimeoutInput" type="number" min="3" max="120" step="1" value="${Math.max(3, Math.min(120, Number(monitor.timeout_sec || 15)))}" />
           </label>
-          <label>Verknüpfter Host (UID, optional)
-            <input id="externalMonitorEditHostUidInput" type="text" placeholder="host_uid" value="${escapeHtml(asText(monitor.related_host_uid, ""))}" />
+          <label>Verknüpfter Host (optional)
+            <select id="externalMonitorEditHostSelect">
+              <option value="">— Kein Host —</option>
+              ${unknownHostOption}
+              ${hostOptions}
+            </select>
           </label>
         </div>
         <label class="external-monitor-edit-enabled">
@@ -21260,7 +21453,7 @@ async function openExternalMonitorEditorDialog(monitor) {
   const expectedStatusInput = modal.querySelector("#externalMonitorEditExpectedStatusInput");
   const keywordInput = modal.querySelector("#externalMonitorEditKeywordInput");
   const timeoutInput = modal.querySelector("#externalMonitorEditTimeoutInput");
-  const hostUidInput = modal.querySelector("#externalMonitorEditHostUidInput");
+  const hostSelect = modal.querySelector("#externalMonitorEditHostSelect");
   const enabledInput = modal.querySelector("#externalMonitorEditEnabledInput");
 
   return new Promise((resolve) => {
@@ -21294,7 +21487,7 @@ async function openExternalMonitorEditorDialog(monitor) {
         expected_status: Number.isFinite(expectedStatus) ? expectedStatus : null,
         keyword: asText(keywordInput?.value, "").trim(),
         timeout_sec: Math.max(3, Math.min(120, Number(timeoutInput?.value || 15))),
-        related_host_uid: asText(hostUidInput?.value, "").trim(),
+        related_host_uid: asText(hostSelect?.value, "").trim(),
         enabled: Boolean(enabledInput?.checked),
       });
     });
@@ -21347,6 +21540,15 @@ function wireExternalMonitorDetailInteractions() {
   }
   detailView.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target : null;
+    const linkedHostButton = target ? target.closest('[data-action="select-linked-host"]') : null;
+    if (linkedHostButton) {
+      event.preventDefault();
+      selectHostFromMonitorLink(
+        linkedHostButton.getAttribute("data-host") || "",
+        linkedHostButton.getAttribute("data-host-uid") || "",
+      );
+      return;
+    }
     const editButton = target ? target.closest('[data-action="edit-external-monitor"]') : null;
     if (!editButton) {
       return;

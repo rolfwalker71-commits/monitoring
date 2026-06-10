@@ -2153,17 +2153,150 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .host-linked-monitors {
-  margin-top: 2px;
+  margin-top: 4px;
+  display: grid;
+  gap: 4px;
 }
 
-.host-linked-monitors-badge {
+.host-linked-monitors-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.host-linked-monitors-title {
+  font-size: 8.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6d28d9;
+}
+
+.host-linked-monitors-summary {
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.host-linked-monitor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.host-linked-monitor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid #ddd6fe;
+  background: #f5f3ff;
+  color: #4c1d95;
   font-size: 9px;
   font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: #f5f3ff;
-  color: #6d28d9;
-  border: 1px solid #ddd6fe;
+  cursor: pointer;
+}
+
+.host-linked-monitor-chip--up {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.host-linked-monitor-chip--down {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.host-linked-monitor-chip--degraded {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.host-linked-monitor-chip--unknown {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.host-linked-monitor-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  background: currentColor;
+}
+
+.host-linked-monitor-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.host-linked-monitor-state {
+  font-size: 8px;
+  opacity: 0.85;
+}
+
+.service-monitor-linked-host {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1e3a5f;
+  font-size: 9px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.service-monitor-linked-host--missing {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.service-monitor-linked-host-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+}
+
+.service-monitor-linked-host-meta {
+  font-size: 8px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.external-monitor-linked-host-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.external-monitor-linked-host-link:hover {
+  text-decoration: underline;
 }
 
 .header-stat-chip-services-ok {
@@ -2390,6 +2523,44 @@ body[data-theme="dark"] .service-monitor-card {
 }
 
 body[data-theme="dark"] .service-monitor-name { color: #e9d5ff; }
+
+body[data-theme="dark"] .host-linked-monitor-chip {
+  border-color: #5b21b6;
+  background: #312e81;
+  color: #e9d5ff;
+}
+
+body[data-theme="dark"] .host-linked-monitor-chip--up {
+  border-color: #166534;
+  background: #14532d;
+  color: #bbf7d0;
+}
+
+body[data-theme="dark"] .host-linked-monitor-chip--down {
+  border-color: #991b1b;
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+body[data-theme="dark"] .host-linked-monitor-chip--degraded {
+  border-color: #92400e;
+  background: #78350f;
+  color: #fde68a;
+}
+
+body[data-theme="dark"] .service-monitor-linked-host {
+  border-color: #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .service-monitor-linked-host-meta {
+  color: #94a3b8;
+}
+
+body[data-theme="dark"] .external-monitor-linked-host-link {
+  color: #93c5fd;
+}
 body[data-theme="dark"] .external-monitor-detail-header {
   border-color: #5b21b6;
   background: linear-gradient(180deg, #1e1b4b 0%, #172554 100%);
