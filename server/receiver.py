@@ -43,6 +43,20 @@ except Exception:
     webpush = None  # type: ignore[assignment]
     _WEB_PUSH_AVAILABLE = False
 
+from external_monitors import (
+    create_external_monitor,
+    create_probe_site,
+    external_monitor_summary,
+    get_probe_config,
+    init_external_monitor_tables,
+    list_external_monitors,
+    list_probe_sites,
+    push_probe_results,
+    start_external_monitor_worker,
+    update_external_monitor,
+    wake_external_monitor_worker,
+)
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
@@ -2296,6 +2310,7 @@ def init_db() -> None:
                 "INSERT INTO app_migrations (migration_key, applied_at_utc) VALUES (?, ?)",
                 (LINUX_MOUNTPOINT_DEFAULTS_MIGRATION_KEY, utc_now_iso()),
             )
+        init_external_monitor_tables(conn)
         conn.commit()
 
 
@@ -20681,6 +20696,47 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"count": len(reports), "reports": reports})
             return
 
+        if parsed.path == "/api/v1/external-monitors/summary":
+            if not self._require_web_session():
+                return
+            with sqlite_connect_read() as conn:
+                summary = external_monitor_summary(conn)
+            self._send_json(HTTPStatus.OK, {"summary": summary})
+            return
+
+        if parsed.path == "/api/v1/external-monitors":
+            if not self._require_web_session():
+                return
+            query = parse_qs(parsed.query)
+            monitor_id_raw = str(query.get("monitor_id", [""])[0] or "").strip()
+            monitor_id = int(monitor_id_raw) if monitor_id_raw.isdigit() else None
+            with sqlite_connect_read() as conn:
+                monitors = list_external_monitors(conn, monitor_id=monitor_id)
+            self._send_json(HTTPStatus.OK, {"monitors": monitors, "count": len(monitors)})
+            return
+
+        if parsed.path == "/api/v1/external-monitor-probe-sites":
+            if not self._require_admin_session():
+                return
+            with sqlite_connect_read() as conn:
+                sites = list_probe_sites(conn)
+            self._send_json(HTTPStatus.OK, {"probe_sites": sites, "count": len(sites)})
+            return
+
+        if parsed.path == "/api/v1/external-monitor-probe/config":
+            probe_token = str(self.headers.get("X-Probe-Token", "") or "").strip()
+            if not probe_token:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                config = get_probe_config(conn, probe_token)
+                if not config:
+                    self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid_probe_token"})
+                    return
+                conn.commit()
+            self._send_json(HTTPStatus.OK, config)
+            return
+
         if parsed.path == "/api/v1/hosts":
             endpoint_timer = _new_endpoint_timer("/api/v1/hosts")
             query = parse_qs(parsed.query)
@@ -22742,7 +22798,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if path.startswith("/api/v1/") and path not in {"/api/v1/agent-report", "/api/v1/agent-command-result"}:
+        if path.startswith("/api/v1/") and path not in {
+            "/api/v1/agent-report",
+            "/api/v1/agent-command-result",
+            "/api/v1/external-monitor-probe/push",
+            "/api/v1/external-monitor-probe/config",
+        }:
             if not self._require_web_session():
                 return
 
@@ -25328,6 +25389,93 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/external-monitor-probe/push":
+            probe_token = str(self.headers.get("X-Probe-Token", "") or "").strip()
+            if not probe_token:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "missing_probe_token"})
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            results = payload.get("results")
+            if not isinstance(results, list):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "results must be an array"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                push_result = push_probe_results(conn, probe_token, results)
+                conn.commit()
+            if push_result.get("error"):
+                self._send_json(HTTPStatus.UNAUTHORIZED, push_result)
+                return
+            self._send_json(HTTPStatus.OK, push_result)
+            return
+
+        if path == "/api/v1/external-monitors":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            monitor_id_raw = payload.get("id")
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    if monitor_id_raw not in (None, "", 0):
+                        monitor = update_external_monitor(conn, int(monitor_id_raw), payload)
+                        if not monitor:
+                            self._send_json(HTTPStatus.NOT_FOUND, {"error": "monitor not found"})
+                            return
+                    else:
+                        monitor = create_external_monitor(conn, payload)
+                    conn.commit()
+                wake_external_monitor_worker()
+                self._send_json(HTTPStatus.OK, {"monitor": monitor})
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+            return
+
+        if path == "/api/v1/external-monitor-probe-sites":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            name = str(payload.get("name") or "").strip()
+            if not name:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "name required"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                site = create_probe_site(
+                    conn,
+                    name=name,
+                    related_host_uid=str(payload.get("related_host_uid") or "").strip(),
+                )
+                conn.commit()
+            self._send_json(HTTPStatus.OK, {"probe_site": site})
+            return
+
         if path != "/api/v1/agent-report":
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
             return
@@ -25579,6 +25727,8 @@ def main() -> None:
         daemon=True,
     )
     agent_ingest_worker_thread.start()
+
+    start_external_monitor_worker(str(DB_PATH))
 
     def _startup_prewarm_read_caches() -> None:
         # Let login/session/hosts requests win right after restart.

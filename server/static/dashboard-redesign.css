@@ -1963,3 +1963,258 @@ body[data-theme="dark"] .live-report-feed-stats {
   max-width: none !important;
   min-width: 3.5rem !important;
 }
+
+/* ── External service monitors ── */
+.sidebar-card-header--services {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px !important;
+}
+
+.sidebar-card-header--services h3 {
+  color: #6d28d9 !important;
+}
+
+.btn-secondary--compact {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.service-monitor-list-shell {
+  padding: 0 10px 10px;
+}
+
+.service-monitor-list {
+  display: grid;
+  gap: 7px;
+}
+
+.service-monitor-card {
+  position: relative;
+  border: 1px solid #ddd6fe;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fff 0%, #faf5ff 100%);
+  padding: 9px 11px 9px 10px;
+  cursor: pointer;
+}
+
+.service-monitor-card.selected {
+  border-color: #a78bfa;
+  box-shadow: inset 0 0 0 1px #c4b5fd, 0 0 0 2px rgba(124, 58, 237, 0.12);
+}
+
+.service-monitor-card .status-bar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 0 10px 10px 0;
+}
+
+.service-monitor-card .status-bar--up { background: #16a34a; }
+.service-monitor-card .status-bar--down { background: #dc2626; }
+.service-monitor-card .status-bar--degraded { background: #d97706; }
+.service-monitor-card .status-bar--unknown { background: #94a3b8; }
+
+.service-monitor-type {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7c3aed;
+  margin-bottom: 3px;
+}
+
+.service-monitor-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: #312e81;
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.service-monitor-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 9.5px;
+  color: #6b7280;
+}
+
+.service-monitor-meta .latency {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.service-monitor-meta .state {
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.service-monitor-meta .state--up { color: #16a34a; }
+.service-monitor-meta .state--down { color: #dc2626; }
+.service-monitor-meta .state--degraded { color: #d97706; }
+.service-monitor-meta .state--unknown { color: #94a3b8; }
+
+.service-monitor-cert {
+  margin-top: 5px;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  font-weight: 600;
+}
+
+.service-monitor-cert--ok { background: #dcfce7; color: #166534; }
+.service-monitor-cert--warn { background: #fef3c7; color: #92400e; }
+
+.service-monitor-source {
+  margin-top: 4px;
+  font-size: 8.5px;
+  color: #8b5cf6;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.host-linked-monitors {
+  margin-top: 2px;
+}
+
+.host-linked-monitors-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+
+.header-stat-chip-services-ok {
+  border-color: #c4b5fd !important;
+  background: #f5f3ff !important;
+}
+
+.header-stat-chip-services-down {
+  border-color: #fecaca !important;
+  background: #fef2f2 !important;
+}
+
+.reports-column--service-mode #reportChromeBar,
+.reports-column--service-mode .section-head,
+.reports-column--service-mode #hostDashboardPanels {
+  display: none !important;
+}
+
+.external-monitor-detail-view {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.external-monitor-detail-header {
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff 0%, #faf5ff 100%);
+  padding: 14px 16px;
+}
+
+.external-monitor-detail-header h4 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  color: #312e81;
+}
+
+.external-monitor-detail-header .sub {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  word-break: break-word;
+}
+
+.external-monitor-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.external-monitor-metric {
+  border: 1px solid #d1dfed;
+  border-left: 4px solid #7c3aed;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+}
+
+.external-monitor-metric--up { border-left-color: #16a34a; }
+.external-monitor-metric--down { border-left-color: #dc2626; }
+.external-monitor-metric--warn { border-left-color: #d97706; }
+
+.external-monitor-metric .label {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.external-monitor-metric .value {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 4px 0;
+}
+
+.external-monitor-metric .hint {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.external-monitor-panel {
+  border: 1px solid #d6e3f1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px;
+}
+
+.external-monitor-panel h5 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #274b71;
+}
+
+.external-monitor-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.external-monitor-table th,
+.external-monitor-table td {
+  text-align: left;
+  padding: 7px 6px;
+  border-bottom: 1px solid #e4edf7;
+}
+
+.external-monitor-table th {
+  color: #64748b;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+body[data-theme="dark"] .service-monitor-card {
+  border-color: #5b21b6;
+  background: linear-gradient(180deg, #1e1b4b 0%, #172554 100%);
+}
+
+body[data-theme="dark"] .service-monitor-name { color: #e9d5ff; }
+body[data-theme="dark"] .external-monitor-detail-header {
+  border-color: #5b21b6;
+  background: linear-gradient(180deg, #1e1b4b 0%, #172554 100%);
+}

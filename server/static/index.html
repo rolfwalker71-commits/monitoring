@@ -127,6 +127,10 @@
                 <span id="headerActiveHostsChip" class="header-stat-chip header-stat-chip-active-hosts" title="Aktive Hosts (online)"><span class="header-chip-label">Aktiv</span><span id="headerActiveHostsCount" class="header-chip-count">0</span></span>
                 <span id="headerInactiveChip" class="header-stat-chip header-stat-chip-inactive" title="Inaktive Hosts (1h)"><span class="header-chip-label">Inaktiv</span><span id="headerInactiveCount" class="header-chip-count">0</span></span>
               </div>
+              <div class="header-kpi-group header-kpi-group--services hidden" id="headerServicesKpiGroup" role="group" aria-label="Externe Services">
+                <span id="headerServicesOkChip" class="header-stat-chip header-stat-chip-services-ok" title="Externe Services erreichbar"><span class="header-chip-label">Services OK</span><span id="headerServicesOkCount" class="header-chip-count">0</span></span>
+                <span id="headerServicesDownChip" class="header-stat-chip header-stat-chip-services-down" title="Externe Services nicht erreichbar"><span class="header-chip-label">Services Down</span><span id="headerServicesDownCount" class="header-chip-count">0</span></span>
+              </div>
               <div class="header-kpi-group header-kpi-group--storage" role="group" aria-label="Datenbank">
                 <span id="headerDbReportsChip" class="header-stat-chip header-stat-chip-db-reports" title="Berichte in der Datenbank"><span class="header-chip-label">Berichte</span><span id="headerDbReportsCount" class="header-chip-count">0</span></span>
                 <span id="headerDbSizeChip" class="header-stat-chip header-stat-chip-db-size" title="Groesse der Datenbankdateien (SQLite + WAL + SHM)"><span class="header-chip-label">DB</span><span id="headerDbSizeValue" class="header-chip-count">-</span></span>
@@ -1366,6 +1370,13 @@
               <div class="host-list-shell">
                 <div id="hostList" class="host-list"></div>
               </div>
+              <div class="sidebar-card-header sidebar-card-header--services">
+                <h3>🔗 Services</h3>
+                <button id="addExternalMonitorButton" class="btn-secondary btn-secondary--compact hidden" type="button" title="Service-Monitor anlegen (Admin)">＋</button>
+              </div>
+              <div class="service-monitor-list-shell">
+                <div id="serviceMonitorList" class="service-monitor-list"></div>
+              </div>
               <div id="hostsPrevButton" hidden></div>
               <div id="hostsNextButton" hidden></div>
             </div>
@@ -1419,6 +1430,7 @@
               </div>
             </div>
 
+            <div id="hostDashboardPanels">
             <div class="view-tabs-shell">
               <div class="view-tabs" role="tablist" aria-label="Hauptansichten">
                 <button id="overviewTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="overviewView">Übersicht</button>
@@ -1646,6 +1658,9 @@
                 </div><!-- /.overview-content -->
               </div><!-- /.overview-layout -->
             </div>
+            </div><!-- /#hostDashboardPanels -->
+
+            <div id="externalMonitorDetailView" class="external-monitor-detail-view hidden" aria-live="polite"></div>
           </section>
         </div>
       </section>

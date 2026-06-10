@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Externe Monitore – Konzept &amp; UI-Mockup</title>
+  <style>
+    :root {
+      --bg: #eaf1f8;
+      --panel: #ffffff;
+      --line: #d4dfec;
+      --line-soft: #e6eef7;
+      --txt: #1d344d;
+      --muted: #5f748a;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --crit: #dc2626;
+      --blue: #2563eb;
+      --service-accent: #7c3aed;
+      --chip: #eef5fd;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 28px;
+      font-family: "Segoe UI", "IBM Plex Sans", sans-serif;
+      color: var(--txt);
+      background: radial-gradient(circle at 20% -10%, #f7fbff 0%, #edf4fb 42%, var(--bg) 100%);
+      line-height: 1.45;
+    }
+
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .intro { max-width: 980px; color: #4b647f; margin-bottom: 28px; }
+
+    .section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      margin-bottom: 24px;
+      overflow: hidden;
+      box-shadow: 0 10px 28px rgba(38, 67, 98, 0.07);
+    }
+
+    .section-head {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--line-soft);
+      background: linear-gradient(180deg, #fcfeff 0%, #f2f8ff 100%);
+    }
+
+    .section-head h2 { margin: 0 0 6px; font-size: 19px; color: #173b62; }
+    .section-head p { margin: 0; font-size: 13px; color: #56718d; }
+
+    .section-body { padding: 16px 18px 18px; }
+
+    .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .badge {
+      border-radius: 999px;
+      border: 1px solid #c6d8ec;
+      background: var(--chip);
+      color: #365678;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge--new { border-color: #c4b5fd; background: #f5f3ff; color: #5b21b6; }
+    .badge--existing { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+
+    /* Architecture diagram */
+    .arch {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+      max-width: 920px;
+      margin: 0 auto 8px;
+    }
+
+    .arch-box {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #f8fbff;
+      font-size: 12px;
+    }
+
+    .arch-box strong { display: block; font-size: 13px; margin-bottom: 6px; }
+    .arch-box ul { margin: 0; padding-left: 16px; color: var(--muted); }
+    .arch-box--new { border-color: #c4b5fd; background: #faf5ff; }
+    .arch-arrow { font-size: 22px; color: #94a3b8; text-align: center; }
+
+    .schema-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .schema-grid, .arch { grid-template-columns: 1fr; }
+      .arch-arrow { transform: rotate(90deg); }
+    }
+
+    .code-block {
+      border: 1px solid #d6e3f1;
+      border-radius: 10px;
+      background: #f8fafc;
+      padding: 12px 14px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      overflow-x: auto;
+      white-space: pre;
+      color: #334155;
+    }
+
+    .api-list { margin: 0; padding: 0; list-style: none; font-size: 12px; }
+    .api-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line-soft);
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 10px;
+    }
+    .api-list code { font-size: 11px; color: #1e40af; }
+
+    /* Dashboard mockup */
+    .app-frame {
+      border: 1px solid #cfdeee;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #f9fcff;
+    }
+
+    .top-bar {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line-soft);
+      background: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .top-bar h3 { margin: 0; font-size: 15px; }
+    .kpi-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .kpi {
+      border: 1px solid #c5d7ea;
+      border-radius: 8px;
+      background: #eef5ff;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #315070;
+    }
+    .kpi--new { background: #f5f3ff; border-color: #c4b5fd; color: #5b21b6; }
+    .kpi .num { font-size: 14px; }
+
+    .dash-layout {
+      display: grid;
+      grid-template-columns: 290px 1fr;
+      min-height: 620px;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--line-soft);
+      background: linear-gradient(180deg, #f8fbff 0%, #f1f7ff 100%);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-block {
+      padding: 10px 10px 8px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .sidebar-block:last-child { border-bottom: none; flex: 1; overflow: auto; }
+
+    .sidebar-title {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748b;
+      margin: 0 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sidebar-title .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+    }
+    .dot--hosts { background: var(--ok); }
+    .dot--services { background: var(--service-accent); }
+
+    /* Existing host card */
+    .host-card {
+      position: relative;
+      border: 1px solid #cedceb;
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px 12px;
+      margin-bottom: 7px;
+      cursor: pointer;
+    }
+
+    .host-card.selected {
+      border-color: #8fb6df;
+      box-shadow: inset 0 0 0 1px #afccea, 0 0 0 2px rgba(37, 99, 235, 0.12);
+    }
+
+    .host-card .version-bar {
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: 4px;
+      border-radius: 0 10px 10px 0;
+      background: var(--ok);
+    }
+
+    .host-card .corner-badges {
+      position: absolute;
+      top: 8px; right: 10px;
+      display: flex; gap: 5px;
+    }
+
+    .circle-badge {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 8px; font-weight: 800; color: #64748b;
+    }
+
+    .circle-badge img { width: 13px; height: 13px; }
+
+    .host-customer {
+      font-size: 15px;
+      font-weight: 900;
+      color: #0f3f5f;
+      padding-right: 50px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .host-row2 {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 10.5px;
+      color: #6a819d;
+      font-weight: 600;
+    }
+
+    .host-row2 .clock {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 8px;
+      color: #8aa0b8;
+    }
+
+    .host-row3 {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 10.5px;
+      color: #7188a3;
+    }
+
+    .host-row3 .left { display: flex; align-items: center; gap: 5px; }
+    .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+
+    .link-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #f5f3ff;
+      color: #6d28d9;
+      border: 1px solid #ddd6fe;
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    /* New service monitor card */
+    .service-card {
+      position: relative;
+      border: 1px solid #ddd6fe;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #fff 0%, #faf5ff 100%);
+      padding: 9px 11px;
+      margin-bottom: 7px;
+      cursor: pointer;
+    }
+
+    .service-card.selected {
+      border-color: #a78bfa;
+      box-shadow: inset 0 0 0 1px #c4b5fd, 0 0 0 2px rgba(124, 58, 237, 0.15);
+    }
+
+    .service-card .status-bar {
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: 4px;
+      border-radius: 0 10px 10px 0;
+    }
+    .status-bar--up { background: var(--ok); }
+    .status-bar--warn { background: var(--warn); }
+    .status-bar--down { background: var(--crit); }
+
+    .service-type {
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #7c3aed;
+      margin-bottom: 3px;
+    }
+
+    .service-name {
+      font-size: 12px;
+      font-weight: 800;
+      color: #312e81;
+      margin-bottom: 4px;
+    }
+
+    .service-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9.5px;
+      color: #6b7280;
+    }
+
+    .service-meta .latency { font-family: "IBM Plex Mono", monospace; }
+    .service-meta .state { font-weight: 700; }
+    .state--up { color: var(--ok); }
+    .state--warn { color: var(--warn); }
+    .state--down { color: var(--crit); }
+
+    .cert-pill {
+      margin-top: 5px;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      font-weight: 600;
+    }
+    .cert-pill--ok { background: #dcfce7; color: #166534; }
+    .cert-pill--warn { background: #fef3c7; color: #92400e; }
+
+    /* Main detail */
+    .main-panel { padding: 14px; display: grid; gap: 12px; align-content: start; }
+
+    .detail-header {
+      border: 1px solid #d6e3f1;
+      border-radius: 12px;
+      background: #fff;
+      padding: 14px 16px;
+    }
+
+    .detail-header h4 { margin: 0 0 4px; font-size: 20px; }
+    .detail-header .sub { font-size: 12px; color: var(--muted); }
+
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tab {
+      border: 1px solid #c4d6e9;
+      border-radius: 8px;
+      background: #fff;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #2f4c6b;
+    }
+    .tab.active { background: #eaf3ff; border-color: #93b8dd; }
+    .tab--new { border-color: #c4b5fd; }
+    .tab--new.active { background: #f5f3ff; color: #5b21b6; }
+
+    .cards3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .metric-card {
+      border: 1px solid #d1dfed;
+      border-left: 4px solid #4a86bc;
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+    }
+    .metric-card.ok { border-left-color: var(--ok); }
+    .metric-card.warn { border-left-color: var(--warn); }
+    .metric-card.crit { border-left-color: var(--crit); }
+    .metric-card.purple { border-left-color: var(--service-accent); }
+
+    .metric-card .label { font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: 700; }
+    .metric-card .value { font-size: 22px; font-weight: 800; line-height: 1.1; margin: 4px 0; }
+    .metric-card .hint { font-size: 11px; color: var(--muted); }
+
+    .panel-box {
+      border: 1px solid #d6e3f1;
+      border-radius: 10px;
+      background: #fff;
+      padding: 12px;
+    }
+
+    .panel-box h5 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: #274b71;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-box h5 .tag-new {
+      font-size: 9px;
+      background: #f5f3ff;
+      color: #6d28d9;
+      border: 1px solid #ddd6fe;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .check-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    .check-table th, .check-table td {
+      text-align: left;
+      padding: 7px 6px;
+      border-bottom: 1px solid #e4edf7;
+    }
+
+    .check-table th { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    .status-dot--up { background: var(--ok); }
+    .status-dot--warn { background: var(--warn); }
+    .status-dot--down { background: var(--crit); }
+
+    .split-views {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 1100px) {
+      .dash-layout, .split-views { grid-template-columns: 1fr; }
+      .cards3 { grid-template-columns: 1fr; }
+    }
+
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    .legend span { display: flex; align-items: center; gap: 6px; }
+    .legend .swatch {
+      width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line);
+    }
+    .swatch--existing { background: #fff; }
+    .swatch--new { background: #faf5ff; border-color: #c4b5fd; }
+
+    .note {
+      font-size: 12px;
+      color: #4b647f;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Externe Monitore – Konzeptskizze</h1>
+  <p class="intro">
+    Empfehlung: <strong>kein Dummy-Host</strong>, sondern eigene Entität <em>external_monitors</em>
+    mit serverseitigem Poller (Uptime-Kuma-ähnlich). Bestehende Agent-Hosts bleiben unverändert;
+    externe Services erscheinen als eigener Block in der Sidebar und optional verknüpft im Host-Detail.
+  </p>
+
+  <!-- 1. Architektur -->
+  <section class="section">
+    <div class="section-head">
+      <h2>1. Architektur</h2>
+      <p>Checks laufen zentral auf dem Infoboard-Server — kein Agent auf Kundenseite nötig.</p>
+      <div class="badge-row">
+        <span class="badge badge--existing">Bestehend: Agent-Reports</span>
+        <span class="badge badge--new">Neu: Check-Worker</span>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="arch">
+        <div class="arch-box arch-box--new">
+          <strong>Check-Worker</strong>
+          <ul>
+            <li>HTTP / HTTPS</li>
+            <li>TCP-Port</li>
+            <li>SSL-Zertifikat</li>
+            <li>Keyword-Match</li>
+          </ul>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-box">
+          <strong>Ziele (extern)</strong>
+          <ul>
+            <li>Service Layer URL</li>
+            <li>Web Client</li>
+            <li>SLD / Reverse Proxy</li>
+            <li>Port 40000 / 50000</li>
+          </ul>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-box">
+          <strong>SQLite + API</strong>
+          <ul>
+            <li>external_monitors</li>
+            <li>external_monitor_results</li>
+            <li>Alerts bei Down / Zertifikat</li>
+          </ul>
+        </div>
+      </div>
+      <div class="arch" style="margin-top: 16px;">
+        <div class="arch-box arch-box--new" style="grid-column: 1;">
+          <strong>UI (Dashboard)</strong>
+          <ul>
+            <li>Sidebar: Block „Services“</li>
+            <li>Host-Detail: Tab „Externe Checks“</li>
+            <li>Mobile: KPI „Services down“</li>
+          </ul>
+        </div>
+        <div class="arch-arrow">↔</div>
+        <div class="arch-box" style="grid-column: 3 / span 3;">
+          <strong>Bestehend (unverändert)</strong>
+          <ul>
+            <li>Agent-Ingest, host_settings, Disk-Alerts, SAP-Services vom Agent</li>
+            <li>Hosts-KPI Aktiv/Inaktiv basiert weiter nur auf echten Reports</li>
+            <li>Optionale Verknüpfung: <code>related_host_uid</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Datenmodell & API -->
+  <section class="section">
+    <div class="section-head">
+      <h2>2. Datenmodell &amp; API (MVP)</h2>
+      <p>Erste Iteration: HTTP + SSL-Zertifikat, Admin-CRUD, Status-Liste, Alerts.</p>
+    </div>
+    <div class="section-body schema-grid">
+      <div>
+        <div class="code-block">CREATE TABLE external_monitors (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  monitor_type TEXT NOT NULL,  -- http | tcp | ssl_cert
+  target_url TEXT NOT NULL,
+  customer_id INTEGER,
+  related_host_uid TEXT,       -- optional Link zum Agent-Host
+  interval_sec INTEGER DEFAULT 300,
+  expected_status INTEGER,     -- z.B. 200
+  keyword TEXT,                -- optional Inhalt-Check
+  timeout_sec INTEGER DEFAULT 15,
+  enabled INTEGER DEFAULT 1,
+  created_at_utc TEXT,
+  updated_at_utc TEXT
+);
+
+CREATE TABLE external_monitor_results (
+  id INTEGER PRIMARY KEY,
+  monitor_id INTEGER NOT NULL,
+  checked_at_utc TEXT NOT NULL,
+  status TEXT NOT NULL,        -- up | down | degraded
+  response_ms INTEGER,
+  http_status INTEGER,
+  cert_expires_at_utc TEXT,
+  cert_days_left INTEGER,
+  error_message TEXT
+);</div>
+      </div>
+      <div>
+        <ul class="api-list">
+          <li><code>GET</code> <span>/api/v1/external-monitors — Liste inkl. letztem Status</span></li>
+          <li><code>POST</code> <span>/api/v1/external-monitors — Monitor anlegen (Admin)</span></li>
+          <li><code>PUT</code> <span>/api/v1/external-monitors/:id — bearbeiten</span></li>
+          <li><code>GET</code> <span>/api/v1/external-monitors/:id/history — Sparkline / 24h</span></li>
+          <li><code>GET</code> <span>/api/v1/external-monitors/summary — KPI: up/down/cert-warn</span></li>
+          <li><code>—</code> <span>Worker-Thread in receiver.py (analog Agent-Ingest)</span></li>
+          <li><code>—</code> <span>Alert bei 2× fail oder cert_days_left &lt; 14</span></li>
+        </ul>
+        <div class="note" style="margin-top: 14px;">
+          <strong>SAP-typische Checks im MVP:</strong> Service Layer <code>/b1s/v1/$metadata</code>,
+          Web Client-URL, TCP 50000, Zertifikat des Reverse Proxy.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Integriertes Dashboard-Mockup -->
+  <section class="section">
+    <div class="section-head">
+      <h2>3. UI-Mockup: Bestehend + Neu integriert</h2>
+      <p>Linke Sidebar: unveränderte Host-Karten oben, neuer Block „Services“ darunter. Host-Detail erhält Tab mit verknüpften Checks.</p>
+      <div class="legend">
+        <span><span class="swatch swatch--existing"></span> Bestehend (Agent-Host)</span>
+        <span><span class="swatch swatch--new"></span> Neu (Externer Monitor)</span>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="app-frame">
+        <div class="top-bar">
+          <h3>Infoboard Monitoring</h3>
+          <div class="kpi-row">
+            <div class="kpi"><span class="num">68</span> Aktiv</div>
+            <div class="kpi"><span class="num">4</span> Inaktiv</div>
+            <div class="kpi kpi--new"><span class="num">12</span> Services OK</div>
+            <div class="kpi kpi--new" style="border-color:#fecaca;background:#fef2f2;color:#991b1b;"><span class="num">1</span> Service Down</div>
+          </div>
+        </div>
+
+        <div class="dash-layout">
+          <!-- Sidebar -->
+          <aside class="sidebar">
+            <div class="sidebar-block">
+              <p class="sidebar-title"><span class="dot dot--hosts"></span> Hosts <span style="font-weight:600;color:#94a3b8;">(bestehend)</span></p>
+
+              <div class="host-card selected">
+                <div class="version-bar"></div>
+                <div class="corner-badges">
+                  <span class="circle-badge"><img src="server/static/icons/windows.png" alt="" onerror="this.parentElement.textContent='W'"></span>
+                  <span class="circle-badge">CH</span>
+                </div>
+                <div class="host-customer">Hilpertshauser AG</div>
+                <div class="host-row2">
+                  <span>SQL Server</span>
+                  <span class="clock">09:06</span>
+                </div>
+                <div class="host-row3">
+                  <span class="left"><span class="pulse"></span> server09</span>
+                  <span>172.20.1.9</span>
+                </div>
+                <div style="margin-top:5px;"><span class="link-badge">2 externe Checks</span></div>
+              </div>
+
+              <div class="host-card">
+                <div class="version-bar" style="background:#d97706;"></div>
+                <div class="corner-badges">
+                  <span class="circle-badge"><img src="server/static/icons/suse.png" alt="" onerror="this.parentElement.textContent='S'"></span>
+                  <span class="circle-badge">CH</span>
+                </div>
+                <div class="host-customer">Hausverw. Wangen</div>
+                <div class="host-row2">
+                  <span>Presentation Server SU4</span>
+                  <span class="clock">09:03</span>
+                </div>
+                <div class="host-row3">
+                  <span class="left"><span class="pulse"></span> 2027-BFY-01</span>
+                  <span>10.20.27.11</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="sidebar-block">
+              <p class="sidebar-title"><span class="dot dot--services"></span> Services <span style="font-weight:600;color:#94a3b8;">(neu)</span></p>
+
+              <div class="service-card">
+                <div class="status-bar status-bar--up"></div>
+                <div class="service-type">HTTPS · Service Layer</div>
+                <div class="service-name">Hilpertshauser SL Prod</div>
+                <div class="service-meta">
+                  <span class="state state--up">UP</span>
+                  <span class="latency">142 ms</span>
+                </div>
+                <span class="cert-pill cert-pill--ok">Zertifikat: 187 Tage</span>
+              </div>
+
+              <div class="service-card selected">
+                <div class="status-bar status-bar--down"></div>
+                <div class="service-type">HTTPS · Web Client</div>
+                <div class="service-name">Kanadevia Web Client</div>
+                <div class="service-meta">
+                  <span class="state state--down">DOWN</span>
+                  <span class="latency">timeout</span>
+                </div>
+                <span class="cert-pill cert-pill--warn">Zertifikat: 11 Tage</span>
+              </div>
+
+              <div class="service-card">
+                <div class="status-bar status-bar--warn"></div>
+                <div class="service-type">TCP · Port 50000</div>
+                <div class="service-name">ANG SLD Gateway</div>
+                <div class="service-meta">
+                  <span class="state state--warn">DEGRADED</span>
+                  <span class="latency">890 ms</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <!-- Main: Host selected -->
+          <main class="main-panel">
+            <div class="detail-header">
+              <h4>Hilpertshauser AG · server09</h4>
+              <p class="sub">Agent-Host (bestehend) — CPU, RAM, Filesystems, SAP-Services wie bisher</p>
+            </div>
+
+            <div class="tabs">
+              <span class="tab active">Übersicht</span>
+              <span class="tab">Filesystems</span>
+              <span class="tab">SAP Services</span>
+              <span class="tab tab--new active">Externe Checks (2)</span>
+              <span class="tab">Alerts</span>
+            </div>
+
+            <div class="cards3">
+              <div class="metric-card ok">
+                <div class="label">Letzter Report</div>
+                <div class="value">09:06</div>
+                <div class="hint">Agent online</div>
+              </div>
+              <div class="metric-card ok">
+                <div class="label">CPU</div>
+                <div class="value">23%</div>
+                <div class="hint">vom Agent</div>
+              </div>
+              <div class="metric-card purple">
+                <div class="label">Externe Checks</div>
+                <div class="value">2/2</div>
+                <div class="hint">UP — unabhängig vom Agent</div>
+              </div>
+            </div>
+
+            <div class="panel-box">
+              <h5>Verknüpfte externe Monitore <span class="tag-new">neu</span></h5>
+              <table class="check-table">
+                <thead>
+                  <tr>
+                    <th>Monitor</th>
+                    <th>Typ</th>
+                    <th>Status</th>
+                    <th>Latenz</th>
+                    <th>Zertifikat</th>
+                    <th>Geprüft</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Service Layer Prod</td>
+                    <td>HTTPS</td>
+                    <td><span class="status-dot status-dot--up"></span>UP</td>
+                    <td>142 ms</td>
+                    <td>187 Tage</td>
+                    <td>vor 2 Min</td>
+                  </tr>
+                  <tr>
+                    <td>Web Client</td>
+                    <td>HTTPS</td>
+                    <td><span class="status-dot status-dot--up"></span>UP</td>
+                    <td>201 ms</td>
+                    <td>187 Tage</td>
+                    <td>vor 2 Min</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <!-- Second view: Service monitor detail -->
+      <p style="margin: 20px 0 10px; font-size: 13px; font-weight: 700; color: #173b62;">Gleiche App — Service in Sidebar ausgewählt:</p>
+
+      <div class="app-frame">
+        <div class="dash-layout" style="min-height: 380px;">
+          <aside class="sidebar" style="opacity: 0.85;">
+            <div class="sidebar-block" style="font-size: 11px; color: #94a3b8; padding: 20px;">
+              … Sidebar wie oben, „Kanadevia Web Client“ selected …
+            </div>
+          </aside>
+          <main class="main-panel">
+            <div class="detail-header" style="border-color: #ddd6fe; background: linear-gradient(180deg,#fff,#faf5ff);">
+              <h4>Kanadevia Web Client</h4>
+              <p class="sub">Externer Monitor — kein Agent, Ziel: https://b1web.kanadevia.example/webclient</p>
+            </div>
+
+            <div class="cards3">
+              <div class="metric-card crit">
+                <div class="label">Status</div>
+                <div class="value">DOWN</div>
+                <div class="hint">seit 14 Min (3/3 fails)</div>
+              </div>
+              <div class="metric-card warn">
+                <div class="label">Zertifikat</div>
+                <div class="value">11d</div>
+                <div class="hint">läuft ab 21.06.2026</div>
+              </div>
+              <div class="metric-card purple">
+                <div class="label">Verfügbarkeit 24h</div>
+                <div class="value">94.2%</div>
+                <div class="hint">2 Ausfälle</div>
+              </div>
+            </div>
+
+            <div class="split-views">
+              <div class="panel-box">
+                <h5>Konfiguration</h5>
+                <table class="check-table">
+                  <tr><td>Typ</td><td>HTTPS + Keyword</td></tr>
+                  <tr><td>Intervall</td><td>5 Minuten</td></tr>
+                  <tr><td>Erwartung</td><td>HTTP 200, enthält „webclient“</td></tr>
+                  <tr><td>Kunde</td><td>Kanadevia Inova</td></tr>
+                  <tr><td>Verknüpfter Host</td><td>— (standalone)</td></tr>
+                </table>
+              </div>
+              <div class="panel-box">
+                <h5>Letzte Prüfungen</h5>
+                <table class="check-table">
+                  <tr><td>09:10</td><td><span class="status-dot status-dot--down"></span>timeout</td></tr>
+                  <tr><td>09:05</td><td><span class="status-dot status-dot--down"></span>HTTP 502</td></tr>
+                  <tr><td>09:00</td><td><span class="status-dot status-dot--up"></span>198 ms</td></tr>
+                  <tr><td>08:55</td><td><span class="status-dot status-dot--up"></span>205 ms</td></tr>
+                </table>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Umsetzungsphasen -->
+  <section class="section">
+    <div class="section-head">
+      <h2>4. Umsetzung in Phasen</h2>
+    </div>
+    <div class="section-body">
+      <table class="check-table">
+        <thead>
+          <tr><th>Phase</th><th>Inhalt</th><th>Aufwand (grob)</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>MVP 1</strong></td>
+            <td>DB + Worker (HTTP/SSL) + Admin-Formular + Sidebar-Block „Services“</td>
+            <td>~2–3 Tage</td>
+          </tr>
+          <tr>
+            <td><strong>MVP 2</strong></td>
+            <td>Alerts (Down/Zertifikat), KPI im Header, Verknüpfung <code>related_host_uid</code>, Tab im Host-Detail</td>
+            <td>~2 Tage</td>
+          </tr>
+          <tr>
+            <td><strong>MVP 3</strong></td>
+            <td>TCP-Port-Checks, Keyword, Verfügbarkeits-Historie, Mobile-Ansicht</td>
+            <td>~2–3 Tage</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">
+        <strong>Warum kein Dummy-Host?</strong> Aktiv/Inaktiv-KPIs, Agent-Version-Balken, Filesystem-Alerts und SAP-Harvest
+        würden verfälscht oder leer bleiben. Getrennte Entität + optionaler Link zum echten Host ist sauberer und wartbarer.
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>

@@ -520,6 +520,10 @@ const state = {
   globalHeadsUpSuppressedOpenAlertsCount: 0,
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
+  externalMonitors: [],
+  externalMonitorSummary: { total: 0, up: 0, down: 0, degraded: 0, unknown: 0, cert_warn: 0 },
+  selectedExternalMonitorId: null,
+  serviceMonitorListDelegatedWired: false,
   dbReportsTotal: null,
   dbReportsTotalSeeded: false,
   dbReportsLastHour: 0,
@@ -1673,6 +1677,9 @@ async function refreshDashboard(options = {}) {
     const shouldRefreshGlobalAlertsList = state.viewMode === "global" && state.globalSubMode === "global-alerts";
 
     const hostsPromise = loadHosts({ preserveScroll, bustCache: force, silent: automatic });
+    void loadExternalMonitors({ silent: automatic }).catch((error) => {
+      console.warn("loadExternalMonitors failed:", error);
+    });
     void loadHeaderDatabaseKpis().catch((error) => {
       console.warn("loadHeaderDatabaseKpis failed:", error);
     });
@@ -3193,6 +3200,7 @@ function setAuthUiState(authenticated) {
   }
   state.isAuthenticated = authenticated;
   syncBrandProfileIdentity();
+  updateExternalMonitorAdminUi();
   if (authenticated) {
     startSessionRefreshTimer();
     startSessionCountdownTimer();
@@ -10838,6 +10846,11 @@ function renderSingleHostCard(host) {
         >
       </div>`
     : "";
+  const linkedMonitorCount = (Array.isArray(state.externalMonitors) ? state.externalMonitors : [])
+    .filter((monitor) => asText(monitor?.related_host_uid, "").trim() === hostIdentity).length;
+  const linkedMonitorsHtml = linkedMonitorCount > 0
+    ? `<div class="host-linked-monitors"><span class="host-linked-monitors-badge">${linkedMonitorCount} externe Check${linkedMonitorCount === 1 ? "" : "s"}</span></div>`
+    : "";
   const designationBadgeLine = `<div class="host-designation-row"><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span><span class="host-detail-clock" title="${escapeHtml(lastReportClock.title)}">${escapeHtml(lastReportClock.label)}</span></div>`;
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
@@ -10894,6 +10907,7 @@ function renderSingleHostCard(host) {
       <div class="host-card-main">
         ${customerTitleLine}
         ${designationBadgeLine}
+        ${linkedMonitorsHtml}
         <div class="host-tech-line">
           <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span>${licenseDotHtml}<span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
           <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
@@ -13300,9 +13314,11 @@ function wireHostListInteractions() {
     }
 
     const previousScrollTop = hostList.scrollTop;
+    state.selectedExternalMonitorId = null;
     state.selectedHost = hostname;
     state.selectedHostUid = hostUid;
     state.selectedDisplayName = item.querySelector("strong")?.textContent || hostname;
+    applyServiceMonitorViewMode(false);
     state.reportOffset = 0;
     state.hostReportMeta = null;
     renderHosts(state.hosts);
@@ -17393,6 +17409,25 @@ function updateHeaderStatChips() {
     currentTrendValues.muted = mutedValue;
     mutedChip.classList.remove("hidden");
   }
+  const servicesKpiGroup = document.getElementById("headerServicesKpiGroup");
+  const servicesOkChip = document.getElementById("headerServicesOkChip");
+  const servicesOkCount = document.getElementById("headerServicesOkCount");
+  const servicesDownChip = document.getElementById("headerServicesDownChip");
+  const servicesDownCount = document.getElementById("headerServicesDownCount");
+  const serviceSummary = state.externalMonitorSummary || {};
+  const serviceTotal = Math.max(0, Number(serviceSummary.total || 0));
+  const serviceUp = Math.max(0, Number(serviceSummary.up || 0));
+  const serviceDown = Math.max(0, Number(serviceSummary.down || 0) + Number(serviceSummary.degraded || 0));
+  if (servicesKpiGroup) {
+    servicesKpiGroup.classList.toggle("hidden", serviceTotal <= 0);
+  }
+  if (servicesOkChip && servicesOkCount) {
+    servicesOkCount.textContent = String(serviceUp);
+  }
+  if (servicesDownChip && servicesDownCount) {
+    servicesDownCount.textContent = String(serviceDown);
+  }
+
   if (activeHostsChip && activeHostsCount) {
     const inactiveCount = Math.max(0, Number(state.inactiveHostsCount || 0));
     const canonicalHosts = (Array.isArray(state.hosts) ? state.hosts : []).filter((host) => isCanonicalHostCard(host));
@@ -20730,3 +20765,332 @@ async function loadSystemOverview() {
     container.innerHTML = `<p class="muted">${escapeHtml(formatApiLoadError(error?.message, "Systemübersicht"))}</p>`;
   }
 }
+
+function formatExternalMonitorTypeLabel(monitor) {
+  const monitorType = asText(monitor?.monitor_type, "http").toLowerCase();
+  const typeLabels = { http: "HTTPS", tcp: "TCP", ssl_cert: "SSL" };
+  const suffix = monitorType === "http" ? " · HTTP" : "";
+  return `${typeLabels[monitorType] || monitorType.toUpperCase()}${suffix}`;
+}
+
+function formatExternalMonitorLatency(monitor) {
+  const responseMs = Number(monitor?.last_response_ms);
+  if (Number.isFinite(responseMs) && responseMs >= 0) {
+    return `${responseMs} ms`;
+  }
+  const errorText = asText(monitor?.last_error_message, "").toLowerCase();
+  if (errorText.includes("timed out") || errorText.includes("timeout")) {
+    return "timeout";
+  }
+  return "-";
+}
+
+function externalMonitorStatusBarClass(status) {
+  const normalized = asText(status, "unknown").toLowerCase();
+  if (normalized === "up") return "status-bar--up";
+  if (normalized === "down") return "status-bar--down";
+  if (normalized === "degraded") return "status-bar--degraded";
+  return "status-bar--unknown";
+}
+
+function renderServiceMonitorCard(monitor) {
+  const monitorId = Number(monitor?.id || 0);
+  const selectedClass = monitorId === Number(state.selectedExternalMonitorId || 0) ? " selected" : "";
+  const status = asText(monitor?.last_status, "unknown").toLowerCase();
+  const certDays = monitor?.last_cert_days_left;
+  const certHtml = Number.isFinite(Number(certDays))
+    ? `<span class="service-monitor-cert ${Number(certDays) <= 14 ? "service-monitor-cert--warn" : "service-monitor-cert--ok"}">Zertifikat: ${Number(certDays)} Tage</span>`
+    : "";
+  const probeSource = asText(monitor?.probe_source, "server").toLowerCase();
+  const sourceLabel = probeSource === "push" ? "Intern · Push-Probe" : "Extern · Server";
+  return `
+    <article class="service-monitor-card${selectedClass}" tabindex="0" role="button" data-service-monitor-id="${monitorId}">
+      <div class="status-bar ${externalMonitorStatusBarClass(status)}"></div>
+      <div class="service-monitor-type">${escapeHtml(formatExternalMonitorTypeLabel(monitor))}</div>
+      <div class="service-monitor-name">${escapeHtml(asText(monitor?.name, "Service"))}</div>
+      <div class="service-monitor-meta">
+        <span class="state state--${escapeHtml(status)}">${escapeHtml(status.toUpperCase())}</span>
+        <span class="latency">${escapeHtml(formatExternalMonitorLatency(monitor))}</span>
+      </div>
+      ${certHtml}
+      <div class="service-monitor-source">${escapeHtml(sourceLabel)}</div>
+    </article>
+  `;
+}
+
+function renderServiceMonitors() {
+  const listEl = document.getElementById("serviceMonitorList");
+  if (!listEl) {
+    return;
+  }
+  const monitors = Array.isArray(state.externalMonitors) ? state.externalMonitors.filter((item) => item?.enabled !== false) : [];
+  if (!monitors.length) {
+    listEl.innerHTML = '<p class="muted">Keine Service-Monitore konfiguriert.</p>';
+    return;
+  }
+  listEl.innerHTML = monitors.map(renderServiceMonitorCard).join("");
+  wireServiceMonitorListInteractions();
+}
+
+function applyServiceMonitorViewMode(active) {
+  const reportsColumn = document.querySelector(".reports-column");
+  const detailView = document.getElementById("externalMonitorDetailView");
+  if (reportsColumn) {
+    reportsColumn.classList.toggle("reports-column--service-mode", Boolean(active));
+  }
+  if (detailView) {
+    detailView.classList.toggle("hidden", !active);
+  }
+}
+
+function renderExternalMonitorDetail(monitor) {
+  const detailView = document.getElementById("externalMonitorDetailView");
+  if (!detailView || !monitor) {
+    return;
+  }
+  const status = asText(monitor.last_status, "unknown").toLowerCase();
+  const metricClass = status === "up" ? "external-monitor-metric--up" : status === "down" ? "external-monitor-metric--down" : "external-monitor-metric--warn";
+  const certHint = Number.isFinite(Number(monitor.last_cert_days_left))
+    ? `läuft ab in ${Number(monitor.last_cert_days_left)} Tagen`
+    : "kein Zertifikat erkannt";
+  const historyRows = Array.isArray(monitor.history) ? monitor.history : [];
+  const historyHtml = historyRows.length
+    ? historyRows.map((entry) => `
+        <tr>
+          <td>${escapeHtml(formatAutoRefreshTimestamp(entry.checked_at_utc ? new Date(entry.checked_at_utc) : null) || asText(entry.checked_at_utc, "-"))}</td>
+          <td>${escapeHtml(asText(entry.status, "-").toUpperCase())}</td>
+          <td>${escapeHtml(entry.response_ms != null ? `${entry.response_ms} ms` : "-")}</td>
+          <td>${escapeHtml(asText(entry.error_message, ""))}</td>
+        </tr>
+      `).join("")
+    : '<tr><td colspan="4" class="muted">Noch keine Historie vorhanden.</td></tr>';
+
+  detailView.innerHTML = `
+    <div class="external-monitor-detail-header">
+      <h4>${escapeHtml(asText(monitor.name, "Service"))}</h4>
+      <p class="sub">${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Interner Monitor (Push-Probe) — " : "Externer Monitor — ")}${escapeHtml(asText(monitor.target_url, ""))}</p>
+    </div>
+    <div class="external-monitor-metrics">
+      <div class="external-monitor-metric ${metricClass}">
+        <div class="label">Status</div>
+        <div class="value">${escapeHtml(status.toUpperCase())}</div>
+        <div class="hint">${escapeHtml(asText(monitor.last_error_message, "OK"))}</div>
+      </div>
+      <div class="external-monitor-metric external-monitor-metric--warn">
+        <div class="label">Zertifikat</div>
+        <div class="value">${Number.isFinite(Number(monitor.last_cert_days_left)) ? `${Number(monitor.last_cert_days_left)}d` : "-"}</div>
+        <div class="hint">${escapeHtml(certHint)}</div>
+      </div>
+      <div class="external-monitor-metric">
+        <div class="label">Latenz</div>
+        <div class="value">${escapeHtml(formatExternalMonitorLatency(monitor))}</div>
+        <div class="hint">Letzte Prüfung: ${escapeHtml(asText(monitor.last_checked_at_utc, "-"))}</div>
+      </div>
+    </div>
+    <div class="external-monitor-panel">
+      <h5>Konfiguration</h5>
+      <table class="external-monitor-table">
+        <tbody>
+          <tr><td>Typ</td><td>${escapeHtml(formatExternalMonitorTypeLabel(monitor))}</td></tr>
+          <tr><td>Quelle</td><td>${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Intern (Push-Probe)" : "Extern (Server)")}</td></tr>
+          <tr><td>Intervall</td><td>${escapeHtml(String(Math.max(30, Number(monitor.interval_sec || 300) / 60)))} Min.</td></tr>
+          <tr><td>Erwartung</td><td>${monitor.expected_status != null ? `HTTP ${escapeHtml(String(monitor.expected_status))}` : "-"}${monitor.keyword ? ` · Keyword „${escapeHtml(monitor.keyword)}“` : ""}</td></tr>
+          <tr><td>Verknüpfter Host</td><td>${escapeHtml(asText(monitor.related_host_uid, "—") || "—")}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="external-monitor-panel">
+      <h5>Letzte Prüfungen</h5>
+      <table class="external-monitor-table">
+        <thead><tr><th>Zeit</th><th>Status</th><th>Latenz</th><th>Fehler</th></tr></thead>
+        <tbody>${historyHtml}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function loadExternalMonitorDetail(monitorId) {
+  const response = await fetch(`/api/v1/external-monitors?monitor_id=${encodeURIComponent(String(monitorId))}`, {
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  const monitors = Array.isArray(data.monitors) ? data.monitors : [];
+  return monitors[0] || null;
+}
+
+function selectExternalMonitor(monitorId) {
+  const numericId = Number(monitorId || 0);
+  if (!numericId || numericId === Number(state.selectedExternalMonitorId || 0)) {
+    return;
+  }
+  state.selectedExternalMonitorId = numericId;
+  state.selectedHost = "";
+  state.selectedHostUid = "";
+  renderHosts(state.hosts);
+  renderServiceMonitors();
+  applyServiceMonitorViewMode(true);
+  void loadExternalMonitorDetail(numericId)
+    .then((monitor) => {
+      if (!monitor || Number(state.selectedExternalMonitorId) !== numericId) {
+        return;
+      }
+      renderExternalMonitorDetail(monitor);
+    })
+    .catch((error) => {
+      const detailView = document.getElementById("externalMonitorDetailView");
+      if (detailView) {
+        detailView.innerHTML = `<p class="muted">${escapeHtml(formatApiLoadError(error?.message, "Service-Monitor"))}</p>`;
+      }
+    });
+}
+
+function wireServiceMonitorListInteractions() {
+  const listEl = document.getElementById("serviceMonitorList");
+  if (!listEl || state.serviceMonitorListDelegatedWired) {
+    return;
+  }
+  listEl.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const card = target ? target.closest(".service-monitor-card") : null;
+    if (!card) {
+      return;
+    }
+    const monitorId = Number(card.getAttribute("data-service-monitor-id") || 0);
+    if (!monitorId) {
+      return;
+    }
+    event.preventDefault();
+    selectExternalMonitor(monitorId);
+  });
+  listEl.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    const target = event.target instanceof Element ? event.target : null;
+    const card = target ? target.closest(".service-monitor-card") : null;
+    if (!card) {
+      return;
+    }
+    event.preventDefault();
+    selectExternalMonitor(Number(card.getAttribute("data-service-monitor-id") || 0));
+  });
+  state.serviceMonitorListDelegatedWired = true;
+}
+
+async function loadExternalMonitorSummary() {
+  const response = await fetch("/api/v1/external-monitors/summary", { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  state.externalMonitorSummary = data.summary || { total: 0, up: 0, down: 0, degraded: 0, unknown: 0, cert_warn: 0 };
+  updateHeaderStatChips();
+}
+
+async function loadExternalMonitors(options = {}) {
+  if (!state.isAuthenticated) {
+    return;
+  }
+  const response = await fetch("/api/v1/external-monitors", { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  state.externalMonitors = Array.isArray(data.monitors) ? data.monitors : [];
+  renderServiceMonitors();
+  if (Number(state.selectedExternalMonitorId || 0) > 0) {
+    const stillExists = state.externalMonitors.some((item) => Number(item.id) === Number(state.selectedExternalMonitorId));
+    if (!stillExists) {
+      state.selectedExternalMonitorId = null;
+      applyServiceMonitorViewMode(false);
+    } else if (!options.silent) {
+      void loadExternalMonitorDetail(Number(state.selectedExternalMonitorId)).then((monitor) => {
+        if (monitor) {
+          renderExternalMonitorDetail(monitor);
+        }
+      });
+    }
+  }
+  if (Array.isArray(state.hosts) && state.hosts.length) {
+    renderHosts(state.hosts);
+  }
+  await loadExternalMonitorSummary();
+  updateExternalMonitorAdminUi();
+}
+
+function updateExternalMonitorAdminUi() {
+  const addButton = document.getElementById("addExternalMonitorButton");
+  if (addButton) {
+    addButton.classList.toggle("hidden", !state.isAdmin);
+  }
+}
+
+async function openExternalMonitorCreateDialog() {
+  if (!state.isAdmin) {
+    return;
+  }
+  const name = window.prompt("Name des Service-Monitors:", "");
+  if (!name || !name.trim()) {
+    return;
+  }
+  const targetUrl = window.prompt("Ziel-URL (https://... oder host:port):", "");
+  if (!targetUrl || !targetUrl.trim()) {
+    return;
+  }
+  const probeSourceRaw = window.prompt("Quelle: 'server' (extern vom Infoboard) oder 'push' (intern per Probe):", "server");
+  const probeSource = asText(probeSourceRaw, "server").toLowerCase() === "push" ? "push" : "server";
+  let probeSiteId = null;
+  if (probeSource === "push") {
+    const probeSiteName = window.prompt("Name der internen Probe-Stelle (wird neu angelegt wenn leer):", "Interne Probe");
+    if (!probeSiteName || !probeSiteName.trim()) {
+      return;
+    }
+    const siteResponse = await fetch("/api/v1/external-monitor-probe-sites", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: probeSiteName.trim() }),
+    });
+    const siteData = await siteResponse.json().catch(() => ({}));
+    if (!siteResponse.ok) {
+      window.alert(asText(siteData.error, "Probe-Stelle konnte nicht angelegt werden."));
+      return;
+    }
+    probeSiteId = siteData?.probe_site?.id;
+    const probeToken = asText(siteData?.probe_site?.token, "");
+    if (probeToken) {
+      window.alert(`Probe-Token (einmalig speichern):\n\n${probeToken}`);
+    }
+  }
+  const payload = {
+    name: name.trim(),
+    target_url: targetUrl.trim(),
+    monitor_type: "http",
+    probe_source: probeSource,
+    probe_site_id: probeSiteId,
+    interval_sec: 300,
+    expected_status: 200,
+  };
+  const response = await fetch("/api/v1/external-monitors", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    window.alert(asText(data.error, "Monitor konnte nicht angelegt werden."));
+    return;
+  }
+  await loadExternalMonitors({ silent: true });
+  if (data.monitor?.id) {
+    selectExternalMonitor(data.monitor.id);
+  }
+}
+
+document.getElementById("addExternalMonitorButton")?.addEventListener("click", () => {
+  void openExternalMonitorCreateDialog();
+});
