@@ -21777,6 +21777,20 @@ function renderExternalMonitorHistoryChart(historyRows, monitor) {
   `;
 }
 
+function renderServiceMonitorHeadRowHtml(monitor) {
+  const catalogServiceName = asText(monitor?.service_definition_name, "").trim();
+  const typeLabel = formatExternalMonitorTypeLabel(monitor);
+  const servicePillHtml = catalogServiceName
+    ? `<span class="service-monitor-pill service-monitor-pill--definition">${escapeHtml(catalogServiceName)}</span>`
+    : "";
+  return (
+    `<div class="service-monitor-head-row">`
+    + `<span class="service-monitor-type-label">${escapeHtml(typeLabel)}</span>`
+    + servicePillHtml
+    + `</div>`
+  );
+}
+
 function renderServiceMonitorCard(monitor) {
   const monitorId = Number(monitor?.id || 0);
   const selectedClass = monitorId === Number(state.selectedExternalMonitorId || 0) ? " selected" : "";
@@ -21791,21 +21805,12 @@ function renderServiceMonitorCard(monitor) {
   const sourcePillLabel = probeSource === "push" ? "Intern" : "Extern";
   const linkedHostHtml = renderLinkedHostForServiceCard(monitor);
   const monitorName = asText(monitor?.name, "Monitor");
-  const catalogServiceName = asText(monitor?.service_definition_name, "").trim();
-  const definitionPillHtml = catalogServiceName
-    ? `<div class="service-monitor-pill-row service-monitor-pill-row--top"><span class="service-monitor-pill service-monitor-pill--definition">${escapeHtml(catalogServiceName)}</span></div>`
-    : "";
   const lastCheckClock = formatHostLastReportClock(monitor?.last_checked_at_utc);
   const statusTitle = `${status.toUpperCase()} · ${formatExternalMonitorLatency(monitor)}`;
   return `
     <article class="host-item service-monitor-card ${statusClass}${selectedClass}" tabindex="0" role="button" data-service-monitor-id="${monitorId}" title="${escapeHtml(statusTitle)}">
       <div class="host-card-main">
-        ${definitionPillHtml}
-        <div class="host-customer-title-line service-monitor-type-line">
-          <span class="host-customer-row host-customer-row--top">
-            <span class="host-customer-line">${escapeHtml(formatExternalMonitorTypeLabel(monitor))}</span>
-          </span>
-        </div>
+        ${renderServiceMonitorHeadRowHtml(monitor)}
         <div class="host-designation-row">
           <span class="host-detail-line">${escapeHtml(monitorName)}</span>
           <span class="host-detail-clock" title="${escapeHtml(lastCheckClock.title)}">${escapeHtml(lastCheckClock.label)}</span>
@@ -21906,15 +21911,11 @@ function renderExternalMonitorDetail(monitor) {
       </div>`
     : "";
 
-  const catalogServiceName = asText(monitor.service_definition_name, "").trim();
-  const catalogPillHtml = catalogServiceName
-    ? `<div class="service-monitor-pill-row service-monitor-pill-row--top"><span class="service-monitor-pill service-monitor-pill--definition">${escapeHtml(catalogServiceName)}</span></div>`
-    : "";
   detailView.innerHTML = `
     <div class="external-monitor-detail-header">
       <div class="external-monitor-detail-header-top">
         <div>
-          ${catalogPillHtml}
+          ${renderServiceMonitorHeadRowHtml(monitor)}
           <h4>${escapeHtml(asText(monitor.name, "Service"))}</h4>
           <p class="sub">${escapeHtml(asText(monitor.probe_source, "server") === "push" ? "Interner Monitor (Push-Probe) — " : "Externer Monitor — ")}${escapeHtml(asText(monitor.target_url, ""))}</p>
         </div>

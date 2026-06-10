@@ -22,8 +22,7 @@
 
 /* Unified card surfaces (host list, KPIs, report meta, panels) */
 .host-list article.host-item,
-.hosts-column .host-item,
-.service-monitor-list article.host-item,
+.hosts-column .host-item:not(.service-monitor-card),
 .meta-groups .meta-group,
 .metric-card,
 .overview-sap-chip,
@@ -39,14 +38,22 @@
 }
 
 .host-list article.host-item:hover,
-.hosts-column .host-item:hover,
-.service-monitor-list article.host-item:hover {
+.hosts-column .host-item:not(.service-monitor-card):hover {
   border-color: #a8b9cc !important;
   box-shadow: var(--dr-card-shadow-hover) !important;
 }
 
+.service-monitor-list article.host-item.service-monitor-card {
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--dr-card-shadow) !important;
+}
+
+.service-monitor-list article.host-item.service-monitor-card:hover {
+  box-shadow: var(--dr-card-shadow-hover) !important;
+}
+
 .host-list article.host-item.selected,
-.hosts-column .host-item.selected {
+.hosts-column .host-item.selected:not(.service-monitor-card) {
   border-color: #93c5fd !important;
   box-shadow: var(--dr-card-shadow-hover) !important;
   background: #fff !important;
@@ -1146,7 +1153,7 @@ body[data-theme="dark"] .header-stat-chip {
 }
 
 body[data-theme="dark"] .host-list article.host-item.selected,
-body[data-theme="dark"] .hosts-column .host-item.selected {
+body[data-theme="dark"] .hosts-column .host-item.selected:not(.service-monitor-card) {
   background: #172033 !important;
   border-color: #3b82f6 !important;
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35), var(--dr-card-shadow-hover) !important;
@@ -2041,6 +2048,11 @@ body[data-theme="dark"] .live-report-feed-stats {
   overflow-x: hidden;
   padding: 0;
   box-sizing: border-box;
+  scrollbar-gutter: stable;
+}
+
+.sidebar-panel--services .service-monitor-list-shell {
+  padding-right: 2px;
 }
 
 .sidebar-panel--hosts .host-list,
@@ -2111,6 +2123,39 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   margin-bottom: 4px;
 }
 
+.service-monitor-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  background: #fef9c3;
+  border: 1px solid #fde047;
+  min-width: 0;
+}
+
+.service-monitor-type-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #854d0e;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.service-monitor-head-row .service-monitor-pill--definition {
+  flex: 0 1 auto;
+  max-width: 58%;
+  margin-left: auto;
+}
+
 .service-monitor-pill-row--bottom {
   margin-top: 4px;
 }
@@ -2132,9 +2177,9 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .service-monitor-pill--definition {
-  color: #1e3a5f;
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  color: #854d0e;
+  background: #fef08a;
+  border-color: #facc15;
 }
 
 .service-monitor-pill--intern {
@@ -2149,39 +2194,51 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   border-color: #93c5fd;
 }
 
-.service-monitor-card.service-monitor-card--up {
-  background: #f0fdf4 !important;
-  border-color: #86efac !important;
+.service-monitor-list article.host-item.service-monitor-card--up,
+.hosts-column .service-monitor-list article.host-item.service-monitor-card--up {
+  background: #fffbeb !important;
+  border-color: #fde047 !important;
+  opacity: 1 !important;
 }
 
-.service-monitor-card.service-monitor-card--down {
+.service-monitor-list article.host-item.service-monitor-card--down,
+.hosts-column .service-monitor-list article.host-item.service-monitor-card--down {
   background: #fef2f2 !important;
   border-color: #fca5a5 !important;
+  opacity: 1 !important;
 }
 
-.service-monitor-card.service-monitor-card--warn {
+.service-monitor-list article.host-item.service-monitor-card--warn,
+.hosts-column .service-monitor-list article.host-item.service-monitor-card--warn {
   background: #fffbeb !important;
   border-color: #fcd34d !important;
+  opacity: 1 !important;
 }
 
-.service-monitor-card.service-monitor-card--unknown {
+.service-monitor-list article.host-item.service-monitor-card--unknown,
+.hosts-column .service-monitor-list article.host-item.service-monitor-card--unknown {
   background: #f8fafc !important;
   border-color: #cbd5e1 !important;
+  opacity: 1 !important;
 }
 
-.service-monitor-card.selected.service-monitor-card--up {
-  box-shadow: inset 0 0 0 1px #4ade80, var(--dr-card-shadow-hover) !important;
+.service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--up,
+.hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--up {
+  box-shadow: inset 0 0 0 1px #facc15, var(--dr-card-shadow-hover) !important;
 }
 
-.service-monitor-card.selected.service-monitor-card--down {
+.service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--down,
+.hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--down {
   box-shadow: inset 0 0 0 1px #f87171, var(--dr-card-shadow-hover) !important;
 }
 
-.service-monitor-card.selected.service-monitor-card--warn {
+.service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--warn,
+.hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--warn {
   box-shadow: inset 0 0 0 1px #fbbf24, var(--dr-card-shadow-hover) !important;
 }
 
-.service-monitor-card.selected.service-monitor-card--unknown {
+.service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--unknown,
+.hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--unknown {
   box-shadow: inset 0 0 0 1px #93c5fd, var(--dr-card-shadow-hover) !important;
 }
 
@@ -2251,10 +2308,19 @@ body[data-theme="dark"] .service-monitor-filter-select {
   color: #e2e8f0;
 }
 
+body[data-theme="dark"] .service-monitor-head-row {
+  background: #713f12;
+  border-color: #a16207;
+}
+
+body[data-theme="dark"] .service-monitor-type-label {
+  color: #fef08a;
+}
+
 body[data-theme="dark"] .service-monitor-pill--definition {
-  color: #bfdbfe;
-  background: #1e3a5f;
-  border-color: #334155;
+  color: #fef9c3;
+  background: #854d0e;
+  border-color: #ca8a04;
 }
 
 body[data-theme="dark"] .service-monitor-pill--intern {
@@ -2269,22 +2335,26 @@ body[data-theme="dark"] .service-monitor-pill--extern {
   border-color: #334155;
 }
 
-body[data-theme="dark"] .service-monitor-card.service-monitor-card--up {
-  background: #14532d !important;
-  border-color: #166534 !important;
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--up,
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--up {
+  background: #713f12 !important;
+  border-color: #a16207 !important;
 }
 
-body[data-theme="dark"] .service-monitor-card.service-monitor-card--down {
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--down,
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--down {
   background: #7f1d1d !important;
   border-color: #991b1b !important;
 }
 
-body[data-theme="dark"] .service-monitor-card.service-monitor-card--warn {
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--warn,
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--warn {
   background: #78350f !important;
   border-color: #92400e !important;
 }
 
-body[data-theme="dark"] .service-monitor-card.service-monitor-card--unknown {
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--unknown,
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--unknown {
   background: #1e293b !important;
   border-color: #334155 !important;
 }
