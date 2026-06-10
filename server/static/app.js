@@ -21319,6 +21319,7 @@ function setSidebarMode(mode) {
   const servicesButton = document.getElementById("sidebarModeServicesButton");
   const addButton = document.getElementById("addExternalMonitorButton");
   const manageDefinitionsButton = document.getElementById("manageServiceDefinitionsButton");
+  const headerActions = document.getElementById("sidebarHeaderActions");
   if (hostsPanel) {
     hostsPanel.classList.toggle("hidden", nextMode !== "hosts");
   }
@@ -21339,6 +21340,9 @@ function setSidebarMode(mode) {
   }
   if (manageDefinitionsButton) {
     manageDefinitionsButton.classList.toggle("hidden", !showServiceAdmin);
+  }
+  if (headerActions) {
+    headerActions.classList.toggle("hidden", !showServiceAdmin);
   }
 }
 
