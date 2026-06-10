@@ -2127,8 +2127,8 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 6px;
+  margin-bottom: 3px;
   padding: 0;
   min-width: 0;
 }
@@ -2154,14 +2154,14 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .service-monitor-pill-row--bottom {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .service-monitor-pill {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 999px;
   border: 1px solid #e2e8f0;
   background: #fff;
@@ -2258,7 +2258,7 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 
 .service-monitor-list {
   display: grid;
-  gap: var(--space-2);
+  gap: 6px;
 }
 
 .service-monitor-list article {
@@ -2266,8 +2266,40 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .service-monitor-list article.host-item {
-  padding: 10px 12px !important;
+  padding: 7px 10px !important;
   cursor: pointer;
+}
+
+.service-monitor-card .host-card-main {
+  gap: 3px;
+}
+
+.service-monitor-card .host-designation-row {
+  gap: 6px;
+}
+
+.service-monitor-card .host-detail-line {
+  font-size: 10.5px;
+  line-height: 1.15;
+  padding-bottom: 0;
+}
+
+.service-monitor-card .host-detail-clock {
+  font-size: 8px;
+}
+
+.service-monitor-card .host-tech-line {
+  gap: 8px;
+}
+
+.service-monitor-card .host-tech-row {
+  gap: 4px;
+}
+
+.service-monitor-card .host-tech-row--host .host-meta-v,
+.service-monitor-card .host-tech-row--ip .host-meta-v {
+  font-size: 9.5px !important;
+  line-height: 1.15;
 }
 
 .service-monitor-type-line {
@@ -2283,12 +2315,13 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .service-monitor-cert {
-  margin-top: 4px;
-  font-size: 9px;
-  padding: 2px 6px;
+  margin-top: 2px;
+  font-size: 8px;
+  padding: 1px 5px;
   border-radius: 4px;
   display: inline-block;
   font-weight: 600;
+  line-height: 1.2;
 }
 
 .service-monitor-cert--ok { background: #f0fdf4; color: #166534; }
@@ -2439,11 +2472,11 @@ body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.se
 
 .service-monitor-linked-host {
   display: grid;
-  gap: 3px;
+  gap: 1px;
   width: 100%;
-  margin-top: 4px;
-  padding: 5px 6px;
-  border-radius: 6px;
+  margin-top: 2px;
+  padding: 3px 5px;
+  border-radius: 5px;
   border: 1px solid #e8f0fe;
   background: #f8fbff;
   color: #1e3a5f;
@@ -2475,11 +2508,11 @@ body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.se
 
 .service-monitor-linked-host-meta {
   display: block;
-  padding-left: 13px;
-  font-size: 8px;
+  padding-left: 12px;
+  font-size: 7.5px;
   font-weight: 600;
   color: #64748b;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .service-monitor-linked-host-alerts {
