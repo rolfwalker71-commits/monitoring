@@ -491,8 +491,13 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   flex-shrink: 0;
 }
 
-.host-list article.host-item .host-card-main {
+.host-list article.host-item .host-customer-title-line {
   padding-right: 50px;
+}
+
+.host-list article.host-item .host-designation-row,
+.host-list article.host-item .host-tech-line {
+  width: 100%;
 }
 
 .host-list article.host-item .host-detail-line {
