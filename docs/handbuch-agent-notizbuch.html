@@ -313,10 +313,37 @@ sudo tail -n 30 /var/log/monitoring-agent.log</pre>
       <h2>4 · Harvest-User unter Linux (HANA)</h2>
       <p>Auf Linux heisst der Harvest-User <code>HARVEST</code> – ein <strong>HANA-Datenbankbenutzer</strong> (nicht SQL Server). Der Agent liest damit AddOns und die Tenant-Datenbankliste per <code>hdbsql</code>.</p>
 
-      <h3>SQL-Skript (mitgeliefert)</h3>
-      <p>Pfad auf dem HANA-Host nach Agent-Installation:</p>
-      <pre>/opt/monitoring-agent/setup_harvest_hana_user.sql</pre>
-      <p>Das Skript legt User <code>HARVEST</code> an und vergibt <code>SELECT</code> auf die Schemas <code>SLDDATA</code> und <code>SBOCOMMON</code> (Tabellen Extensions, SARI, COMPANYDBS).</p>
+      <h3>SQL-Skript (im Tenant ausführen)</h3>
+      <p>Legt User <code>HARVEST</code> an und vergibt <code>SELECT</code> auf <code>SLDDATA</code> und <code>SBOCOMMON</code> (Extensions, SARI, COMPANYDBS). Liegt zusätzlich auf dem Host unter <code>/opt/monitoring-agent/setup_harvest_hana_user.sql</code>.</p>
+      <pre>-- setup_harvest_hana_user.sql
+-- Monitoring-Agent: read-only HANA user for AddOns + COMPANYDBS queries.
+--
+-- Where to run:
+--   SAP HANA Studio / SAP HANA Database Explorer → SQL Console on the
+--   TENANT database that holds SAP Business One data (not SYSTEMDB).
+--
+-- Multitenant: repeat in each tenant (e.g. BUP, PRD, …).
+--
+-- Password must match HANA_ADDONS_PASSWORD in /etc/monitoring-agent/agent.conf
+-- (default from install_agent.sh: 0djKUt&amp;xbLK0AYr).
+
+-- Optional re-run cleanup:
+-- DROP USER HARVEST;
+
+CREATE USER HARVEST PASSWORD "0djKUt&amp;xbLK0AYr" NO FORCE_FIRST_PASSWORD_CHANGE;
+
+-- Agent queries (collect_and_send.sh):
+--   SLDDATA.EXTENSIONS + SLDDATA.EXTENSIONDEPLOYMENTS  (Lightweight AddOns)
+--   SBOCOMMON.SARI                                     (Legacy AddOns)
+--   SLDDATA.COMPANYDBS                                 (Tenant DB list)
+
+GRANT SELECT ON SCHEMA SLDDATA TO HARVEST;
+GRANT SELECT ON SCHEMA SBOCOMMON TO HARVEST;
+
+-- Quick verify (run as HARVEST in the same tenant):
+-- SELECT COUNT(*) FROM "SLDDATA"."COMPANYDBS";
+-- SELECT COUNT(*) FROM "SBOCOMMON"."SARI";</pre>
+      <p>Passwort im Skript muss mit <code>HANA_ADDONS_PASSWORD</code> in <code>agent.conf</code> übereinstimmen (Standard wie bei Windows-Harvest).</p>
 
       <h3>In SAP HANA Studio einrichten</h3>
       <ol>
@@ -325,8 +352,7 @@ sudo tail -n 30 /var/log/monitoring-agent.log</pre>
         <li>Zum <strong>Tenant</strong> wechseln, in dem die B1-Daten liegen – <em>nicht</em> SYSTEMDB.<br>
             Bei Multitenant: pro Tenant wiederholen (z.&nbsp;B. <code>BUP</code>, <code>PRD</code>).</li>
         <li><strong>SQL Console</strong> öffnen (Rechtsklick auf Tenant → Open SQL Console).</li>
-        <li>Skript laden: <code>File → Open</code> → <code>/opt/monitoring-agent/setup_harvest_hana_user.sql</code></li>
-        <li>Passwort im Skript prüfen – muss mit <code>HANA_ADDONS_PASSWORD</code> in <code>agent.conf</code> übereinstimmen (Standard wie bei Windows-Harvest).</li>
+        <li>Skript oben einfügen <em>oder</em> laden: <code>File → Open</code> → <code>/opt/monitoring-agent/setup_harvest_hana_user.sql</code></li>
         <li>Skript ausführen (<kbd>F8</kbd> / Execute).</li>
         <li>Optional verifizieren (in neuer Console als <code>HARVEST</code>):<br>
             <code>SELECT COUNT(*) FROM "SLDDATA"."COMPANYDBS";</code></li>
