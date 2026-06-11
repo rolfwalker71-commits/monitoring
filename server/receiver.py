@@ -19639,6 +19639,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         doc_aliases = {
             "/docs/onboarding-handbuch": DOCS_DIR / "onboarding-kollegen-handbuch.html",
             "/docs/onboarding-kollegen-handbuch": DOCS_DIR / "onboarding-kollegen-handbuch.html",
+            "/docs/handbuch-agent-notizbuch": DOCS_DIR / "handbuch-agent-notizbuch.html",
+            "/docs/agent-notizbuch": DOCS_DIR / "handbuch-agent-notizbuch.html",
             "/docs/agent-deployment-guide": REPO_ROOT / "agent-deployment-guide.html",
         }
         if normalized in doc_aliases:

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notizbuch – Agents, Harvest &amp; SQL-Datenbankgrößen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Patrick+Hand&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #fffef8;
+      --paper-line: rgba(120, 150, 190, 0.22);
+      --margin-red: #e8a0a8;
+      --ink: #2b3442;
+      --muted: #5c6675;
+      --accent: #2f5f9e;
+      --sticky: #fff9c4;
+      --sticky-border: #e6d56a;
+      --tape: rgba(255, 255, 255, 0.55);
+      --mono: "IBM Plex Mono", "Consolas", monospace;
+      --hand: "Patrick Hand", "Segoe Print", cursive;
+      --title: "Caveat", "Segoe Print", cursive;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--hand);
+      font-size: 18px;
+      line-height: 1.55;
+      background:
+        radial-gradient(circle at 18px 28px, rgba(0,0,0,0.045) 2px, transparent 2.5px) 0 0 / 34px 34px,
+        repeating-linear-gradient(
+          to bottom,
+          transparent 0,
+          transparent 31px,
+          var(--paper-line) 31px,
+          var(--paper-line) 32px
+        ),
+        linear-gradient(90deg, transparent 52px, var(--margin-red) 52px, var(--margin-red) 54px, transparent 54px),
+        var(--paper);
+    }
+    .notebook {
+      width: min(860px, calc(100% - 24px));
+      margin: 28px auto 64px;
+      padding: 8px 24px 48px 68px;
+    }
+    .cover {
+      min-height: 52vh;
+      display: grid;
+      align-content: center;
+      gap: 18px;
+      padding: 36px 0 48px;
+    }
+    .cover .label {
+      font-family: var(--title);
+      font-size: 22px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+    h1, h2, h3 {
+      font-family: var(--title);
+      font-weight: 700;
+      line-height: 1.15;
+      margin: 0;
+    }
+    h1 { font-size: clamp(42px, 8vw, 58px); color: var(--accent); }
+    h2 {
+      font-size: 32px;
+      margin: 42px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid rgba(47, 95, 158, 0.18);
+    }
+    h3 {
+      font-size: 24px;
+      margin: 22px 0 8px;
+      color: #3d4f66;
+    }
+    p, li { margin: 0; color: var(--ink); }
+    p + p, ul + p, p + ul, ol + p { margin-top: 10px; }
+    ul, ol { padding-left: 22px; display: grid; gap: 6px; }
+    li::marker { color: var(--accent); }
+    .meta-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px 28px;
+      font-size: 17px;
+      color: var(--muted);
+    }
+    .meta-line span { border-bottom: 1px dotted #9aa7b8; min-width: 120px; }
+    .sticky {
+      position: relative;
+      margin: 18px 0;
+      padding: 14px 16px 14px 18px;
+      background: var(--sticky);
+      border: 1px solid var(--sticky-border);
+      box-shadow: 2px 3px 0 rgba(0,0,0,0.06);
+      transform: rotate(-0.4deg);
+    }
+    .sticky::before {
+      content: "";
+      position: absolute;
+      top: -8px;
+      left: 18px;
+      width: 72px;
+      height: 18px;
+      background: var(--tape);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .sticky strong { font-family: var(--title); font-size: 22px; }
+    pre {
+      margin: 10px 0 0;
+      padding: 12px 14px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(47, 95, 158, 0.16);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+    code {
+      font-family: var(--mono);
+      font-size: 0.88em;
+      background: rgba(255,255,255,0.65);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 16px;
+      background: rgba(255,255,255,0.55);
+    }
+    th, td {
+      border: 1px solid rgba(47, 95, 158, 0.18);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: rgba(47, 95, 158, 0.08); font-family: var(--title); font-size: 19px; }
+    .checklist { list-style: none; padding: 0; }
+    .checklist li::before { content: "☐ "; color: var(--accent); font-weight: 700; }
+    .page-break { height: 28px; }
+    .toc a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(47, 95, 158, 0.35);
+    }
+    .toc a:hover { border-bottom-style: solid; }
+    .footer-note {
+      margin-top: 48px;
+      padding-top: 14px;
+      border-top: 1px dashed rgba(47, 95, 158, 0.25);
+      font-size: 15px;
+      color: var(--muted);
+    }
+    @media print {
+      body { background: #fff; }
+      .notebook { width: 100%; margin: 0; padding-left: 58px; }
+      .sticky { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <article class="notebook">
+    <header class="cover">
+      <div class="label">Notizbuch · Technischer Betrieb</div>
+      <h1>Agents installieren,<br>Harvest einrichten,<br>SQL-Größen reparieren</h1>
+      <p>Kurzanleitung für Windows- und Linux-Hosts im SYSTEM Infoboard. Kein Ersatz für die ausführliche Doku – aber alles Wichtige auf wenigen Seiten.</p>
+      <div class="meta-line">
+        <span>Datum: _______________</span>
+        <span>Bearbeitet von: _______________</span>
+      </div>
+    </header>
+
+    <section class="toc">
+      <h2>Inhalt</h2>
+      <ol>
+        <li><a href="#windows">Windows-Agent installieren</a></li>
+        <li><a href="#linux">Linux-Agent installieren</a></li>
+        <li><a href="#harvest-windows">Harvest-User unter Windows (SQL Server)</a></li>
+        <li><a href="#harvest-linux">Harvest-User unter Linux (HANA)</a></li>
+        <li><a href="#sql-groessen">SQL-Datenbankgrößen fehlen im Infoboard</a></li>
+        <li><a href="#checkliste">Abschluss-Checkliste</a></li>
+      </ol>
+    </section>
+
+    <div class="sticky">
+      <strong>Merken:</strong> Infoboard-URL und Updates kommen vom gleichen Server.<br>
+      Basis: <code>https://infoboard.ang-schweiz.ch</code> · Skripte: <code>{SERVER_URL}/updates</code>
+    </div>
+
+    <section id="windows">
+      <h2>1 · Windows-Agent installieren</h2>
+      <p>PowerShell <strong>als Administrator</strong> öffnen. Der Agent landet unter <code>C:\ProgramData\monitoring-agent</code> und meldet sich per geplantem Task alle 15&nbsp;Minuten (Standard).</p>
+
+      <h3>Neuinstallation</h3>
+      <pre>$tmp = "$env:TEMP\install_agent.ps1"
+Invoke-WebRequest -Uri 'https://infoboard.ang-schweiz.ch/updates/client/windows/install_agent.ps1' -UseBasicParsing -OutFile $tmp
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmp `
+  -ServerUrl 'https://infoboard.ang-schweiz.ch' `
+  -ApiKey 'IHR_API_KEY' `
+  -AgentId 'HOST01.domain.local' `
+  -DisplayName 'Kundenname Server' `
+  -IntervalMinutes 15 `
+  -UpdateHours 1</pre>
+
+      <p>Falls <code>Invoke-WebRequest</code> wegen TLS/Revocation scheitert, <code>curl.exe -fsSL --ssl-no-revoke …</code> nutzen (siehe README im Repo).</p>
+
+      <h3>Wichtige Pfade</h3>
+      <table>
+        <thead><tr><th>Was</th><th>Wo</th></tr></thead>
+        <tbody>
+          <tr><td>Konfiguration</td><td><code>C:\ProgramData\monitoring-agent\agent.conf</code></td></tr>
+          <tr><td>Collect-Skript</td><td><code>collect_and_send.ps1</code></td></tr>
+          <tr><td>Collect-Task</td><td><code>monitoring-agent-collect</code> (läuft als SYSTEM)</td></tr>
+          <tr><td>Update-Task</td><td><code>monitoring-agent-update</code></td></tr>
+          <tr><td>Log</td><td><code>monitoring-agent.log</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>Test nach der Installation</h3>
+      <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  C:\ProgramData\monitoring-agent\collect_and_send.ps1 -NoJitter</pre>
+      <p>Im Log: HTTP <strong>202</strong> oder <code>Payload queued</code>. Danach Host-Karte im Infoboard prüfen.</p>
+
+      <h3>Reparatur / Skripte nachziehen</h3>
+      <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  C:\ProgramData\monitoring-agent\bootstrap_agent.ps1 `
+  -ServerUrl 'https://infoboard.ang-schweiz.ch'</pre>
+    </section>
+
+    <section id="linux">
+      <h2>2 · Linux-Agent installieren</h2>
+      <p>Installation per curl als <strong>root</strong> (sudo). Skripte unter <code>/opt/monitoring-agent</code>, Konfiguration unter <code>/etc/monitoring-agent/agent.conf</code>.</p>
+
+      <h3>Neuinstallation</h3>
+      <pre>curl -fsSL 'https://infoboard.ang-schweiz.ch/updates/client/linux/install_agent.sh' | sudo bash -s -- \
+  --server-url 'https://infoboard.ang-schweiz.ch' \
+  --api-key 'IHR_API_KEY' \
+  --agent-id 'host.domain.local' \
+  --display-name 'Kundenname Server' \
+  --interval-minutes 15 \
+  --update-hours 1</pre>
+
+      <h3>Wichtige Pfade</h3>
+      <table>
+        <thead><tr><th>Was</th><th>Wo</th></tr></thead>
+        <tbody>
+          <tr><td>Skripte</td><td><code>/opt/monitoring-agent/</code></td></tr>
+          <tr><td>Konfiguration</td><td><code>/etc/monitoring-agent/agent.conf</code></td></tr>
+          <tr><td>Cron</td><td><code>/etc/cron.d/monitoring-agent</code></td></tr>
+          <tr><td>Log</td><td><code>/var/log/monitoring-agent.log</code></td></tr>
+          <tr><td>Queue</td><td><code>/var/lib/monitoring-agent/queue/</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>Test nach der Installation</h3>
+      <pre>sudo /opt/monitoring-agent/collect_and_send.sh --no-jitter
+sudo tail -n 30 /var/log/monitoring-agent.log</pre>
+
+      <div class="sticky">
+        <strong>Wichtig:</strong> HANA-Abfragen (<code>hdbsql</code>) gibt es <em>nur</em> auf Linux.<br>
+        Windows liefert SAP B1 / SQL Server – kein HANA-Memory über den Windows-Agent.
+      </div>
+    </section>
+
+    <section id="harvest-windows">
+      <h2>3 · Harvest-User unter Windows (SQL Server)</h2>
+      <p>Für <strong>SAP Business One auf SQL Server</strong> braucht der Agent einen SQL-Login <code>harvest</code>. Damit werden u.&nbsp;a. gelesen:</p>
+      <ul>
+        <li>Datenbankgrößen und Extensions (über Harvest-Verbindung)</li>
+        <li>SARI-AddOns und SAP-Tabellen-Scan (<code>ENABLE_SAP_SCAN=1</code>)</li>
+      </ul>
+
+      <h3>Automatisches Setup (empfohlen)</h3>
+      <p>Als Administrator auf dem SQL-Host:</p>
+      <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  C:\ProgramData\monitoring-agent\setup_harvest_sql_user.ps1</pre>
+      <p>Das Skript versucht:</p>
+      <ol>
+        <li>SQL-Instanz zu finden (<code>localhost</code>, Named Instance, …)</li>
+        <li>Login <code>harvest</code> anzulegen</li>
+        <li>Server-Rechte (<code>VIEW SERVER STATE</code>, …) und <code>db_datareader</code> auf User-DBs zu vergeben</li>
+        <li><code>HARVEST_SQL_*</code> und <code>ENABLE_SAP_SCAN=1</code> in <code>agent.conf</code> zu schreiben</li>
+      </ol>
+
+      <h3>agent.conf – relevante Keys</h3>
+      <table>
+        <thead><tr><th>Key</th><th>Beispiel / Hinweis</th></tr></thead>
+        <tbody>
+          <tr><td><code>HARVEST_SQL_SERVER</code></td><td><code>localhost</code> oder <code>.\SQLEXPRESS</code></td></tr>
+          <tr><td><code>HARVEST_SQL_USER</code></td><td><code>harvest</code></td></tr>
+          <tr><td><code>HARVEST_SQL_PASSWORD</code></td><td>Projektpasswort (Standard im Setup-Skript)</td></tr>
+          <tr><td><code>HARVEST_SETUP_SQL_ADMIN_USER</code></td><td>Optional: sa-ähnlicher Admin, falls Windows-Auth für Setup nicht reicht</td></tr>
+          <tr><td><code>HARVEST_SETUP_SQL_ADMIN_PASSWORD</code></td><td>Passwort zum Admin-Login</td></tr>
+          <tr><td><code>ENABLE_SAP_SCAN</code></td><td><code>1</code> für Tabellen-Scan</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Manuell prüfen</h3>
+      <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  C:\ProgramData\monitoring-agent\collect_and_send.ps1 -NoJitter</pre>
+      <p>Im Report-JSON: Abschnitt <code>harvest_status</code> – dort stehen <code>can_connect</code>, <code>databases_accessible</code> und Fehlertexte.</p>
+    </section>
+
+    <section id="harvest-linux">
+      <h2>4 · Harvest-User unter Linux (HANA)</h2>
+      <p>Auf Linux heisst der Harvest-User <code>HARVEST</code> – ein <strong>HANA-Datenbankbenutzer</strong> (nicht SQL Server). Der Agent liest damit AddOns und die Tenant-Datenbankliste per <code>hdbsql</code>.</p>
+
+      <h3>SQL-Skript (mitgeliefert)</h3>
+      <p>Pfad auf dem HANA-Host nach Agent-Installation:</p>
+      <pre>/opt/monitoring-agent/setup_harvest_hana_user.sql</pre>
+      <p>Das Skript legt User <code>HARVEST</code> an und vergibt <code>SELECT</code> auf die Schemas <code>SLDDATA</code> und <code>SBOCOMMON</code> (Tabellen Extensions, SARI, COMPANYDBS).</p>
+
+      <h3>In SAP HANA Studio einrichten</h3>
+      <ol>
+        <li><strong>HANA Studio</strong> (oder Database Explorer) öffnen und System hinzufügen.</li>
+        <li>Als Admin verbinden (z.&nbsp;B. <code>SYSTEM</code> oder gleichberechtigter User).</li>
+        <li>Zum <strong>Tenant</strong> wechseln, in dem die B1-Daten liegen – <em>nicht</em> SYSTEMDB.<br>
+            Bei Multitenant: pro Tenant wiederholen (z.&nbsp;B. <code>BUP</code>, <code>PRD</code>).</li>
+        <li><strong>SQL Console</strong> öffnen (Rechtsklick auf Tenant → Open SQL Console).</li>
+        <li>Skript laden: <code>File → Open</code> → <code>/opt/monitoring-agent/setup_harvest_hana_user.sql</code></li>
+        <li>Passwort im Skript prüfen – muss mit <code>HANA_ADDONS_PASSWORD</code> in <code>agent.conf</code> übereinstimmen (Standard wie bei Windows-Harvest).</li>
+        <li>Skript ausführen (<kbd>F8</kbd> / Execute).</li>
+        <li>Optional verifizieren (in neuer Console als <code>HARVEST</code>):<br>
+            <code>SELECT COUNT(*) FROM "SLDDATA"."COMPANYDBS";</code></li>
+      </ol>
+
+      <div class="sticky">
+        <strong>Multitenant:</strong> User und Grants in <em>jedem</em> Tenant setzen, aus dem der Agent Daten lesen soll.<br>
+        Der Agent erkennt Tenants automatisch unter <code>/usr/sap/&lt;SID&gt;/SYS/global/hdb/custom/config/tenants/</code>.
+      </div>
+
+      <h3>Alternative: Skript per hdbsql (ohne Studio)</h3>
+      <pre># Beispiel SID BUP, Tenant BUP, als &lt;sid&gt;adm und SQL-Admin:
+su - bupadm -c "hdbsql -d BUP -u SYSTEM -p 'ADMIN_PASS' \
+  -I /opt/monitoring-agent/setup_harvest_hana_user.sql"
+
+# Verbindung als HARVEST testen:
+su - bupadm -c "hdbsql -d BUP -u HARVEST -p 'PASS' \
+  \"SELECT COUNT(*) FROM \\\"SLDDATA\\\".\\\"COMPANYDBS\\\"\""</pre>
+
+      <h3>agent.conf – HANA-Keys</h3>
+      <table>
+        <thead><tr><th>Key</th><th>Bedeutung</th></tr></thead>
+        <tbody>
+          <tr><td><code>HANA_SID</code></td><td>System-ID, z.&nbsp;B. <code>BUP</code> (<code>ls /hana/shared</code>)</td></tr>
+          <tr><td><code>HANA_ADDONS_USER</code></td><td>Standard: <code>HARVEST</code></td></tr>
+          <tr><td><code>HANA_ADDONS_PASSWORD</code></td><td>Passwort aus dem SQL-Skript</td></tr>
+          <tr><td><code>HANA_ADDONS_HOST</code></td><td>Meist <code>127.0.0.1</code></td></tr>
+          <tr><td><code>HANA_ADDONS_PORT</code></td><td>SQL-Port, z.&nbsp;B. <code>30015</code> (3&lt;Inst&gt;15)</td></tr>
+          <tr><td><code>HANA_ADDONS_ENABLED</code></td><td><code>1</code> (Standard bei Install)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Nach dem Setup prüfen</h3>
+      <ol>
+        <li><code>HANA_SID</code> und Passwort in <code>/etc/monitoring-agent/agent.conf</code> setzen (falls abweichend)</li>
+        <li><code>sudo /opt/monitoring-agent/collect_and_send.sh --no-jitter</code></li>
+        <li>Im Infoboard: HANA-AddOns und Datenbankliste im Report sichtbar?</li>
+      </ol>
+
+      <div class="sticky">
+        <strong>Symptom HANA leer, Rest OK?</strong><br>
+        → Falscher Tenant, SID/Port, oder HARVEST ohne Grants auf SLDDATA/SBOCOMMON.<br>
+        Log: <code>/var/log/monitoring-agent.log</code>
+      </div>
+    </section>
+
+    <section id="sql-groessen">
+      <h2>5 · SQL-Datenbankgrößen fehlen im Infoboard</h2>
+      <p><strong>Gilt für Windows / SQL Server.</strong> Typisches Bild: Instanz und Version sind sichtbar, aber die Tabelle mit DB-Größen ist leer.</p>
+
+      <h3>Warum zwei Kontexte?</h3>
+      <table>
+        <thead><tr><th>Kontext</th><th>Wofür</th></tr></thead>
+        <tbody>
+          <tr><td><code>harvest</code> (SQL-Login)</td><td>SAP B1 Harvest-Daten, Extensions, Tabellen-Scan</td></tr>
+          <tr><td><code>NT AUTHORITY\SYSTEM</code></td><td>Größenabfrage über <code>sys.master_files</code> – der Collect-Task läuft als SYSTEM!</td></tr>
+        </tbody>
+      </table>
+      <p>Harvest allein reicht für die Größenanzeige oft <em>nicht</em>. SYSTEM braucht Server-Rechte.</p>
+
+      <h3>Symptome</h3>
+      <ul>
+        <li>Einzelmeldung → <strong>Datenbanken</strong>: keine MB/GB-Zeilen</li>
+        <li>Diagnose zeigt z.&nbsp;B. <code>SYSTEM_USER: NT AUTHORITY\SYSTEM</code> (DE: <code>NT-AUTORITÄT\SYSTEM</code>)</li>
+        <li>Abfrage auf <code>sys.master_files</code> liefert nichts oder Permission denied</li>
+      </ul>
+
+      <h3>Schritt 1 – Diagnose im Infoboard</h3>
+      <p>Host öffnen → Report → Karte <strong>Datenbanken</strong> aufklappen → Bereich <strong>SQL Authentifizierung (für Diag)</strong>. Dort notieren:</p>
+      <ul>
+        <li><code>SYSTEM_USER</code></li>
+        <li><code>ORIGINAL_LOGIN</code></li>
+        <li><code>SUSER_SNAME</code></li>
+      </ul>
+      <p>Das UI schlägt ein Grant-Skript vor – Werte exakt aus der Diagnose übernehmen!</p>
+
+      <h3>Schritt 2 – GRANT in SQL Server (als Sysadmin)</h3>
+      <pre>-- Login anlegen (Name aus SYSTEM_USER – ggf. NT-AUTORITÄT\SYSTEM)
+IF SUSER_ID(N'NT-AUTORITÄT\SYSTEM') IS NULL
+    CREATE LOGIN [NT-AUTORITÄT\SYSTEM] FROM WINDOWS;
+
+-- Falls ORIGINAL_LOGIN ein Maschinenkonto ist (z. B. DOMÄNE\HOST$):
+-- IF SUSER_ID(N'DOMÄNE\HOST$') IS NULL
+--     CREATE LOGIN [DOMÄNE\HOST$] FROM WINDOWS;
+
+GRANT VIEW SERVER STATE TO [NT-AUTORITÄT\SYSTEM];
+GRANT VIEW ANY DEFINITION TO [NT-AUTORITÄT\SYSTEM];
+
+-- Optional für Maschinenkonto:
+-- GRANT VIEW SERVER STATE TO [DOMÄNE\HOST$];
+-- GRANT VIEW ANY DEFINITION TO [DOMÄNE\HOST$];</pre>
+
+      <h3>Schritt 3 – Verifizieren</h3>
+      <ol>
+        <li><code>collect_and_send.ps1 -NoJitter</code> ausführen</li>
+        <li>Neue Meldung im Infoboard: DB-Tabelle mit Größen</li>
+      </ol>
+
+      <h3>Wenn es danach noch leer ist</h3>
+      <ul>
+        <li><code>setup_harvest_sql_user.ps1</code> erneut – Harvest-Verbindung prüfen</li>
+        <li><code>HARVEST_SQL_SERVER</code>: richtige Instanz? (<code>.\SQLEXPRESS</code>, Named Instance, SQL Browser)</li>
+        <li>Firewall / TCP vs. Named Pipes</li>
+        <li>Collect-Log: <code>C:\ProgramData\monitoring-agent\monitoring-agent.log</code></li>
+      </ul>
+    </section>
+
+    <section id="checkliste">
+      <h2>6 · Abschluss-Checkliste</h2>
+      <ul class="checklist">
+        <li>Agent installiert (Windows oder Linux)</li>
+        <li>Manueller Collect mit <code>-NoJitter</code> / <code>--no-jitter</code> → HTTP 202</li>
+        <li>Host erscheint im Infoboard, letzte Meldung plausibel</li>
+        <li>Windows: <code>setup_harvest_sql_user.ps1</code> gelaufen, <code>harvest_status.can_connect=true</code></li>
+        <li>Windows + SQL: GRANT an SYSTEM (Kap. 5), DB-Größen sichtbar</li>
+        <li>Linux + HANA: <code>setup_harvest_hana_user.sql</code> im Tenant ausführen, <code>HANA_SID</code> + Passwort in <code>agent.conf</code></li>
+        <li>Geplanter Task / Cron aktiv (nicht nur manueller Test)</li>
+      </ul>
+    </section>
+
+    <p class="footer-note">
+      Stand: Repository <code>docs/handbuch-agent-notizbuch.html</code> ·
+      Ausführliche Doku: <a href="/docs/onboarding-kollegen-handbuch">Onboarding-Handbuch</a>,
+      <a href="/docs/agent-deployment-guide">Agent Deployment Guide</a> ·
+      Bei Abweichungen gilt der deployed Code auf dem Infoboard-Server.
+    </p>
+  </article>
+</body>
+</html>

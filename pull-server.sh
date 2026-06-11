@@ -100,6 +100,7 @@ client/windows/setup_harvest_sql_user.ps1
 client/windows/probe_sap_services.ps1
 client/linux/collect_and_send.sh
 client/linux/self_update.sh
+client/linux/setup_harvest_hana_user.sql
 "
 
 # Parallele downloads: bis zu 4 gleichzeitig
@@ -127,6 +128,7 @@ cp -f "$TARGET_DIR/client/windows/setup_harvest_sql_user.ps1" "$TARGET_DIR/updat
 cp -f "$TARGET_DIR/client/windows/probe_sap_services.ps1" "$TARGET_DIR/updates/client/windows/probe_sap_services.ps1"
 cp -f "$TARGET_DIR/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/collect_and_send.sh"
 cp -f "$TARGET_DIR/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
+cp -f "$TARGET_DIR/client/linux/setup_harvest_hana_user.sql" "$TARGET_DIR/updates/client/linux/setup_harvest_hana_user.sql"
 echo "Update-Payloads gespiegelt ✓"
 
 echo "Installation erfolgreich abgeschlossen!"

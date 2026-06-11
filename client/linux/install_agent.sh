@@ -193,9 +193,11 @@ chmod 0750 "$AGENT_QUEUE_DIR"
 curl "${CURL_BASE_ARGS[@]}" "$COLLECT_SCRIPT_URL" -o "$INSTALL_DIR/collect_and_send.sh"
 curl "${CURL_BASE_ARGS[@]}" "$SELF_UPDATE_SCRIPT_URL" -o "$INSTALL_DIR/self_update.sh"
 curl "${CURL_BASE_ARGS[@]}" "$GUARDIAN_SCRIPT_URL" -o "$INSTALL_DIR/script_guardian.sh"
+curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/client/linux/setup_harvest_hana_user.sql" -o "$INSTALL_DIR/setup_harvest_hana_user.sql" 2>/dev/null || true
 chmod 0755 "$INSTALL_DIR/collect_and_send.sh"
 chmod 0755 "$INSTALL_DIR/self_update.sh"
 chmod 0755 "$INSTALL_DIR/script_guardian.sh"
+chmod 0644 "$INSTALL_DIR/setup_harvest_hana_user.sql" 2>/dev/null || true
 
 if ! curl "${CURL_BASE_ARGS[@]}" "$AGENT_VERSION_URL" -o "$INSTALL_DIR/AGENT_VERSION"; then
   if ! curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/BUILD_VERSION" -o "$INSTALL_DIR/AGENT_VERSION"; then

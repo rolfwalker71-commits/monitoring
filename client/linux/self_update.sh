@@ -400,6 +400,9 @@ if download_update_file "client/linux/monitor_probe.sh" "$tmp_dir/monitor_probe.
   && bash -n "$tmp_dir/monitor_probe.sh" 2>/dev/null; then
   install -m 0755 "$tmp_dir/monitor_probe.sh" "$INSTALL_DIR/monitor_probe.sh"
 fi
+if download_update_file "client/linux/setup_harvest_hana_user.sql" "$tmp_dir/setup_harvest_hana_user.sql"; then
+  install -m 0644 "$tmp_dir/setup_harvest_hana_user.sql" "$INSTALL_DIR/setup_harvest_hana_user.sql"
+fi
 
 ts="$(date +"%d.%m.%Y %H:%M" 2>/dev/null || true)"
 if [[ "$remote_version" == "$local_version" ]]; then
