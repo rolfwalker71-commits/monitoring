@@ -1110,10 +1110,10 @@ def _fetch_due_server_monitors(conn: sqlite3.Connection) -> list[dict[str, Any]]
     rows = conn.execute(
         _monitor_select_sql()
         + """
-        WHERE enabled = 1
-          AND probe_source = 'server'
-          AND (next_check_at_utc = '' OR next_check_at_utc <= ?)
-        ORDER BY next_check_at_utc ASC, id ASC
+        WHERE m.enabled = 1
+          AND m.probe_source = 'server'
+          AND (m.next_check_at_utc = '' OR m.next_check_at_utc <= ?)
+        ORDER BY m.next_check_at_utc ASC, m.id ASC
         LIMIT ?
         """,
         (now, EXTERNAL_MONITOR_WORKER_BATCH_LIMIT),
