@@ -13056,9 +13056,23 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 }
 
 .header-host-tools .host-search-box {
-  min-width: 240px;
-  max-width: 320px;
-  flex: 1 1 280px;
+  min-width: 150px;
+  max-width: 210px;
+  flex: 0 1 180px;
+}
+
+.header-host-tools .host-filter-control--compact select,
+.header-host-tools #hostEnvironmentFilterSelect {
+  min-width: 92px;
+}
+
+.header-host-tools #hostOsFilterSelect,
+.header-host-tools #hostCountryFilterSelect {
+  min-width: 118px;
+}
+
+.header-host-tools #hostSidebarInterestModeSelect {
+  min-width: 132px;
 }
 
 .header-host-tools .search-input {
@@ -13098,7 +13112,7 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 
 .header-host-tools .host-filter-control select {
   flex: 0 0 auto;
-  min-width: 156px;
+  min-width: 118px;
   font-size: 11px;
   padding: 4px 7px;
   border: 1px solid #c6d8ee;
@@ -13109,7 +13123,7 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 }
 
 .header-host-tools #hostSortSelect {
-  min-width: 188px;
+  min-width: 168px;
 }
 
 .header-host-tools .host-filter-control-icons {
@@ -13328,8 +13342,8 @@ body[data-theme="dark"] .header-stat-chip {
   }
 
   .header-host-tools .host-search-box {
-    min-width: 220px;
-    flex-basis: 240px;
+    min-width: 140px;
+    flex-basis: 160px;
   }
 }
 

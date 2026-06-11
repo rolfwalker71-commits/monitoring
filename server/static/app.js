@@ -474,6 +474,7 @@ const state = {
   hostSearchQuery: "",
   hostOsFilter: "all",
   hostCountryFilter: "all",
+  hostEnvironmentFilter: "all",
   hostSortMode: "customer_alpha",
   systemOverviewCountryFilter: "all",
   systemOverviewSearchQuery: "",
@@ -985,11 +986,13 @@ function loadHostFilterPreferences() {
   state.hostSearchQuery = "";
   state.hostOsFilter = "all";
   state.hostCountryFilter = "all";
+  state.hostEnvironmentFilter = "all";
   state.hostSortMode = "customer_alpha";
 
   const username = String(state.authUser || "").trim().toLowerCase();
   if (!username) {
     syncHostSortControl();
+    syncHostEnvironmentFilterControl();
     return;
   }
 
@@ -997,17 +1000,20 @@ function loadHostFilterPreferences() {
     const raw = window.localStorage.getItem(`${HOST_FILTERS_STORAGE_KEY_PREFIX}${username}`);
     if (!raw) {
       syncHostSortControl();
+      syncHostEnvironmentFilterControl();
       return;
     }
     const saved = JSON.parse(raw);
     if (saved.hostSearchQuery !== undefined) state.hostSearchQuery = String(saved.hostSearchQuery);
     if (saved.hostOsFilter !== undefined) state.hostOsFilter = String(saved.hostOsFilter);
     if (saved.hostCountryFilter !== undefined) state.hostCountryFilter = String(saved.hostCountryFilter);
+    if (saved.hostEnvironmentFilter !== undefined) state.hostEnvironmentFilter = normalizeHostEnvironmentFilter(saved.hostEnvironmentFilter);
     if (saved.hostSortMode !== undefined) state.hostSortMode = normalizeHostSortMode(saved.hostSortMode);
   } catch (_error) {
     // Ignore
   }
   syncHostSortControl();
+  syncHostEnvironmentFilterControl();
 }
 
 async function loadUserPreferences() {
@@ -1265,6 +1271,7 @@ function persistHostFilterPreferences() {
       hostSearchQuery: state.hostSearchQuery,
       hostOsFilter: state.hostOsFilter,
       hostCountryFilter: state.hostCountryFilter,
+      hostEnvironmentFilter: normalizeHostEnvironmentFilter(state.hostEnvironmentFilter),
       hostSortMode: normalizeHostSortMode(state.hostSortMode),
     }));
   } catch (_error) {
@@ -10318,8 +10325,21 @@ function normalizeHostCountryCode(host) {
   return asText(host?.country_code || "", "").trim().toUpperCase();
 }
 
+const HOST_ENVIRONMENT_FILTERS = new Set(["all", "prod", "test"]);
+
+function normalizeHostEnvironmentFilter(value) {
+  const filter = String(value || "").trim().toLowerCase();
+  return HOST_ENVIRONMENT_FILTERS.has(filter) ? filter : "all";
+}
+
+function normalizeHostEnvironmentType(host) {
+  const env = asText(host?.environment_type, "").trim().toLowerCase();
+  return env === "prod" || env === "test" ? env : "";
+}
+
 let hostOsFilterSelectWired = false;
 let hostCountryFilterSelectWired = false;
+let hostEnvironmentFilterSelectWired = false;
 let hostSortSelectWired = false;
 
 function syncHostSortControl() {
@@ -10328,6 +10348,27 @@ function syncHostSortControl() {
     return;
   }
   sortSelect.value = normalizeHostSortMode(state.hostSortMode);
+}
+
+function syncHostEnvironmentFilterControl() {
+  const envSelect = document.getElementById("hostEnvironmentFilterSelect");
+  if (!envSelect) {
+    return;
+  }
+  envSelect.value = normalizeHostEnvironmentFilter(state.hostEnvironmentFilter);
+  if (!hostEnvironmentFilterSelectWired) {
+    hostEnvironmentFilterSelectWired = true;
+    envSelect.addEventListener("change", async (event) => {
+      const nextFilter = normalizeHostEnvironmentFilter(event.target?.value);
+      if (state.hostEnvironmentFilter === nextFilter) {
+        return;
+      }
+      state.hostEnvironmentFilter = nextFilter;
+      state.hostOffset = 0;
+      persistHostFilterPreferences();
+      await applyHostFiltersLocally({ preserveScroll: true });
+    });
+  }
 }
 
 function renderHostIconFilters(hosts) {
@@ -10527,6 +10568,7 @@ function filterAndSortHosts(hosts) {
   const query = state.hostSearchQuery.toLowerCase().trim();
   const osFilter = String(state.hostOsFilter || "all");
   const countryFilter = String(state.hostCountryFilter || "all").toUpperCase();
+  const environmentFilter = normalizeHostEnvironmentFilter(state.hostEnvironmentFilter);
 
   let filtered = hosts;
   if (query.length > 0) {
@@ -10539,6 +10581,10 @@ function filterAndSortHosts(hosts) {
 
   if (countryFilter !== "ALL") {
     filtered = filtered.filter((host) => normalizeHostCountryCode(host) === countryFilter);
+  }
+
+  if (environmentFilter !== "all") {
+    filtered = filtered.filter((host) => normalizeHostEnvironmentType(host) === environmentFilter);
   }
 
   const interestMode = normalizeHostInterestMode(state.hostInterestMode);
@@ -10580,6 +10626,7 @@ function hasActiveHostFilters() {
     String(state.hostSearchQuery || "").trim().length > 0
     || String(state.hostOsFilter || "all") !== "all"
     || String(state.hostCountryFilter || "all") !== "all"
+    || normalizeHostEnvironmentFilter(state.hostEnvironmentFilter) !== "all"
     || (interestMode === "interested_only" && state.hostInterestHosts.size > 0)
   );
 }
@@ -19664,6 +19711,7 @@ function wireEvents() {
       await applyHostFiltersLocally({ preserveScroll: true });
     });
   }
+  syncHostEnvironmentFilterControl();
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden || !state.isAuthenticated) {
@@ -21422,7 +21470,7 @@ function formatExternalMonitorCertDaysLeft(daysLeft, expiresAtUtc) {
   const expiryLabel = formatReportDateTime(expiresAtUtc);
   const hasExpiryLabel = expiryLabel !== "-";
   const daysLabel = `${days} Tage`;
-  const display = hasExpiryLabel ? `${daysLabel} · ${expiryLabel}` : daysLabel;
+  const display = daysLabel;
   let hint = "";
   if (days < 0) {
     hint = hasExpiryLabel ? `abgelaufen am ${expiryLabel}` : "Zertifikat abgelaufen";
@@ -21431,7 +21479,7 @@ function formatExternalMonitorCertDaysLeft(daysLeft, expiresAtUtc) {
   } else {
     hint = `läuft ab in ${days} Tagen`;
   }
-  const cardLabel = hasExpiryLabel ? `Zertifikat: ${daysLabel} · ${expiryLabel}` : `Zertifikat: ${daysLabel}`;
+  const cardLabel = `Zertifikat: ${daysLabel}`;
   return {
     display,
     hint,
