@@ -13,6 +13,7 @@ import socket
 import sqlite3
 import ssl
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -31,6 +32,10 @@ PROBE_TOKEN_PREFIX = "mprb_"
 _monitor_worker_wakeup = threading.Event()
 _monitor_worker_started = False
 _monitor_worker_lock = threading.Lock()
+
+
+def _log_external_monitor_worker(message: str) -> None:
+    print(f"[external-monitors] {message}", file=sys.stderr, flush=True)
 
 
 def utc_now_iso() -> str:
@@ -1156,6 +1161,8 @@ def run_monitor_check_with_timeout(monitor: dict[str, Any]) -> dict[str, Any]:
 
 def _process_due_server_monitors(conn: sqlite3.Connection) -> int:
     due_monitors = _fetch_due_server_monitors(conn)
+    if due_monitors:
+        _log_external_monitor_worker(f"checking {len(due_monitors)} due monitor(s)")
     processed = 0
     for monitor in due_monitors:
         monitor_id = int(monitor["id"])
@@ -1164,8 +1171,8 @@ def _process_due_server_monitors(conn: sqlite3.Connection) -> int:
             record_monitor_result(conn, monitor_id, result)
             processed += 1
         except Exception as exc:
-            print(f"[external-monitors] monitor {monitor_id} failed: {exc}")
-            traceback.print_exc()
+            _log_external_monitor_worker(f"monitor {monitor_id} failed: {exc}")
+            traceback.print_exc(file=sys.stderr)
             record_monitor_result(
                 conn,
                 monitor_id,
@@ -1183,7 +1190,7 @@ def _process_due_server_monitors(conn: sqlite3.Connection) -> int:
 
 
 def external_monitor_worker_loop(db_path: str) -> None:
-    print(f"[external-monitors] worker started (db={db_path})")
+    _log_external_monitor_worker(f"worker started (db={db_path})")
     while True:
         _monitor_worker_wakeup.wait(timeout=EXTERNAL_MONITOR_WORKER_INTERVAL_SEC)
         _monitor_worker_wakeup.clear()
@@ -1197,10 +1204,10 @@ def external_monitor_worker_loop(db_path: str) -> None:
                     if processed < EXTERNAL_MONITOR_WORKER_BATCH_LIMIT:
                         break
             if total_processed:
-                print(f"[external-monitors] worker processed {total_processed} monitor(s)")
+                _log_external_monitor_worker(f"worker processed {total_processed} monitor(s)")
         except Exception as exc:
-            print(f"[external-monitors] worker error: {exc}")
-            traceback.print_exc()
+            _log_external_monitor_worker(f"worker error: {exc}")
+            traceback.print_exc(file=sys.stderr)
 
 
 def start_external_monitor_worker(db_path: str) -> None:

@@ -1903,6 +1903,7 @@ Type=simple
 User=root
 WorkingDirectory=$TARGET_DIR
 EnvironmentFile=$TARGET_DIR/monitoring.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=$TARGET_DIR/.venv/bin/python $TARGET_DIR/server/receiver.py --host 0.0.0.0 --port 8080
 Restart=on-failure
 RestartSec=5
