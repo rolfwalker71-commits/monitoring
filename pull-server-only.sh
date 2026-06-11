@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260610a"
+PULL_SCRIPT_VERSION="20260611a"
 # Bump when FILES_LIST changes (must match script_guardian entries).
 PULL_FILES_MANIFEST="scripts-38-v1"
 PULL_FILES_EXPECTED_COUNT=38
@@ -967,6 +967,13 @@ explain_deploy_integrity_failure() {
   agent_ver="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
   echo "Integritaets-Details:" >&2
   echo "  BUILD_VERSION=$build_ver AGENT_VERSION=$agent_ver" >&2
+  if [ -n "$build_ver" ] && [ -n "$agent_ver" ] && [ "$build_ver" != "$agent_ver" ]; then
+    if version_gt "$build_ver" "$agent_ver"; then
+      echo "  Hinweis: BUILD vor AGENT (unkritisch bei Server-only-Release)." >&2
+    else
+      echo "  FEHLER: AGENT neuer als BUILD – Version-Dateien inkonsistent." >&2
+    fi
+  fi
   if [ ! -f "$ps1" ]; then
     echo "  collect_and_send.ps1 fehlt unter $ps1" >&2
     return 0
@@ -995,7 +1002,10 @@ verify_deployed_payload_integrity() {
   agent_ver="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
   [ -n "$agent_ver" ] && [ -n "$build_ver" ] || return 1
   if [ "$build_ver" != "$agent_ver" ]; then
-    return 1
+    # Server-only releases bump BUILD without AGENT; embedded fallback may lag further behind.
+    if version_gt "$agent_ver" "$build_ver"; then
+      return 1
+    fi
   fi
 
   ps1="$TARGET_DIR/client/windows/collect_and_send.ps1"
@@ -1798,7 +1808,11 @@ print_deploy_consistency_summary() {
   fi
   echo "BUILD lokal: ${local_bv:-?} | AGENT lokal: ${local_av:-?}"
   if [ -n "$local_bv" ] && [ -n "$local_av" ] && [ "$local_bv" != "$local_av" ]; then
-    echo "WARNUNG: BUILD und AGENT lokal unterschiedlich." >&2
+    if version_gt "$local_av" "$local_bv"; then
+      echo "WARNUNG: AGENT lokal ($local_av) neuer als BUILD ($local_bv)." >&2
+    else
+      echo "Hinweis: BUILD ($local_bv) vor AGENT ($local_av) – normal bei Server-only-Release."
+    fi
   fi
   if [ -n "$remote_bv" ] && [ -n "$local_bv" ] && [ "$local_bv" = "$remote_bv" ]; then
     echo "Version-Status: AKTUELL (BUILD $local_bv)"
