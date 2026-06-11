@@ -17,7 +17,6 @@ import tempfile
 import threading
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib import error, parse, request
@@ -1124,19 +1123,35 @@ def _monitor_check_timeout_sec(monitor: dict[str, Any]) -> int:
 
 def run_monitor_check_with_timeout(monitor: dict[str, Any]) -> dict[str, Any]:
     timeout_sec = _monitor_check_timeout_sec(monitor)
-    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="external-monitor-check") as pool:
-        future = pool.submit(run_monitor_check, monitor)
-        try:
-            return future.result(timeout=timeout_sec)
-        except FuturesTimeoutError:
-            return {
-                "status": "down",
-                "response_ms": timeout_sec * 1000,
-                "http_status": None,
-                "cert_expires_at_utc": "",
-                "cert_days_left": None,
-                "error_message": f"Prüfung abgebrochen nach {timeout_sec}s (Timeout)",
-            }
+    holder: dict[str, Any] = {}
+
+    def _run_check() -> None:
+        holder["result"] = run_monitor_check(monitor)
+
+    check_thread = threading.Thread(
+        target=_run_check,
+        name="external-monitor-check",
+        daemon=True,
+    )
+    check_thread.start()
+    check_thread.join(timeout_sec)
+    if check_thread.is_alive():
+        return {
+            "status": "down",
+            "response_ms": timeout_sec * 1000,
+            "http_status": None,
+            "cert_expires_at_utc": "",
+            "cert_days_left": None,
+            "error_message": f"Prüfung abgebrochen nach {timeout_sec}s (Timeout)",
+        }
+    return holder.get("result") or {
+        "status": "down",
+        "response_ms": None,
+        "http_status": None,
+        "cert_expires_at_utc": "",
+        "cert_days_left": None,
+        "error_message": "Prüfung ohne Ergebnis beendet",
+    }
 
 
 def _process_due_server_monitors(conn: sqlite3.Connection) -> int:
@@ -1168,6 +1183,7 @@ def _process_due_server_monitors(conn: sqlite3.Connection) -> int:
 
 
 def external_monitor_worker_loop(db_path: str) -> None:
+    print(f"[external-monitors] worker started (db={db_path})")
     while True:
         _monitor_worker_wakeup.wait(timeout=EXTERNAL_MONITOR_WORKER_INTERVAL_SEC)
         _monitor_worker_wakeup.clear()
@@ -1212,8 +1228,9 @@ def test_external_monitor_now(conn: sqlite3.Connection, monitor_id: int) -> dict
     if not monitors:
         return None
     monitor = monitors[0]
-    result = run_monitor_check(monitor)
+    result = run_monitor_check_with_timeout(monitor)
     record_monitor_result(conn, int(monitor_id), result)
+    wake_external_monitor_worker()
     refreshed = list_external_monitors(conn, monitor_id=monitor_id)
     return {
         "monitor": refreshed[0] if refreshed else monitor,
