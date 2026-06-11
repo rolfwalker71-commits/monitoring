@@ -16,12 +16,16 @@ import subprocess
 import tempfile
 import threading
 import time
+import traceback
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib import error, parse, request
 from urllib.parse import urlparse
 
 EXTERNAL_MONITOR_WORKER_INTERVAL_SEC = 30
+EXTERNAL_MONITOR_WORKER_BATCH_LIMIT = 20
+EXTERNAL_MONITOR_WORKER_MAX_BATCHES_PER_WAKE = 10
 EXTERNAL_MONITOR_RESULT_HISTORY_LIMIT = 80
 PROBE_TOKEN_PREFIX = "mprb_"
 
@@ -742,13 +746,6 @@ def _run_ssl_cert_probe(
                 expires_at, days_left = _parse_cert_not_after_from_der(cert_der)
                 if days_left is not None:
                     return expires_at, days_left, ""
-    try:
-        cert_pem = ssl.get_server_certificate((host, port))
-        expires_at, days_left = _parse_cert_not_after_from_pem(cert_pem)
-        if days_left is not None:
-            return expires_at, days_left, ""
-    except (ssl.SSLError, OSError, ValueError):
-        pass
     return "", None, ""
 
 
@@ -1113,11 +1110,61 @@ def _fetch_due_server_monitors(conn: sqlite3.Connection) -> list[dict[str, Any]]
           AND probe_source = 'server'
           AND (next_check_at_utc = '' OR next_check_at_utc <= ?)
         ORDER BY next_check_at_utc ASC, id ASC
-        LIMIT 20
+        LIMIT ?
         """,
-        (now,),
+        (now, EXTERNAL_MONITOR_WORKER_BATCH_LIMIT),
     ).fetchall()
     return [_row_to_monitor_dict(row) for row in rows]
+
+
+def _monitor_check_timeout_sec(monitor: dict[str, Any]) -> int:
+    timeout_sec = max(3, min(120, int(monitor.get("timeout_sec") or 15)))
+    return timeout_sec + 20
+
+
+def run_monitor_check_with_timeout(monitor: dict[str, Any]) -> dict[str, Any]:
+    timeout_sec = _monitor_check_timeout_sec(monitor)
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="external-monitor-check") as pool:
+        future = pool.submit(run_monitor_check, monitor)
+        try:
+            return future.result(timeout=timeout_sec)
+        except FuturesTimeoutError:
+            return {
+                "status": "down",
+                "response_ms": timeout_sec * 1000,
+                "http_status": None,
+                "cert_expires_at_utc": "",
+                "cert_days_left": None,
+                "error_message": f"Prüfung abgebrochen nach {timeout_sec}s (Timeout)",
+            }
+
+
+def _process_due_server_monitors(conn: sqlite3.Connection) -> int:
+    due_monitors = _fetch_due_server_monitors(conn)
+    processed = 0
+    for monitor in due_monitors:
+        monitor_id = int(monitor["id"])
+        try:
+            result = run_monitor_check_with_timeout(monitor)
+            record_monitor_result(conn, monitor_id, result)
+            processed += 1
+        except Exception as exc:
+            print(f"[external-monitors] monitor {monitor_id} failed: {exc}")
+            traceback.print_exc()
+            record_monitor_result(
+                conn,
+                monitor_id,
+                {
+                    "status": "down",
+                    "response_ms": None,
+                    "http_status": None,
+                    "cert_expires_at_utc": "",
+                    "cert_days_left": None,
+                    "error_message": _format_monitor_error_message(exc)[:500],
+                },
+            )
+            processed += 1
+    return processed
 
 
 def external_monitor_worker_loop(db_path: str) -> None:
@@ -1125,14 +1172,19 @@ def external_monitor_worker_loop(db_path: str) -> None:
         _monitor_worker_wakeup.wait(timeout=EXTERNAL_MONITOR_WORKER_INTERVAL_SEC)
         _monitor_worker_wakeup.clear()
         try:
+            total_processed = 0
             with sqlite3.connect(db_path, timeout=30) as conn:
-                due_monitors = _fetch_due_server_monitors(conn)
-                for monitor in due_monitors:
-                    result = run_monitor_check(monitor)
-                    record_monitor_result(conn, int(monitor["id"]), result)
-                conn.commit()
+                for _batch in range(EXTERNAL_MONITOR_WORKER_MAX_BATCHES_PER_WAKE):
+                    processed = _process_due_server_monitors(conn)
+                    total_processed += processed
+                    conn.commit()
+                    if processed < EXTERNAL_MONITOR_WORKER_BATCH_LIMIT:
+                        break
+            if total_processed:
+                print(f"[external-monitors] worker processed {total_processed} monitor(s)")
         except Exception as exc:
             print(f"[external-monitors] worker error: {exc}")
+            traceback.print_exc()
 
 
 def start_external_monitor_worker(db_path: str) -> None:
@@ -1148,6 +1200,7 @@ def start_external_monitor_worker(db_path: str) -> None:
         )
         thread.start()
         _monitor_worker_started = True
+    wake_external_monitor_worker()
 
 
 def wake_external_monitor_worker() -> None:
