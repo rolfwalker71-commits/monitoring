@@ -144,6 +144,10 @@ body[data-theme="dark"] .brand-header .app-logo {
   background: #fff !important;
 }
 
+.panel-header .header-kpi-group--services {
+  background: #fff !important;
+}
+
 .panel-header .header-kpi-group--storage {
   background: #fff !important;
 }
@@ -303,6 +307,59 @@ body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-ch
 
 body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-inactive .header-chip-label,
 body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-inactive .header-chip-count {
+  color: #f87171 !important;
+}
+
+/* Services: OK grün wie Aktiv, Down rot wie Inaktiv */
+.panel-header .header-kpi-group--services > .header-stat-chip-services-ok {
+  background: var(--dr-host-active-bg) !important;
+}
+
+.panel-header .header-kpi-group--services > .header-stat-chip-services-down {
+  background: var(--dr-host-inactive-bg) !important;
+}
+
+.panel-header .header-kpi-group--services > .header-stat-chip-services-ok:hover {
+  background: #dcfce7 !important;
+}
+
+.panel-header .header-kpi-group--services > .header-stat-chip-services-down:hover {
+  background: #fee2e2 !important;
+}
+
+.panel-header .header-kpi-group--services > .header-stat-chip-services-ok .header-chip-label,
+.panel-header .header-kpi-group--services > .header-stat-chip-services-ok .header-chip-count {
+  color: var(--dr-host-active) !important;
+}
+
+.panel-header .header-kpi-group--services > .header-stat-chip-services-down .header-chip-label,
+.panel-header .header-kpi-group--services > .header-stat-chip-services-down .header-chip-count {
+  color: var(--dr-host-inactive) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--services > .header-stat-chip-services-ok {
+  background: rgba(34, 197, 94, 0.14) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--services > .header-stat-chip-services-down {
+  background: rgba(248, 113, 113, 0.14) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--services > .header-stat-chip-services-ok:hover {
+  background: rgba(34, 197, 94, 0.22) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--services > .header-stat-chip-services-down:hover {
+  background: rgba(248, 113, 113, 0.22) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--services > .header-stat-chip-services-ok .header-chip-label,
+body[data-theme="dark"] .panel-header .header-kpi-group--services > .header-stat-chip-services-ok .header-chip-count {
+  color: #4ade80 !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--services > .header-stat-chip-services-down .header-chip-label,
+body[data-theme="dark"] .panel-header .header-kpi-group--services > .header-stat-chip-services-down .header-chip-count {
   color: #f87171 !important;
 }
 
@@ -2646,16 +2703,6 @@ body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.se
 
 .external-monitor-linked-host-link:hover {
   text-decoration: underline;
-}
-
-.header-stat-chip-services-ok {
-  border-color: #bfdbfe !important;
-  background: #eff6ff !important;
-}
-
-.header-stat-chip-services-down {
-  border-color: #fecaca !important;
-  background: #fef2f2 !important;
 }
 
 .reports-column--service-mode #reportChromeBar,
