@@ -42,6 +42,30 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_bool_int(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and not value.strip():
+        return default
+    try:
+        return int(value) != 0
+    except (TypeError, ValueError):
+        return default
+
+
 def _format_monitor_error_message(exc: BaseException | str) -> str:
     text = str(exc).strip()
     if text.lower().startswith("ssl:"):
@@ -334,22 +358,22 @@ def _row_to_monitor_dict(row: sqlite3.Row, *, include_history: bool = False, con
         "service_definition_name": str(row["service_definition_name"] or "") if "service_definition_name" in row.keys() else "",
         "monitor_type": str(row["monitor_type"] or "http"),
         "probe_source": str(row["probe_source"] or "server"),
-        "probe_site_id": int(row["probe_site_id"]) if row["probe_site_id"] is not None else None,
+        "probe_site_id": _optional_int(row["probe_site_id"]),
         "target_url": str(row["target_url"] or ""),
-        "customer_id": int(row["customer_id"]) if row["customer_id"] is not None else None,
+        "customer_id": _optional_int(row["customer_id"]),
         "related_host_uid": str(row["related_host_uid"] or ""),
         "interval_sec": int(row["interval_sec"] or 300),
-        "expected_status": int(row["expected_status"]) if row["expected_status"] is not None else None,
+        "expected_status": _optional_int(row["expected_status"]),
         "keyword": str(row["keyword"] or ""),
         "timeout_sec": int(row["timeout_sec"] or 15),
-        "tls_verify": bool(int(row["tls_verify"])) if "tls_verify" in row.keys() else True,
+        "tls_verify": _optional_bool_int(row["tls_verify"]) if "tls_verify" in row.keys() else True,
         "enabled": bool(int(row["enabled"] or 0)),
         "last_checked_at_utc": str(row["last_checked_at_utc"] or ""),
         "last_status": str(row["last_status"] or "unknown"),
-        "last_response_ms": int(row["last_response_ms"]) if row["last_response_ms"] is not None else None,
-        "last_http_status": int(row["last_http_status"]) if row["last_http_status"] is not None else None,
+        "last_response_ms": _optional_int(row["last_response_ms"]),
+        "last_http_status": _optional_int(row["last_http_status"]),
         "last_cert_expires_at_utc": str(row["last_cert_expires_at_utc"] or ""),
-        "last_cert_days_left": int(row["last_cert_days_left"]) if row["last_cert_days_left"] is not None else None,
+        "last_cert_days_left": _optional_int(row["last_cert_days_left"]),
         "last_error_message": str(row["last_error_message"] or ""),
         "next_check_at_utc": str(row["next_check_at_utc"] or ""),
         "created_at_utc": str(row["created_at_utc"] or ""),
@@ -370,9 +394,9 @@ def _row_to_monitor_dict(row: sqlite3.Row, *, include_history: bool = False, con
             {
                 "checked_at_utc": str(item["checked_at_utc"] or ""),
                 "status": str(item["status"] or ""),
-                "response_ms": int(item["response_ms"]) if item["response_ms"] is not None else None,
-                "http_status": int(item["http_status"]) if item["http_status"] is not None else None,
-                "cert_days_left": int(item["cert_days_left"]) if item["cert_days_left"] is not None else None,
+                "response_ms": _optional_int(item["response_ms"]),
+                "http_status": _optional_int(item["http_status"]),
+                "cert_days_left": _optional_int(item["cert_days_left"]),
                 "error_message": str(item["error_message"] or ""),
             }
             for item in history_rows

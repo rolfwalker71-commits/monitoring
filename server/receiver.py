@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import traceback
 import socket
 import time
 from datetime import datetime, timedelta, timezone
@@ -20729,12 +20730,32 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             monitor_id = int(monitor_id_raw) if monitor_id_raw.isdigit() else None
             include_history_raw = str(query.get("include_history", [""])[0] or "").strip().lower()
             include_history = include_history_raw in ("1", "true", "yes")
-            with sqlite_connect_read() as conn:
-                monitors = list_external_monitors(
-                    conn,
-                    monitor_id=monitor_id,
-                    include_history=include_history,
+            try:
+                with sqlite_connect_read() as conn:
+                    monitors = list_external_monitors(
+                        conn,
+                        monitor_id=monitor_id,
+                        include_history=include_history,
+                    )
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": "database_busy",
+                            "message": "Datenbank kurz gesperrt. Bitte in wenigen Sekunden erneut laden.",
+                        },
+                    )
+                    return
+                raise
+            except Exception as exc:
+                print(f"[external-monitors] GET failed: {exc}", file=sys.stderr, flush=True)
+                traceback.print_exc()
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {"error": "external_monitors_failed", "message": str(exc)},
                 )
+                return
             self._send_json(HTTPStatus.OK, {"monitors": monitors, "count": len(monitors)})
             return
 
