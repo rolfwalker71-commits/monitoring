@@ -18,6 +18,8 @@
   --dr-host-inactive: #b91c1c;
   --dr-host-active-bg: #f0fdf4;
   --dr-host-inactive-bg: #fef2f2;
+  --sidebar-edge: 5px;
+  --sidebar-scroll-pad: 5px;
 }
 
 /* Unified card surfaces (host list, KPIs, report meta, panels) */
@@ -476,8 +478,16 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
 }
 
 /* ── Zone 3: Host cards ── */
-.host-list article.host-item {
-  padding: 10px 12px !important;
+.host-list article.host-item,
+.service-monitor-list article.host-item {
+  padding: 8px 10px !important;
+}
+
+.host-list article.host-item .host-customer-line {
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.015em;
+  line-height: 1.2;
 }
 
 .host-corner-icons .host-flag-icon,
@@ -2053,7 +2063,8 @@ body[data-theme="dark"] .live-report-feed-stats {
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  padding: 8px 0 !important;
+  width: 100%;
+  padding: 2px 0 0 !important;
   margin-bottom: 0 !important;
   box-sizing: border-box;
 }
@@ -2061,6 +2072,7 @@ body[data-theme="dark"] .live-report-feed-stats {
 .sidebar-card-header--toggle .sidebar-mode-toggle {
   flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
 }
 
 .sidebar-header-actions {
@@ -2131,13 +2143,17 @@ body[data-theme="dark"] .live-report-feed-stats {
   flex: 1 1 auto;
 }
 
+.hosts-column {
+  padding: 6px var(--sidebar-edge) 6px !important;
+}
+
 .hosts-column-scroll {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 10px 10px;
+  gap: 6px !important;
+  padding: 0 0 6px !important;
   box-sizing: border-box;
-  scrollbar-gutter: stable;
 }
 
 .sidebar-panel--hosts .host-list-shell,
@@ -2146,13 +2162,9 @@ body[data-theme="dark"] .live-report-feed-stats {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0;
+  padding: 0 var(--sidebar-scroll-pad) 0 0 !important;
   box-sizing: border-box;
   scrollbar-gutter: stable;
-}
-
-.sidebar-panel--services .service-monitor-list-shell {
-  padding-right: 2px;
 }
 
 .sidebar-panel--hosts .host-list,
@@ -2164,6 +2176,11 @@ body[data-theme="dark"] .live-report-feed-stats {
   overflow: visible;
   padding-right: 0;
   scrollbar-gutter: auto;
+}
+
+.host-list,
+.service-monitor-list {
+  gap: 6px !important;
 }
 
 .host-list article.host-item,
@@ -2198,7 +2215,7 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
-  padding: 0 0 8px;
+  padding: 0 0 6px !important;
 }
 
 .service-monitor-filter-select {
@@ -2366,7 +2383,6 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .service-monitor-list article.host-item {
-  padding: 7px 10px !important;
   cursor: pointer;
 }
 
