@@ -21853,7 +21853,7 @@ function formatExternalMonitorHistoryTimestamp(value) {
   return formatReportDateTime(isoValue);
 }
 
-const EXTERNAL_MONITOR_HISTORY_DISPLAY_LIMIT = 80;
+const EXTERNAL_MONITOR_HISTORY_DISPLAY_LIMIT = 120;
 
 function renderExternalMonitorHistoryChart(historyRows, monitor) {
   const rawRows = Array.isArray(historyRows) ? historyRows : [];
