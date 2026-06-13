@@ -11446,9 +11446,7 @@ function renderSelectedHostCustomerChip(host) {
   const envChip = envLabel
     ? `<span class="selected-host-meta-chip selected-host-meta-chip--env selected-host-meta-chip--env-inline${envChipFloatingClass} selected-host-meta-chip--env-${escapeHtml(environmentType)}" title="Host-Umgebung">${escapeHtml(envLabel)}</span>`
     : "";
-  const customerLabel = customerName
-    ? (customerProject ? `${customerName} · ${customerProject}` : customerName)
-    : "Kein Kunde";
+  const customerLabel = formatCustomerNameWithMaringoProject(customerName, customerProject);
   const customerTitle = customerName && customerProject
     ? `Kunde · Maringo ${customerProject}`
     : (customerName ? "Kunde" : "Kein Kunde hinterlegt");
@@ -11512,6 +11510,15 @@ function renderMetricBarRow(label, percent, sublineHtml = "") {
   `;
 }
 
+function formatCustomerNameWithMaringoProject(customerName, customerProject) {
+  const name = asText(customerName, "").trim();
+  const project = asText(customerProject, "").trim();
+  if (!name) {
+    return "Kein Kunde";
+  }
+  return project ? `${name} (${project})` : name;
+}
+
 function updateReportChromeBar() {
   const titleEl = document.getElementById("reportChromeTitle");
   const envEl = document.getElementById("reportChromeEnv");
@@ -11544,8 +11551,9 @@ function updateReportChromeBar() {
   }
 
   const customerName = asText(host.customer_name, "").trim();
+  const customerProject = asText(host.customer_maringo_project_number, "").trim();
   const displayName = asText(host.display_name || host.hostname, "").trim();
-  const customerPart = customerName || "Kein Kunde";
+  const customerPart = formatCustomerNameWithMaringoProject(customerName, customerProject);
   const customerLogoUrl = asText(host.customer_logo_url, "").trim();
   titleEl.innerHTML = `<span class="report-chrome-customer">${escapeHtml(customerPart)}</span><span class="sep" aria-hidden="true">|</span><span class="report-chrome-host">${escapeHtml(displayName)}</span>`;
 
