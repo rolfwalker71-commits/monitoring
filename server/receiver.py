@@ -3181,7 +3181,7 @@ def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, in
         if _is_plain_hostname_host_uid(identity_key, hostname):
             totals["reports_repointed"] += _repoint_report_rows_for_identity(
                 conn,
-                canonical_hostname,
+                hostname,
                 identity_key,
                 canonical_uid,
             )
