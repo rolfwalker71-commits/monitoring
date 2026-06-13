@@ -2491,6 +2491,181 @@ def _derive_host_uid(payload: dict, hostname: str, agent_id: str = "", primary_i
     return safe_hostname
 
 
+def _is_plain_hostname_host_uid(host_uid: object, hostname: object) -> bool:
+    safe_host_uid = str(host_uid or "").strip()
+    safe_hostname = str(hostname or "").strip()
+    return bool(safe_host_uid and safe_hostname and safe_host_uid == safe_hostname)
+
+
+def _host_uid_has_identity_suffix(host_uid: object) -> bool:
+    return "::" in str(host_uid or "")
+
+
+def _find_established_host_uid_for_ingest(
+    conn: sqlite3.Connection,
+    hostname: str,
+    agent_id: str = "",
+    primary_ip: str = "",
+    payload: dict | None = None,
+) -> str:
+    """Return the canonical rich host_uid for an existing host, if one can be matched safely."""
+    safe_hostname = str(hostname or "").strip()
+    if not safe_hostname:
+        return ""
+
+    safe_agent_id = str(agent_id or "").strip()
+    resolved_ip = _resolve_std_nic_ipv4(payload if isinstance(payload, dict) else {}, str(primary_ip or ""))
+    ip_guard = resolved_ip or (str(primary_ip or "").strip() if _is_valid_ipv4(primary_ip) else "")
+
+    rows = conn.execute(
+        """
+        SELECT host_uid,
+               COUNT(*) AS report_count,
+               MAX(received_at_utc) AS last_seen_utc
+        FROM reports
+        WHERE hostname = ?
+          AND COALESCE(host_uid, '') <> ''
+          AND COALESCE(host_uid, '') <> ?
+          AND COALESCE(host_uid, '') LIKE '%::%'
+        GROUP BY host_uid
+        ORDER BY report_count DESC, last_seen_utc DESC
+        """,
+        (safe_hostname, safe_hostname),
+    ).fetchall()
+
+    candidates: list[tuple[str, int, str]] = []
+    for row in rows:
+        uid = str(row[0] or "").strip()
+        report_count = int(row[1] or 0)
+        if not uid or not _host_uid_has_identity_suffix(uid):
+            continue
+        if report_count <= INACTIVE_HOST_GHOST_MAX_REPORTS:
+            continue
+        candidates.append((uid, report_count, str(row[2] or "")))
+
+    if not candidates:
+        return ""
+
+    def _identity_matches(uid: str) -> bool:
+        if safe_agent_id:
+            matched = conn.execute(
+                """
+                SELECT 1
+                FROM reports
+                WHERE hostname = ?
+                  AND host_uid = ?
+                  AND COALESCE(agent_id, '') = ?
+                LIMIT 1
+                """,
+                (safe_hostname, uid, safe_agent_id),
+            ).fetchone()
+            if matched:
+                return True
+        if ip_guard:
+            matched = conn.execute(
+                """
+                SELECT 1
+                FROM reports
+                WHERE hostname = ?
+                  AND host_uid = ?
+                  AND COALESCE(primary_ip, '') = ?
+                LIMIT 1
+                """,
+                (safe_hostname, uid, ip_guard),
+            ).fetchone()
+            if matched:
+                return True
+        return False
+
+    for uid, _, _ in candidates:
+        if _identity_matches(uid):
+            return uid
+
+    if len(candidates) == 1:
+        return candidates[0][0]
+
+    return ""
+
+
+def _strengthen_plain_hostname_host_uid(
+    hostname: str,
+    host_uid: str,
+    agent_id: str = "",
+    primary_ip: str = "",
+    payload: dict | None = None,
+) -> str:
+    safe_hostname = str(hostname or "").strip()
+    safe_host_uid = str(host_uid or "").strip()
+    if not _is_plain_hostname_host_uid(safe_host_uid, safe_hostname):
+        return safe_host_uid
+
+    safe_agent_id = str(agent_id or "").strip()
+    if safe_agent_id:
+        return f"{safe_hostname}::agent:{safe_agent_id}"
+
+    resolved_ip = _resolve_std_nic_ipv4(payload if isinstance(payload, dict) else {}, str(primary_ip or ""))
+    if resolved_ip:
+        return f"{safe_hostname}::ip:{resolved_ip}"
+
+    return safe_host_uid
+
+
+def _resolve_incoming_host_uid(
+    conn: sqlite3.Connection,
+    payload: dict,
+    hostname: str,
+    agent_id: str = "",
+    primary_ip: str = "",
+) -> str:
+    incoming_host_uid = str(payload.get("host_uid", "") or "").strip()
+    if not incoming_host_uid:
+        incoming_host_uid = _derive_host_uid(payload, hostname, agent_id, primary_ip)
+
+    if _is_plain_hostname_host_uid(incoming_host_uid, hostname):
+        canonical_uid = _find_established_host_uid_for_ingest(
+            conn,
+            hostname,
+            agent_id=agent_id,
+            primary_ip=primary_ip,
+            payload=payload,
+        )
+        if canonical_uid:
+            return canonical_uid
+        return _strengthen_plain_hostname_host_uid(
+            hostname,
+            incoming_host_uid,
+            agent_id=agent_id,
+            primary_ip=primary_ip,
+            payload=payload,
+        )
+
+    return incoming_host_uid
+
+
+def _repoint_report_rows_for_identity(
+    conn: sqlite3.Connection,
+    hostname: str,
+    old_host_uid: str,
+    new_host_uid: str,
+) -> int:
+    safe_hostname = str(hostname or "").strip()
+    old_key = str(old_host_uid or "").strip()
+    new_key = str(new_host_uid or "").strip()
+    if not safe_hostname or not old_key or not new_key or old_key == new_key:
+        return 0
+
+    conn.execute(
+        """
+        UPDATE reports
+        SET host_uid = ?
+        WHERE hostname = ?
+          AND COALESCE(host_uid, '') = ?
+        """,
+        (new_key, safe_hostname, old_key),
+    )
+    return int(conn.execute("SELECT changes()").fetchone()[0] or 0)
+
+
 def _reconcile_legacy_host_uids(
     conn: sqlite3.Connection,
     payload: dict,
@@ -2506,8 +2681,19 @@ def _reconcile_legacy_host_uids(
     if not safe_hostname or not safe_host_uid:
         return
 
-    # Nothing to reconcile when host_uid stays at plain hostname fallback.
+    # Plain hostname fallback on a host that already has a rich identity: merge legacy rows.
     if safe_host_uid == safe_hostname:
+        canonical_uid = _find_established_host_uid_for_ingest(
+            conn,
+            safe_hostname,
+            agent_id=safe_agent_id,
+            primary_ip=safe_primary_ip,
+            payload=payload if isinstance(payload, dict) else {},
+        )
+        if not canonical_uid or canonical_uid == safe_host_uid:
+            return
+        _repoint_host_identity_rows(conn, safe_hostname, safe_host_uid, canonical_uid)
+        _repoint_report_rows_for_identity(conn, safe_hostname, safe_host_uid, canonical_uid)
         return
 
     candidates: set[str] = set()
@@ -2877,6 +3063,14 @@ def _is_superseded_host_identity_key(
     if canonical:
         canonical_uid = str(canonical.get("host_uid") or "").strip()
         canonical_last = str(canonical.get("last_report_time_utc") or "").strip()
+        canonical_report_count = int(canonical.get("report_count") or 0)
+        if (
+            _is_plain_hostname_host_uid(safe_host_uid, safe_hostname)
+            and canonical_uid
+            and _host_uid_has_identity_suffix(canonical_uid)
+            and canonical_report_count > INACTIVE_HOST_GHOST_MAX_REPORTS
+        ):
+            return True
         if canonical_uid and canonical_last:
             if safe_host_uid == canonical_uid:
                 return False
@@ -2939,6 +3133,7 @@ def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, in
         "debounce_deleted": 0,
         "debounce_repointed": 0,
         "orphan_reports_deleted": 0,
+        "reports_repointed": 0,
     }
 
     processed_pairs: set[tuple[str, str]] = set()
@@ -2983,11 +3178,19 @@ def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, in
         totals["debounce_deleted"] += int(repoint_stats.get("debounce_deleted", 0) or 0)
         totals["debounce_repointed"] += int(repoint_stats.get("debounce_repointed", 0) or 0)
 
-        conn.execute(
-            f"DELETE FROM reports WHERE hostname = ? AND {host_key_expr} = ?",
-            (hostname, identity_key),
-        )
-        totals["orphan_reports_deleted"] += int(conn.execute("SELECT changes()").fetchone()[0] or 0)
+        if _is_plain_hostname_host_uid(identity_key, hostname):
+            totals["reports_repointed"] += _repoint_report_rows_for_identity(
+                conn,
+                canonical_hostname,
+                identity_key,
+                canonical_uid,
+            )
+        else:
+            conn.execute(
+                f"DELETE FROM reports WHERE hostname = ? AND {host_key_expr} = ?",
+                (hostname, identity_key),
+            )
+            totals["orphan_reports_deleted"] += int(conn.execute("SELECT changes()").fetchone()[0] or 0)
 
     return totals
 
@@ -3067,7 +3270,13 @@ def _backfill_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000)
             agent_id = str(row[2] or "").strip()
             primary_ip = str(row[3] or "").strip()
             payload = parse_payload_json(str(row[4] or "{}"))
-            host_uid = _derive_host_uid(payload, hostname, agent_id, primary_ip)
+            host_uid = _resolve_incoming_host_uid(
+                conn,
+                payload,
+                hostname,
+                agent_id=agent_id,
+                primary_ip=primary_ip,
+            )
             if host_uid:
                 updates.append((host_uid, report_id))
 
@@ -3122,10 +3331,14 @@ def _repair_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000) -
             agent_id = str(row[2] or "").strip()
             primary_ip = str(row[3] or "").strip()
             payload = parse_payload_json(str(row[4] or "{}"))
-            current_uid = str(row[5] or "").strip()
-            expected_uid = _derive_host_uid(payload, hostname, agent_id, primary_ip)
-            if not expected_uid:
-                expected_uid = hostname
+            current_uid = str(payload.get("host_uid", "") or "").strip() or str(row[5] or "").strip()
+            expected_uid = _resolve_incoming_host_uid(
+                conn,
+                payload,
+                hostname,
+                agent_id=agent_id,
+                primary_ip=primary_ip,
+            )
             if expected_uid and expected_uid != current_uid:
                 updates.append((expected_uid, report_id))
                 if hostname:
@@ -18814,10 +19027,14 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
 
     incoming_agent_id = str(payload.get("agent_id", "") or "")
     incoming_primary_ip = str(payload.get("primary_ip", "") or "")
-    incoming_host_uid = str(payload.get("host_uid", "") or "").strip()
-    if not incoming_host_uid:
-        incoming_host_uid = _derive_host_uid(payload, hostname, incoming_agent_id, incoming_primary_ip)
-        payload["host_uid"] = incoming_host_uid
+    incoming_host_uid = _resolve_incoming_host_uid(
+        conn,
+        payload,
+        hostname,
+        agent_id=incoming_agent_id,
+        primary_ip=incoming_primary_ip,
+    )
+    payload["host_uid"] = incoming_host_uid
     _reconcile_legacy_host_uids(
         conn,
         payload,
@@ -25799,7 +26016,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         report_received_at_utc = utc_now_iso()
         incoming_agent_id = str(payload.get("agent_id", "") or "")
         incoming_primary_ip = str(payload.get("primary_ip", "") or "")
-        incoming_host_uid = _derive_host_uid(payload, hostname, incoming_agent_id, incoming_primary_ip)
+        with sqlite_connect() as conn:
+            incoming_host_uid = _resolve_incoming_host_uid(
+                conn,
+                payload,
+                hostname,
+                agent_id=incoming_agent_id,
+                primary_ip=incoming_primary_ip,
+            )
         payload["host_uid"] = incoming_host_uid
 
         try:
