@@ -2347,8 +2347,13 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 
 .service-monitor-head-row .service-monitor-pill--definition {
   flex: 0 1 auto;
-  max-width: 58%;
+  max-width: 62%;
   margin-left: auto;
+  font-size: 12px;
+  font-weight: 800;
+  color: #000000;
+  letter-spacing: 0.01em;
+  border-color: #cbd5e1;
 }
 
 .service-monitor-pill-row--bottom {
@@ -2373,7 +2378,9 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
 }
 
 .service-monitor-pill--definition {
-  color: #92400e;
+  font-size: 12px;
+  font-weight: 800;
+  color: #000000;
 }
 
 .service-monitor-pill--intern {
@@ -2547,8 +2554,9 @@ body[data-theme="dark"] .service-monitor-pill {
   border-color: #cbd5e1;
 }
 
-body[data-theme="dark"] .service-monitor-pill--definition {
-  color: #92400e;
+body[data-theme="dark"] .service-monitor-pill--definition,
+body[data-theme="dark"] .service-monitor-head-row .service-monitor-pill--definition {
+  color: #f8fafc;
 }
 
 body[data-theme="dark"] .service-monitor-pill--intern {
