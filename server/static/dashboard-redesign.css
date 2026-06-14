@@ -40,7 +40,7 @@
   --dashboard-sticky-top: 10px;
   --dashboard-sticky-stack-gap: 10px;
   --dashboard-brand-header-sticky-height: 72px;
-  --external-monitor-history-build-ms: 2000ms;
+  --external-monitor-history-build-ms: 1000ms;
 }
 
 /* Unified card surfaces (host list, KPIs, report meta, panels) */

@@ -1073,7 +1073,7 @@ body {
 
 .service-mobile-card--focused .service-mobile-history-col {
   animation: serviceMobileHistoryColPop 0.16s ease forwards;
-  animation-delay: calc(var(--bar-index) * (2000ms / max(var(--bar-count) - 1, 1)));
+  animation-delay: calc(var(--bar-index) * (1000ms / max(var(--bar-count) - 1, 1)));
 }
 
 .service-mobile-history-bar {
