@@ -456,6 +456,45 @@ function scheduleHeaderKpiUniformCardWidthSync() {
   });
 }
 
+let dashboardStickyHeaderSyncFrameId = null;
+
+function syncDashboardStickyHeaderOffset() {
+  const brandHeader = document.querySelector(".brand-header");
+  if (!brandHeader) {
+    return;
+  }
+  const height = Math.ceil(brandHeader.getBoundingClientRect().height || 0);
+  if (height > 0) {
+    document.documentElement.style.setProperty("--dashboard-brand-header-sticky-height", `${height}px`);
+  }
+}
+
+function scheduleDashboardStickyHeaderOffsetSync() {
+  if (dashboardStickyHeaderSyncFrameId !== null) {
+    window.cancelAnimationFrame(dashboardStickyHeaderSyncFrameId);
+  }
+  dashboardStickyHeaderSyncFrameId = window.requestAnimationFrame(() => {
+    dashboardStickyHeaderSyncFrameId = null;
+    syncDashboardStickyHeaderOffset();
+  });
+}
+
+function initDashboardStickyHeaderStack() {
+  const brandHeader = document.querySelector(".brand-header");
+  if (!brandHeader) {
+    return;
+  }
+  syncDashboardStickyHeaderOffset();
+  if (typeof ResizeObserver === "function") {
+    const observer = new ResizeObserver(() => {
+      scheduleDashboardStickyHeaderOffsetSync();
+    });
+    observer.observe(brandHeader);
+  } else {
+    window.addEventListener("resize", scheduleDashboardStickyHeaderOffsetSync);
+  }
+}
+
 const state = {
   hostLimit: 200,
   hostOffset: 0,
@@ -19780,11 +19819,14 @@ async function init() {
 
   initLiveReportFeed();
   initHeaderSectionCollapsibles();
+  initDashboardStickyHeaderStack();
   applyInitialHeaderKpiWidth();
   window.addEventListener("resize", scheduleHeaderKpiUniformCardWidthSync);
+  window.addEventListener("resize", scheduleDashboardStickyHeaderOffsetSync);
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => {
       scheduleHeaderKpiUniformCardWidthSync();
+      scheduleDashboardStickyHeaderOffsetSync();
     }).catch(() => {
       // Ignore font readiness failures; regular sync paths still run.
     });

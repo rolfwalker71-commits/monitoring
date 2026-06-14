@@ -37,6 +37,9 @@
     var(--sidebar-service-visible) * var(--sidebar-service-card-slot)
     + (var(--sidebar-service-visible) - 1) * var(--sidebar-list-gap)
   );
+  --dashboard-sticky-top: 10px;
+  --dashboard-sticky-stack-gap: 10px;
+  --dashboard-brand-header-sticky-height: 72px;
 }
 
 /* Unified card surfaces (host list, KPIs, report meta, panels) */
@@ -80,8 +83,26 @@
 
 /* ── Zone 1: Brand flatter, KPI neutral ── */
 .brand-header {
+  position: sticky;
+  top: var(--dashboard-sticky-top);
+  z-index: 40;
   padding-top: 6px !important;
   padding-bottom: 6px !important;
+}
+
+.panel-header {
+  top: calc(
+    var(--dashboard-sticky-top)
+    + var(--dashboard-brand-header-sticky-height)
+    + var(--dashboard-sticky-stack-gap)
+  ) !important;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --dashboard-sticky-top: 6px;
+    --dashboard-sticky-stack-gap: 8px;
+  }
 }
 
 /* Logo ohne Karten-Rahmen – frei im Header */
