@@ -40,6 +40,7 @@
   --dashboard-sticky-top: 10px;
   --dashboard-sticky-stack-gap: 10px;
   --dashboard-brand-header-sticky-height: 72px;
+  --external-monitor-history-build-ms: 2000ms;
 }
 
 /* Unified card surfaces (host list, KPIs, report meta, panels) */
@@ -2993,6 +2994,43 @@ body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.se
 .external-monitor-status-cell {
   height: 44px;
   border-radius: 2px 2px 0 0;
+  opacity: 0;
+  transform: scaleY(0);
+  transform-origin: bottom center;
+}
+
+.external-monitor-history-chart.external-monitor-history-chart--build .external-monitor-status-cell,
+.external-monitor-history-chart.external-monitor-history-chart--build .external-monitor-latency-cell {
+  animation: externalMonitorHistoryCellPop 0.16s ease forwards;
+  animation-delay: calc(
+    var(--cell-index) * (var(--external-monitor-history-build-ms) / max(var(--point-count) - 1, 1))
+  );
+}
+
+@keyframes externalMonitorHistoryCellPop {
+  0% {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scaleY(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .external-monitor-status-cell,
+  .external-monitor-latency-cell {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
 }
 
 .external-monitor-history-bar--up { background: #16a34a; }
@@ -3177,6 +3215,9 @@ body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.se
   background: #eef4fb;
   border-radius: 0 0 2px 2px;
   overflow: hidden;
+  opacity: 0;
+  transform: scaleY(0);
+  transform-origin: bottom center;
 }
 
 .external-monitor-latency-cell--empty {

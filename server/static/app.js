@@ -21920,24 +21920,24 @@ function renderExternalMonitorHistoryChart(historyRows, monitor) {
     : "";
   const latencyScale = computeExternalMonitorLatencyScale(rows);
   const pointCount = rows.length;
-  const statusCellsHtml = rows.map((entry) => {
+  const statusCellsHtml = rows.map((entry, index) => {
     const status = asText(entry.status, "unknown").toLowerCase();
     const timestamp = formatExternalMonitorHistoryTimestamp(entry.checked_at_utc ? new Date(entry.checked_at_utc) : null);
     const latency = entry.response_ms != null ? `${entry.response_ms} ms` : "-";
     const errorText = asText(entry.error_message, "").trim();
     const title = `${timestamp}: ${status.toUpperCase()}${latency !== "-" ? ` · ${latency}` : ""}${errorText ? ` · ${errorText}` : ""}`;
-    return `<div class="external-monitor-status-cell ${externalMonitorHistoryBarClass(status)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></div>`;
+    return `<div class="external-monitor-status-cell ${externalMonitorHistoryBarClass(status)}" style="--cell-index: ${index}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></div>`;
   }).join("");
-  const latencyCellsHtml = rows.map((entry) => {
+  const latencyCellsHtml = rows.map((entry, index) => {
     const timestamp = formatExternalMonitorHistoryTimestamp(entry.checked_at_utc ? new Date(entry.checked_at_utc) : null);
     const responseMs = Number(entry?.response_ms);
     const hasLatency = Number.isFinite(responseMs) && responseMs >= 0;
     const title = hasLatency ? `${timestamp}: ${Math.round(responseMs)} ms` : `${timestamp}: keine Latenz`;
     if (!hasLatency || !latencyScale) {
-      return `<div class="external-monitor-latency-cell external-monitor-latency-cell--empty" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></div>`;
+      return `<div class="external-monitor-latency-cell external-monitor-latency-cell--empty" style="--cell-index: ${index}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></div>`;
     }
     const heightPct = Math.max(6, Math.min(100, (responseMs / latencyScale.chartMax) * 100));
-    return `<div class="external-monitor-latency-cell" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><div class="external-monitor-latency-fill" style="height: ${heightPct.toFixed(1)}%"></div></div>`;
+    return `<div class="external-monitor-latency-cell" style="--cell-index: ${index}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><div class="external-monitor-latency-fill" style="height: ${heightPct.toFixed(1)}%"></div></div>`;
   }).join("");
   const latencySectionHtml = latencyScale
     ? `
@@ -21957,7 +21957,7 @@ function renderExternalMonitorHistoryChart(historyRows, monitor) {
   const availabilityValue = summary.availabilityPct != null ? `${summary.availabilityPct}%` : "-";
   const failCount = summary.down + summary.degraded;
   return `
-    <div class="external-monitor-history-chart">
+    <div class="external-monitor-history-chart" style="--point-count: ${pointCount}">
       <div class="external-monitor-history-chart-summary">
         <div class="external-monitor-history-chart-stat">
           <span class="label">Verfügbarkeit</span>
@@ -21989,6 +21989,20 @@ function renderExternalMonitorHistoryChart(historyRows, monitor) {
       </div>
     </div>
   `;
+}
+
+function restartExternalMonitorHistoryChartAnimation(rootEl) {
+  const chart = rootEl?.querySelector?.(".external-monitor-history-chart");
+  if (!chart) {
+    return;
+  }
+  chart.classList.remove("external-monitor-history-chart--build");
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    chart.classList.add("external-monitor-history-chart--build");
+    return;
+  }
+  void chart.offsetWidth;
+  chart.classList.add("external-monitor-history-chart--build");
 }
 
 function renderServiceMonitorHeadRowHtml(monitor) {
@@ -22187,6 +22201,7 @@ function renderExternalMonitorDetail(monitor) {
       </div>
     </details>
   `;
+  restartExternalMonitorHistoryChartAnimation(detailView);
 }
 
 async function loadExternalMonitorDetail(monitorId) {
