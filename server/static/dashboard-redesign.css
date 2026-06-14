@@ -20,6 +20,8 @@
   --dr-host-inactive-bg: #fef2f2;
   --sidebar-edge: 5px;
   --sidebar-scroll-pad: 5px;
+  --sidebar-scroll-track: 12px;
+  --sidebar-content-inset-end: calc(var(--sidebar-scroll-pad) + var(--sidebar-scroll-track));
   --sidebar-list-gap: 6px;
   --sidebar-mode-header-slot: 36px;
   --sidebar-service-toolbar-slot: 40px;
@@ -2127,7 +2129,8 @@ body[data-theme="dark"] .live-report-feed-stats {
   justify-content: flex-start;
   gap: 6px;
   width: 100%;
-  padding: 2px 0 0 !important;
+  max-width: 100%;
+  padding: 2px var(--sidebar-content-inset-end) 0 0 !important;
   margin-bottom: 0 !important;
   box-sizing: border-box;
 }
@@ -2296,7 +2299,8 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
-  padding: 0 0 6px !important;
+  padding: 0 var(--sidebar-content-inset-end) 6px 0 !important;
+  box-sizing: border-box;
 }
 
 .service-monitor-filter-select {
