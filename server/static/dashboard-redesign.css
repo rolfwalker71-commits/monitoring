@@ -640,6 +640,47 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   content: none;
 }
 
+/* ── Zone 3+4: Layout shell cards (sidebar + host detail) ── */
+.layout {
+  align-items: start;
+}
+
+.hosts-column {
+  display: flex;
+  flex-direction: column;
+  background: var(--dr-surface) !important;
+  border: 1px solid var(--dr-card-border) !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--dr-card-shadow) !important;
+  overflow: hidden;
+  padding: 8px var(--sidebar-edge) 10px !important;
+  align-self: start !important;
+}
+
+.reports-column {
+  display: flex;
+  flex-direction: column;
+  background: var(--dr-surface) !important;
+  border: 1px solid var(--dr-card-border) !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--dr-card-shadow) !important;
+  overflow: hidden;
+  align-self: start;
+  min-width: 0;
+}
+
+#hostDashboardPanels {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.reports-column .external-monitor-detail-view {
+  border-top: 1px solid var(--dr-line);
+}
+
 /* ── Zone 4: Report chrome ── */
 .reports-column .section-head {
   display: none !important;
@@ -652,7 +693,7 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--dr-line);
-  background: #fff;
+  background: transparent;
 }
 
 .report-chrome-logo-wrap {
@@ -749,7 +790,7 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
 .reports-column .view-tabs-shell {
   padding: 0 14px;
   border-bottom: 2px solid var(--dr-line);
-  background: #fff;
+  background: transparent;
 }
 
 .reports-column .view-tabs {
@@ -1276,8 +1317,15 @@ body[data-theme="dark"] #reportsView .overview-content {
   background: var(--dr-zone-bg);
 }
 
-body[data-theme="dark"] .report-chrome-bar {
+body[data-theme="dark"] .hosts-column,
+body[data-theme="dark"] .reports-column {
   background: var(--dr-surface) !important;
+  border-color: var(--dr-card-border) !important;
+  box-shadow: var(--dr-card-shadow) !important;
+}
+
+body[data-theme="dark"] .report-chrome-bar {
+  background: transparent !important;
   border-bottom-color: var(--dr-line) !important;
 }
 
@@ -1309,7 +1357,7 @@ body[data-theme="dark"] .report-chrome-date {
 }
 
 body[data-theme="dark"] .reports-column .view-tabs-shell {
-  background: var(--dr-surface) !important;
+  background: transparent !important;
   border-bottom-color: var(--dr-line) !important;
 }
 
@@ -2149,11 +2197,6 @@ body[data-theme="dark"] .live-report-feed-stats {
 .sidebar-mode-btn[data-sidebar-mode="services"].active {
   background: #eff6ff;
   color: #1d4ed8;
-}
-
-.hosts-column {
-  padding: 6px var(--sidebar-edge) 6px !important;
-  align-self: start !important;
 }
 
 .hosts-column-scroll {
