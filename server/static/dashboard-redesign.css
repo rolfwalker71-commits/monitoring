@@ -2384,51 +2384,59 @@ body[data-theme="dark"] .sidebar-mode-btn[data-sidebar-mode="services"].active {
   color: #1d4ed8;
 }
 
-.service-monitor-list article.host-item.service-monitor-card--up,
-.hosts-column .service-monitor-list article.host-item.service-monitor-card--up {
-  background: #f7fef9 !important;
-  border-color: #d1fae5 !important;
+.service-monitor-list article.host-item.service-monitor-card--up:not(.selected),
+.hosts-column .service-monitor-list article.host-item.service-monitor-card--up:not(.selected) {
+  background: #ffffff !important;
+  border: 2px solid #22c55e !important;
   opacity: 1 !important;
 }
 
-.service-monitor-list article.host-item.service-monitor-card--down,
-.hosts-column .service-monitor-list article.host-item.service-monitor-card--down {
-  background: #fff7f7 !important;
-  border-color: #fecaca !important;
+.service-monitor-list article.host-item.service-monitor-card--down:not(.selected),
+.hosts-column .service-monitor-list article.host-item.service-monitor-card--down:not(.selected) {
+  background: #ffffff !important;
+  border: 2px solid #ef4444 !important;
   opacity: 1 !important;
 }
 
-.service-monitor-list article.host-item.service-monitor-card--warn,
-.hosts-column .service-monitor-list article.host-item.service-monitor-card--warn {
-  background: #fffbf5 !important;
-  border-color: #fed7aa !important;
+.service-monitor-list article.host-item.service-monitor-card--warn:not(.selected),
+.hosts-column .service-monitor-list article.host-item.service-monitor-card--warn:not(.selected) {
+  background: #ffffff !important;
+  border: 2px solid #f97316 !important;
   opacity: 1 !important;
 }
 
-.service-monitor-list article.host-item.service-monitor-card--unknown,
-.hosts-column .service-monitor-list article.host-item.service-monitor-card--unknown {
-  background: #fafbfc !important;
-  border-color: #e2e8f0 !important;
+.service-monitor-list article.host-item.service-monitor-card--unknown:not(.selected),
+.hosts-column .service-monitor-list article.host-item.service-monitor-card--unknown:not(.selected) {
+  background: #ffffff !important;
+  border: 2px solid #94a3b8 !important;
   opacity: 1 !important;
 }
 
 .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--up,
 .hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--up {
+  background: #f7fef9 !important;
+  border: 2px solid #22c55e !important;
   box-shadow: inset 0 0 0 1px #4ade80, var(--dr-card-shadow-hover) !important;
 }
 
 .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--down,
 .hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--down {
+  background: #fff7f7 !important;
+  border: 2px solid #ef4444 !important;
   box-shadow: inset 0 0 0 1px #f87171, var(--dr-card-shadow-hover) !important;
 }
 
 .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--warn,
 .hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--warn {
+  background: #fffbf5 !important;
+  border: 2px solid #f97316 !important;
   box-shadow: inset 0 0 0 1px #fb923c, var(--dr-card-shadow-hover) !important;
 }
 
 .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--unknown,
 .hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--unknown {
+  background: #fafbfc !important;
+  border: 2px solid #94a3b8 !important;
   box-shadow: inset 0 0 0 1px #93c5fd, var(--dr-card-shadow-hover) !important;
 }
 
@@ -2551,28 +2559,52 @@ body[data-theme="dark"] .service-monitor-pill--extern {
   color: #1d4ed8;
 }
 
-body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--up,
-body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--up {
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--up:not(.selected),
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--up:not(.selected) {
+  background: var(--dr-surface) !important;
+  border: 2px solid #4ade80 !important;
+}
+
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--down:not(.selected),
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--down:not(.selected) {
+  background: var(--dr-surface) !important;
+  border: 2px solid #f87171 !important;
+}
+
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--warn:not(.selected),
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--warn:not(.selected) {
+  background: var(--dr-surface) !important;
+  border: 2px solid #fb923c !important;
+}
+
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--unknown:not(.selected),
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--unknown:not(.selected) {
+  background: var(--dr-surface) !important;
+  border: 2px solid #64748b !important;
+}
+
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--up,
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--up {
   background: #1f5c42 !important;
-  border-color: #2d7a57 !important;
+  border: 2px solid #4ade80 !important;
 }
 
-body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--down,
-body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--down {
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--down,
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--down {
   background: #8b3333 !important;
-  border-color: #b04a4a !important;
+  border: 2px solid #f87171 !important;
 }
 
-body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--warn,
-body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--warn {
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--warn,
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--warn {
   background: #9a4d28 !important;
-  border-color: #c96a35 !important;
+  border: 2px solid #fb923c !important;
 }
 
-body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card--unknown,
-body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card--unknown {
+body[data-theme="dark"] .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--unknown,
+body[data-theme="dark"] .hosts-column .service-monitor-list article.host-item.service-monitor-card.selected.service-monitor-card--unknown {
   background: #2a3648 !important;
-  border-color: #475569 !important;
+  border: 2px solid #64748b !important;
 }
 
 .host-linked-monitors {
