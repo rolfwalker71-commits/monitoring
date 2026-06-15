@@ -15977,7 +15977,7 @@ function renderBackupStatus(data) {
       const newestParent = newestSlashIndex >= 0 ? newestRaw.slice(0, newestSlashIndex) : "";
       const newestName = escapeHtml(newestLeaf || newestRaw || "-");
       const newestPath = newestParent ? `<div class="backup-status-newest-path" title="${escapeHtml(newestRaw)}">📁 ${escapeHtml(newestParent)}</div>` : "";
-      const newestMod = d.newest_item_modified ? formatUtcPlus2Short(d.newest_item_modified) : "-";
+      const newestMod = d.newest_item_modified ? formatReportDateTime(d.newest_item_modified) : "-";
       const sizeBytes = d.newest_item_size_bytes || 0;
       const sizeText = sizeBytes > 0 ? formatFileSize(sizeBytes) : "-";
       const rowClass = isSql ? "backup-row backup-row--sql" : isHana ? "backup-row backup-row--hana" : "backup-row backup-row--fs";
