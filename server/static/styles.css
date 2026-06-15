@@ -11765,6 +11765,14 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
   vertical-align: top;
 }
 
+.backup-status-table tbody tr:nth-child(odd) > td {
+  background: #fcfdff;
+}
+
+.backup-status-table tbody tr:nth-child(even) > td {
+  background: #f7fbff;
+}
+
 .backup-status-table {
   width: 100%;
   table-layout: fixed;
@@ -11861,13 +11869,9 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
   line-height: 1.4;
 }
 
-.backup-status-table--sql .backup-status-dir-name {
-  display: block;
-}
-
 .backup-status-table--sql .backup-status-dir-name .backup-source-chip {
   margin-right: 6px;
-  vertical-align: middle;
+  vertical-align: top;
 }
 
 .backup-status-table--sql .backup-status-badge-cell {
@@ -11944,9 +11948,12 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
 }
 
 .backup-status-dir-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  vertical-align: top;
+}
+
+.backup-status-dir-name .backup-source-chip {
+  margin-right: 6px;
+  vertical-align: top;
 }
 
 .backup-source-chip {
@@ -11973,14 +11980,6 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
 .backup-source-chip--fs {
   background: #e2e8f0;
   color: #334155;
-}
-
-.backup-row--sql td {
-  background: #f8fbff;
-}
-
-.backup-row--hana td {
-  background: #faf5ff;
 }
 
 body[data-theme="dark"] .backup-host-card {
@@ -12118,12 +12117,12 @@ body[data-theme="dark"] .backup-host-tag--country {
   background: transparent;
 }
 
-body[data-theme="dark"] .backup-row--sql td {
-  background: #0d1d38;
+body[data-theme="dark"] .backup-status-table tbody tr:nth-child(odd) > td {
+  background: #162031;
 }
 
-body[data-theme="dark"] .backup-row--hana td {
-  background: #24113a;
+body[data-theme="dark"] .backup-status-table tbody tr:nth-child(even) > td {
+  background: #131c2c;
 }
 
 /* System overview hierarchy layout */
