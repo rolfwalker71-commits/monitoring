@@ -3568,7 +3568,7 @@ async function loginWebClient() {
   setLoginBusy(true);
   setLoginStatus("Anmeldung läuft…");
   const loginAbort = new AbortController();
-  const loginTimeoutId = window.setTimeout(() => loginAbort.abort(), 15000);
+  const loginTimeoutId = window.setTimeout(() => loginAbort.abort(), 28000);
   try {
     const response = await fetch("/api/v1/web-login", {
       method: "POST",
@@ -3588,7 +3588,7 @@ async function loginWebClient() {
       }
       if (response.status === 502) {
         setLoginStatus(
-          "Gateway-Fehler (502): Server/DB überlastet. 30 Sekunden warten, dann erneut anmelden.",
+          "Gateway-Fehler (502): Server antwortet nicht rechtzeitig. 30 Sekunden warten, dann erneut anmelden.",
           true
         );
         return false;

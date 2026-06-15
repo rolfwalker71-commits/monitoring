@@ -135,15 +135,15 @@ DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAIN
 SQLITE_BUSY_TIMEOUT_SECONDS = max(1.0, min(300.0, float(os.getenv("MONITORING_SQLITE_BUSY_TIMEOUT_SECONDS", "120") or "120")))
 WEB_AUTH_BUSY_TIMEOUT_MS = max(
     1000,
-    int(os.getenv("MONITORING_WEB_AUTH_BUSY_TIMEOUT_MS", "4000") or "4000"),
+    int(os.getenv("MONITORING_WEB_AUTH_BUSY_TIMEOUT_MS", "8000") or "8000"),
 )
 WEB_AUTH_BUSY_RETRY_ATTEMPTS = max(
     1,
-    min(20, int(os.getenv("MONITORING_WEB_AUTH_BUSY_RETRY_ATTEMPTS", "3") or "3")),
+    min(20, int(os.getenv("MONITORING_WEB_AUTH_BUSY_RETRY_ATTEMPTS", "6") or "6")),
 )
 WEB_AUTH_MAX_WALL_SECONDS = max(
     2.0,
-    min(30.0, float(os.getenv("MONITORING_WEB_AUTH_MAX_WALL_SECONDS", "10") or "10")),
+    min(30.0, float(os.getenv("MONITORING_WEB_AUTH_MAX_WALL_SECONDS", "22") or "22")),
 )
 SQLITE_CACHE_SIZE_MIB = max(8, min(512, int(os.getenv("MONITORING_SQLITE_CACHE_SIZE_MIB", "64") or "64")))
 SQLITE_MMAP_SIZE_MIB = max(0, min(2048, int(os.getenv("MONITORING_SQLITE_MMAP_SIZE_MIB", "256") or "256")))
@@ -668,6 +668,15 @@ def sqlite_connect_maintenance() -> sqlite3.Connection:
 def _sqlite_operational_error_is_lock(exc: sqlite3.OperationalError) -> bool:
     text = str(exc).lower()
     return "locked" in text or "busy" in text
+
+
+def _web_login_database_locked_message() -> str:
+    maintenance_hint = " (Wartungsjob aktiv)" if _changelog_maintenance_active() else ""
+    return (
+        "Datenbank kurz schreibgesperrt"
+        f"{maintenance_hint} — z. B. Report-Ingest oder DB-Wartung, nicht Systemüberlastung. "
+        "Bitte 10–20 Sekunden warten und erneut anmelden."
+    )
 
 
 def _purge_expired_web_sessions(conn: sqlite3.Connection) -> None:
@@ -3284,6 +3293,7 @@ def _backfill_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000)
             conn.executemany("UPDATE reports SET host_uid = ? WHERE id = ?", updates)
 
         last_report_id = int(rows[-1][0] or last_report_id)
+        conn.commit()
         if len(rows) < safe_batch_size:
             return
 
@@ -5725,23 +5735,31 @@ def _execute_web_login(
             break
         try:
             with sqlite_connect_interactive() as conn:
-                user = get_web_user(conn, username)
-                if not user or user.get("is_disabled"):
-                    raise ValueError("invalid credentials")
-                if not verify_password(password, str(user["password_hash"]), str(user["password_salt"])):
-                    raise ValueError("invalid credentials")
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    user = get_web_user(conn, username)
+                    if not user or user.get("is_disabled"):
+                        raise ValueError("invalid credentials")
+                    if not verify_password(password, str(user["password_hash"]), str(user["password_salt"])):
+                        raise ValueError("invalid credentials")
 
-                token, expires_at = create_web_session(conn, username)
-                record_web_login_event(
-                    conn,
-                    username=username,
-                    display_name=str(user.get("display_name", "") or ""),
-                    source_ip=source_ip,
-                    auth_method="password",
-                    user_agent=user_agent,
-                )
-                conn.commit()
-                return user, token, expires_at
+                    token, expires_at = create_web_session(conn, username)
+                    record_web_login_event(
+                        conn,
+                        username=username,
+                        display_name=str(user.get("display_name", "") or ""),
+                        source_ip=source_ip,
+                        auth_method="password",
+                        user_agent=user_agent,
+                    )
+                    conn.commit()
+                    return user, token, expires_at
+                except ValueError:
+                    conn.rollback()
+                    raise
+                except Exception:
+                    conn.rollback()
+                    raise
         except ValueError:
             raise
         except sqlite3.OperationalError as exc:
@@ -5750,7 +5768,7 @@ def _execute_web_login(
             last_exc = exc
             if attempt + 1 >= WEB_AUTH_BUSY_RETRY_ATTEMPTS:
                 break
-            time.sleep(min(1.5, 0.2 * (attempt + 1)))
+            time.sleep(min(2.0, 0.35 * (attempt + 1)))
 
     if last_exc is not None:
         raise last_exc
@@ -22987,14 +23005,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             except sqlite3.OperationalError as exc:
                 if _sqlite_operational_error_is_lock(exc):
-                    maintenance_hint = " (Wartungsjob aktiv)" if _changelog_maintenance_active() else ""
                     self._send_json(
                         HTTPStatus.SERVICE_UNAVAILABLE,
                         {
-                            "error": (
-                                "Datenbank voruebergehend gesperrt"
-                                f"{maintenance_hint}. Bitte in 30–60 Sekunden erneut."
-                            ),
+                            "error": _web_login_database_locked_message(),
                             "code": "database_locked",
                         },
                     )
