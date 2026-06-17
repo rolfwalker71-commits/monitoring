@@ -13489,11 +13489,15 @@ function formatGhostHostCleanupSummary(result, dryRun = false) {
   const reports = Number(result?.reports_deleted || 0);
   const alerts = Number(result?.alerts_deleted || 0);
   const minAge = Number(result?.min_age_hours || 48);
+  const tooRecent = Number(result?.ghosts_too_recent || 0);
   const sample = Array.isArray(result?.deleted_sample) ? result.deleted_sample : [];
   const prefix = dryRun ? "Vorschau" : "Bereinigung";
   const lines = [
-    `${prefix}: ${targeted.toLocaleString("de-CH")} Ghost-Karte${targeted === 1 ? "" : "n"}${dryRun ? " würden entfernt" : " entfernt"} (gescannt: ${scanned.toLocaleString("de-CH")}, Schwelle ${minAge}h).`,
+    `${prefix}: ${targeted.toLocaleString("de-CH")} Ghost-Karte${targeted === 1 ? "" : "n"}${dryRun ? " würden entfernt" : " entfernt"} (Kandidaten: ${scanned.toLocaleString("de-CH")}, Schwelle ${minAge}h).`,
   ];
+  if (tooRecent > 0) {
+    lines.push(`${tooRecent.toLocaleString("de-CH")} weitere Kandidaten sind jünger als ${minAge}h (superseded wird sofort erkannt).`);
+  }
   if (!dryRun && (reports > 0 || alerts > 0)) {
     lines.push(`Reports gelöscht: ${reports.toLocaleString("de-CH")}, Alerts gelöscht: ${alerts.toLocaleString("de-CH")}.`);
   }

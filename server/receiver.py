@@ -2946,12 +2946,27 @@ def _repoint_host_identity_rows(
         ("muted_alert_rules", "muted_repointed"),
         ("heads_up_suppression_rules", "heads_up_repointed"),
     ):
-        conn.execute(
-            f"UPDATE {table_name} SET host_uid = ? WHERE host_uid = ?",
-            (new_key, old_key),
-        )
-        changed = int(conn.execute("SELECT changes()").fetchone()[0] or 0)
-        stats[stat_key] += changed
+        rule_rows = conn.execute(
+            f"SELECT mountpoint FROM {table_name} WHERE host_uid = ?",
+            (old_key,),
+        ).fetchall()
+        for rule_row in rule_rows:
+            mountpoint = str(rule_row[0] or "")
+            duplicate_rule = conn.execute(
+                f"SELECT 1 FROM {table_name} WHERE host_uid = ? AND mountpoint = ? LIMIT 1",
+                (new_key, mountpoint),
+            ).fetchone()
+            if duplicate_rule:
+                conn.execute(
+                    f"DELETE FROM {table_name} WHERE host_uid = ? AND mountpoint = ?",
+                    (old_key, mountpoint),
+                )
+            else:
+                conn.execute(
+                    f"UPDATE {table_name} SET host_uid = ?, hostname = ? WHERE host_uid = ? AND mountpoint = ?",
+                    (new_key, safe_hostname, old_key, mountpoint),
+                )
+                stats[stat_key] += 1
 
     return stats
 
@@ -3227,6 +3242,16 @@ def _is_ghost_identity_report_count(report_count: object) -> bool:
     return count > 0 and count <= INACTIVE_HOST_GHOST_MAX_REPORTS
 
 
+def _identity_is_established(row: tuple) -> bool:
+    host_uid = str(row[0] or "").strip()
+    report_count = int(row[5] or 0)
+    if report_count <= INACTIVE_HOST_GHOST_MAX_REPORTS:
+        return False
+    if _host_uid_has_identity_suffix(host_uid):
+        return True
+    return report_count > max(INACTIVE_HOST_GHOST_MAX_REPORTS * 3, 10)
+
+
 def _identity_row_is_stronger(new_row: tuple, existing_row: tuple) -> bool:
     new_count = int(new_row[5] or 0)
     existing_count = int(existing_row[5] or 0)
@@ -3246,16 +3271,83 @@ def _established_identity_maps_from_rows(
         hostname = str(row[1] or "").strip()
         if not host_uid or not hostname or host_uid.startswith("__legacy_report__:"):
             continue
-        if not _is_ghost_identity_report_count(row[5]):
-            existing_hostname = by_hostname.get(hostname)
-            if not existing_hostname or _identity_row_is_stronger(row, existing_hostname):
-                by_hostname[hostname] = row
-            cluster_key = _hostname_cluster_key(hostname)
-            if cluster_key:
-                existing_cluster = by_cluster.get(cluster_key)
-                if not existing_cluster or _identity_row_is_stronger(row, existing_cluster):
-                    by_cluster[cluster_key] = row
+        if not _identity_is_established(row):
+            continue
+        existing_hostname = by_hostname.get(hostname)
+        if not existing_hostname or _identity_row_is_stronger(row, existing_hostname):
+            by_hostname[hostname] = row
+        cluster_key = _hostname_cluster_key(hostname)
+        if cluster_key:
+            existing_cluster = by_cluster.get(cluster_key)
+            if not existing_cluster or _identity_row_is_stronger(row, existing_cluster):
+                by_cluster[cluster_key] = row
     return by_hostname, by_cluster
+
+
+def _should_remove_stale_host_identity(
+    conn: sqlite3.Connection,
+    row: tuple,
+    *,
+    cutoff_iso: str,
+    canonical_by_hostname: dict[str, dict[str, object]],
+    canonical_by_cluster: dict[str, dict[str, object]],
+    last_seen_by_host_uid: dict[str, str],
+    established_by_hostname: dict[str, tuple],
+    established_by_cluster: dict[str, tuple],
+) -> tuple[bool, str]:
+    host_uid = str(row[0] or "").strip()
+    hostname = str(row[1] or "").strip()
+    last_seen_utc = str(row[2] or "").strip()
+    report_count = int(row[5] or 0)
+    if not host_uid or not hostname:
+        return False, ""
+
+    if host_uid.startswith("__legacy_report__:"):
+        if last_seen_utc and last_seen_utc < cutoff_iso:
+            return True, "legacy_orphan"
+        return False, "too_recent"
+
+    established_hostname_row = established_by_hostname.get(hostname)
+    if established_hostname_row and str(established_hostname_row[0] or "").strip() == host_uid:
+        return False, "established"
+
+    cluster_key = _hostname_cluster_key(hostname)
+    established_cluster_row = established_by_cluster.get(cluster_key) if cluster_key else None
+    if established_cluster_row and str(established_cluster_row[0] or "").strip() == host_uid:
+        return False, "established"
+
+    if _is_superseded_host_identity_key(
+        conn,
+        hostname,
+        host_uid,
+        canonical_by_hostname,
+        canonical_by_cluster,
+        last_seen_by_host_uid,
+    ):
+        return True, "superseded"
+
+    if not last_seen_utc or last_seen_utc >= cutoff_iso:
+        return False, "too_recent"
+
+    if _is_ghost_identity_report_count(report_count):
+        return True, "ghost"
+
+    if established_hostname_row:
+        established_uid = str(established_hostname_row[0] or "").strip()
+        established_count = int(established_hostname_row[5] or 0)
+        if established_uid and established_uid != host_uid and established_count > report_count:
+            return True, "weaker_duplicate"
+
+    if established_cluster_row:
+        established_uid = str(established_cluster_row[0] or "").strip()
+        established_count = int(established_cluster_row[5] or 0)
+        if established_uid and established_uid != host_uid and established_count > report_count:
+            return True, "weaker_cluster_duplicate"
+
+    if not _identity_is_established(row):
+        return True, "stale_unestablished"
+
+    return False, ""
 
 
 def cleanup_ghost_host_identities(
@@ -3268,53 +3360,54 @@ def cleanup_ghost_host_identities(
     safe_min_age_hours = max(1, min(720, int(min_age_hours or GHOST_HOST_CLEANUP_MIN_AGE_HOURS)))
     cutoff_iso = utc_hours_ago_iso(safe_min_age_hours)
     rows = _latest_report_rows_by_host_key(conn)
+    canonical_by_hostname = _canonical_identities_by_hostname_from_rows(rows)
+    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(rows)
+    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(rows)
     established_by_hostname, established_by_cluster = _established_identity_maps_from_rows(rows)
 
     ghosts_scanned = 0
     ghosts_targeted = 0
+    ghosts_too_recent = 0
     reports_deleted = 0
     alerts_deleted = 0
     deleted_sample: list[dict[str, str]] = []
+    reason_counts: dict[str, int] = {}
 
     for row in rows:
         host_uid = str(row[0] or "").strip()
         hostname = str(row[1] or "").strip()
-        last_seen_utc = str(row[2] or "").strip()
-        report_count = int(row[5] or 0)
-        if not host_uid or not hostname or host_uid.startswith("__legacy_report__:"):
+        if not host_uid or not hostname:
             continue
-        if not _is_ghost_identity_report_count(report_count):
-            continue
+        if _is_ghost_identity_report_count(row[5]) or host_uid.startswith("__legacy_report__:"):
+            ghosts_scanned += 1
+        elif not _identity_is_established(row):
+            ghosts_scanned += 1
 
-        ghosts_scanned += 1
-        if not last_seen_utc or last_seen_utc >= cutoff_iso:
+        should_remove, reason = _should_remove_stale_host_identity(
+            conn,
+            row,
+            cutoff_iso=cutoff_iso,
+            canonical_by_hostname=canonical_by_hostname,
+            canonical_by_cluster=canonical_by_cluster,
+            last_seen_by_host_uid=last_seen_by_host_uid,
+            established_by_hostname=established_by_hostname,
+            established_by_cluster=established_by_cluster,
+        )
+        if not should_remove:
+            if reason == "too_recent":
+                ghosts_too_recent += 1
             continue
-
-        delete_reason = ""
-        established_hostname_row = established_by_hostname.get(hostname)
-        if established_hostname_row:
-            established_uid = str(established_hostname_row[0] or "").strip()
-            if established_uid and established_uid != host_uid:
-                delete_reason = "superseded_by_hostname"
-        if not delete_reason:
-            cluster_key = _hostname_cluster_key(hostname)
-            established_cluster_row = established_by_cluster.get(cluster_key) if cluster_key else None
-            if established_cluster_row:
-                established_uid = str(established_cluster_row[0] or "").strip()
-                if established_uid and established_uid != host_uid:
-                    delete_reason = "superseded_by_cluster"
-        if not delete_reason:
-            delete_reason = "orphan_ghost"
 
         ghosts_targeted += 1
+        reason_counts[reason] = int(reason_counts.get(reason, 0) or 0) + 1
         if len(deleted_sample) < 40:
             deleted_sample.append(
                 {
                     "hostname": hostname,
                     "host_uid": host_uid,
-                    "reason": delete_reason,
-                    "report_count": str(report_count),
-                    "last_seen_utc": last_seen_utc,
+                    "reason": reason,
+                    "report_count": str(int(row[5] or 0)),
+                    "last_seen_utc": str(row[2] or "").strip(),
                 }
             )
         if dry_run:
@@ -3331,10 +3424,12 @@ def cleanup_ghost_host_identities(
         "ghosts_scanned": ghosts_scanned,
         "ghosts_targeted": ghosts_targeted,
         "ghosts_deleted": 0 if dry_run else ghosts_targeted,
+        "ghosts_too_recent": ghosts_too_recent,
         "reports_deleted": reports_deleted,
         "alerts_deleted": alerts_deleted,
         "min_age_hours": safe_min_age_hours,
         "dry_run": dry_run,
+        "reason_counts": reason_counts,
         "deleted_sample": deleted_sample,
     }
 
