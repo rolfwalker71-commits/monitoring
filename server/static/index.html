@@ -711,6 +711,16 @@
                     </table>
                   </div>
                 </details>
+                <div class="db-maintenance-head host-identity-maintenance-head">
+                  <h6>Host-Identitäten (Ghost-Leichen)</h6>
+                  <div class="db-maintenance-actions">
+                    <button id="previewGhostHostCleanupButton" class="btn-secondary" type="button" title="Ghost-Host-Karten anzeigen, die bereinigt würden">👻 Vorschau</button>
+                    <button id="cleanupGhostHostsButton" class="btn-secondary btn-danger-outline" type="button" title="Temporäre Host-Leichen mit falscher UID entfernen">🧹 Ghosts bereinigen</button>
+                    <button id="cleanupHostIdentitiesButton" class="btn-secondary" type="button" title="Veraltete Identitäten zur kanonischen UID zusammenführen">🔗 Identitäten mergen</button>
+                    <button id="repairHostUidsButton" class="btn-secondary" type="button" title="host_uid aller Reports neu ableiten">🛠 UID reparieren</button>
+                  </div>
+                </div>
+                <p id="hostIdentityMaintenanceStatus" class="count compact">Entfernt Host-Karten mit ≤3 Reports und letztem Report älter als 48h (konfigurierbar).</p>
               </div>
 
               <div id="adminOpsBackupCard" class="db-maintenance-panel admin-ops-card">

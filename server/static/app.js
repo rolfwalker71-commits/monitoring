@@ -13476,6 +13476,95 @@ async function runAdminReportDedupe(dryRun = false) {
   return data;
 }
 
+function setHostIdentityMaintenanceStatus(message, isError = false) {
+  const el = document.getElementById("hostIdentityMaintenanceStatus");
+  if (!el) return;
+  el.textContent = String(message || "");
+  el.classList.toggle("error", isError === true);
+}
+
+function formatGhostHostCleanupSummary(result, dryRun = false) {
+  const targeted = Number(result?.ghosts_targeted ?? result?.ghosts_deleted ?? 0);
+  const scanned = Number(result?.ghosts_scanned || 0);
+  const reports = Number(result?.reports_deleted || 0);
+  const alerts = Number(result?.alerts_deleted || 0);
+  const minAge = Number(result?.min_age_hours || 48);
+  const sample = Array.isArray(result?.deleted_sample) ? result.deleted_sample : [];
+  const prefix = dryRun ? "Vorschau" : "Bereinigung";
+  const lines = [
+    `${prefix}: ${targeted.toLocaleString("de-CH")} Ghost-Karte${targeted === 1 ? "" : "n"}${dryRun ? " würden entfernt" : " entfernt"} (gescannt: ${scanned.toLocaleString("de-CH")}, Schwelle ${minAge}h).`,
+  ];
+  if (!dryRun && (reports > 0 || alerts > 0)) {
+    lines.push(`Reports gelöscht: ${reports.toLocaleString("de-CH")}, Alerts gelöscht: ${alerts.toLocaleString("de-CH")}.`);
+  }
+  if (sample.length > 0) {
+    const names = sample
+      .slice(0, 8)
+      .map((item) => String(item?.hostname || item?.host_uid || "").trim())
+      .filter(Boolean);
+    if (names.length > 0) {
+      lines.push(`Beispiele: ${names.join(", ")}${sample.length > names.length ? " …" : ""}`);
+    }
+  }
+  return lines.join(" ");
+}
+
+async function runAdminGhostHostCleanup({ dryRun = false, minAgeHours = 48 } = {}) {
+  const params = new URLSearchParams();
+  params.set("min_age_hours", String(Math.max(1, Math.min(720, Number(minAgeHours) || 48))));
+  if (dryRun) {
+    params.set("dry_run", "1");
+  }
+  const response = await fetch(`/api/v1/admin/cleanup-ghost-hosts?${params.toString()}`, {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
+async function runAdminCleanupHostIdentities() {
+  const response = await fetch("/api/v1/admin/cleanup-host-identities", {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
+async function runAdminRepairHostUids() {
+  const response = await fetch("/api/v1/admin/repair-host-uids?batch_size=2000", {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
+async function refreshHostListsAfterIdentityMaintenance() {
+  await Promise.all([
+    loadHosts({ bustCache: true }).catch((error) => {
+      console.warn("loadHosts after identity maintenance failed:", error);
+    }),
+    loadInactiveHosts({ bustCache: true, updateList: false }).catch((error) => {
+      console.warn("loadInactiveHosts after identity maintenance failed:", error);
+    }),
+    loadHeaderDatabaseKpis().catch((error) => {
+      console.warn("loadHeaderDatabaseKpis after identity maintenance failed:", error);
+    }),
+  ]);
+  updateHeaderStatChips();
+}
+
 function renderReportDedupeEffect(analysisOrResult) {
   const el = document.getElementById("dbMaintenanceEffect");
   if (!el) return;
@@ -19249,6 +19338,109 @@ function wireEvents() {
         setAgentIngestAuditStatus(`Fehler: ${error.message}`, true);
       } finally {
         refreshAgentIngestQueueButton.disabled = false;
+      }
+    });
+  }
+
+  const previewGhostHostCleanupButton = document.getElementById("previewGhostHostCleanupButton");
+  const cleanupGhostHostsButton = document.getElementById("cleanupGhostHostsButton");
+  const cleanupHostIdentitiesButton = document.getElementById("cleanupHostIdentitiesButton");
+  const repairHostUidsButton = document.getElementById("repairHostUidsButton");
+  const hostIdentityButtons = [
+    previewGhostHostCleanupButton,
+    cleanupGhostHostsButton,
+    cleanupHostIdentitiesButton,
+    repairHostUidsButton,
+  ].filter(Boolean);
+
+  const setHostIdentityButtonsDisabled = (disabled) => {
+    hostIdentityButtons.forEach((button) => {
+      button.disabled = disabled;
+    });
+  };
+
+  if (previewGhostHostCleanupButton) {
+    previewGhostHostCleanupButton.addEventListener("click", async () => {
+      setHostIdentityButtonsDisabled(true);
+      setHostIdentityMaintenanceStatus("Ghost-Vorschau läuft...");
+      try {
+        const result = await runAdminGhostHostCleanup({ dryRun: true });
+        setHostIdentityMaintenanceStatus(formatGhostHostCleanupSummary(result, true));
+      } catch (error) {
+        setHostIdentityMaintenanceStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        setHostIdentityButtonsDisabled(false);
+      }
+    });
+  }
+
+  if (cleanupGhostHostsButton) {
+    cleanupGhostHostsButton.addEventListener("click", async () => {
+      const confirmed = window.confirm(
+        "Ghost-Host-Leichen jetzt entfernen?\n\nBetroffen: Host-Karten mit höchstens 3 Reports und letztem Report älter als 48 Stunden (falsche UID / Einmal-Meldung)."
+      );
+      if (!confirmed) return;
+
+      setHostIdentityButtonsDisabled(true);
+      setHostIdentityMaintenanceStatus("Ghost-Bereinigung läuft...");
+      try {
+        const result = await runAdminGhostHostCleanup({ dryRun: false });
+        setHostIdentityMaintenanceStatus(formatGhostHostCleanupSummary(result, false));
+        await refreshHostListsAfterIdentityMaintenance();
+      } catch (error) {
+        setHostIdentityMaintenanceStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        setHostIdentityButtonsDisabled(false);
+      }
+    });
+  }
+
+  if (cleanupHostIdentitiesButton) {
+    cleanupHostIdentitiesButton.addEventListener("click", async () => {
+      const confirmed = window.confirm(
+        "Veraltete Host-Identitäten zur kanonischen UID zusammenführen?\n\nDuplikat-Reports mit falscher UID werden gelöscht oder umgebogen."
+      );
+      if (!confirmed) return;
+
+      setHostIdentityButtonsDisabled(true);
+      setHostIdentityMaintenanceStatus("Identitäts-Merge läuft...");
+      try {
+        const result = await runAdminCleanupHostIdentities();
+        const repointed = Number(result.identities_repointed || 0);
+        const orphanReports = Number(result.orphan_reports_deleted || 0);
+        setHostIdentityMaintenanceStatus(
+          `Identitäten bereinigt: ${repointed.toLocaleString("de-CH")} umgebogen, ${orphanReports.toLocaleString("de-CH")} verwaiste Reports gelöscht.`
+        );
+        await refreshHostListsAfterIdentityMaintenance();
+      } catch (error) {
+        setHostIdentityMaintenanceStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        setHostIdentityButtonsDisabled(false);
+      }
+    });
+  }
+
+  if (repairHostUidsButton) {
+    repairHostUidsButton.addEventListener("click", async () => {
+      const confirmed = window.confirm(
+        "host_uid aller Reports neu ableiten?\n\nKann falsche UIDs korrigieren, dauert je nach DB-Grösse einige Minuten."
+      );
+      if (!confirmed) return;
+
+      setHostIdentityButtonsDisabled(true);
+      setHostIdentityMaintenanceStatus("UID-Reparatur läuft...");
+      try {
+        const result = await runAdminRepairHostUids();
+        const updated = Number(result.updated_reports || 0);
+        const deltaCards = Number(result.delta_host_cards || 0);
+        setHostIdentityMaintenanceStatus(
+          `UID-Reparatur: ${updated.toLocaleString("de-CH")} Reports angepasst, Hostkarten-Differenz ${deltaCards >= 0 ? "+" : ""}${deltaCards.toLocaleString("de-CH")}.`
+        );
+        await refreshHostListsAfterIdentityMaintenance();
+      } catch (error) {
+        setHostIdentityMaintenanceStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        setHostIdentityButtonsDisabled(false);
       }
     });
   }

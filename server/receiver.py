@@ -277,6 +277,14 @@ INACTIVE_HOST_GHOST_MAX_REPORTS = max(
     1,
     min(10, int(os.getenv("MONITORING_INACTIVE_HOST_GHOST_MAX_REPORTS", "3") or "3")),
 )
+GHOST_HOST_CLEANUP_MIN_AGE_HOURS = max(
+    1,
+    min(720, int(os.getenv("MONITORING_GHOST_HOST_CLEANUP_MIN_AGE_HOURS", "48") or "48")),
+)
+GHOST_HOST_CLEANUP_INTERVAL_HOURS = max(
+    1,
+    min(168, int(os.getenv("MONITORING_GHOST_HOST_CLEANUP_INTERVAL_HOURS", "24") or "24")),
+)
 CUSTOMER_LOGO_MAX_BYTES = max(64 * 1024, min(10 * 1024 * 1024, int(os.getenv("MONITORING_CUSTOMER_LOGO_MAX_BYTES", str(2 * 1024 * 1024)) or str(2 * 1024 * 1024))))
 try:
     SCHEDULE_TIMEZONE = ZoneInfo(SCHEDULE_TIMEZONE_NAME)
@@ -2648,6 +2656,16 @@ def _resolve_incoming_host_uid(
             payload=payload,
         )
 
+    canonical_uid = _find_established_host_uid_for_ingest(
+        conn,
+        hostname,
+        agent_id=agent_id,
+        primary_ip=primary_ip,
+        payload=payload,
+    )
+    if canonical_uid and canonical_uid != incoming_host_uid:
+        return canonical_uid
+
     return incoming_host_uid
 
 
@@ -3202,6 +3220,123 @@ def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, in
             totals["orphan_reports_deleted"] += int(conn.execute("SELECT changes()").fetchone()[0] or 0)
 
     return totals
+
+
+def _is_ghost_identity_report_count(report_count: object) -> bool:
+    count = int(report_count or 0)
+    return count > 0 and count <= INACTIVE_HOST_GHOST_MAX_REPORTS
+
+
+def _identity_row_is_stronger(new_row: tuple, existing_row: tuple) -> bool:
+    new_count = int(new_row[5] or 0)
+    existing_count = int(existing_row[5] or 0)
+    if new_count != existing_count:
+        return new_count > existing_count
+    return str(new_row[2] or "").strip() > str(existing_row[2] or "").strip()
+
+
+def _established_identity_maps_from_rows(
+    rows: list[tuple],
+) -> tuple[dict[str, tuple], dict[str, tuple]]:
+    """Map hostname/cluster to the strongest non-ghost identity row."""
+    by_hostname: dict[str, tuple] = {}
+    by_cluster: dict[str, tuple] = {}
+    for row in rows:
+        host_uid = str(row[0] or "").strip()
+        hostname = str(row[1] or "").strip()
+        if not host_uid or not hostname or host_uid.startswith("__legacy_report__:"):
+            continue
+        if not _is_ghost_identity_report_count(row[5]):
+            existing_hostname = by_hostname.get(hostname)
+            if not existing_hostname or _identity_row_is_stronger(row, existing_hostname):
+                by_hostname[hostname] = row
+            cluster_key = _hostname_cluster_key(hostname)
+            if cluster_key:
+                existing_cluster = by_cluster.get(cluster_key)
+                if not existing_cluster or _identity_row_is_stronger(row, existing_cluster):
+                    by_cluster[cluster_key] = row
+    return by_hostname, by_cluster
+
+
+def cleanup_ghost_host_identities(
+    conn: sqlite3.Connection,
+    *,
+    min_age_hours: int | None = None,
+    dry_run: bool = False,
+) -> dict[str, object]:
+    """Remove stale temporary host identities (wrong UID, few reports, no follow-up)."""
+    safe_min_age_hours = max(1, min(720, int(min_age_hours or GHOST_HOST_CLEANUP_MIN_AGE_HOURS)))
+    cutoff_iso = utc_hours_ago_iso(safe_min_age_hours)
+    rows = _latest_report_rows_by_host_key(conn)
+    established_by_hostname, established_by_cluster = _established_identity_maps_from_rows(rows)
+
+    ghosts_scanned = 0
+    ghosts_targeted = 0
+    reports_deleted = 0
+    alerts_deleted = 0
+    deleted_sample: list[dict[str, str]] = []
+
+    for row in rows:
+        host_uid = str(row[0] or "").strip()
+        hostname = str(row[1] or "").strip()
+        last_seen_utc = str(row[2] or "").strip()
+        report_count = int(row[5] or 0)
+        if not host_uid or not hostname or host_uid.startswith("__legacy_report__:"):
+            continue
+        if not _is_ghost_identity_report_count(report_count):
+            continue
+
+        ghosts_scanned += 1
+        if not last_seen_utc or last_seen_utc >= cutoff_iso:
+            continue
+
+        delete_reason = ""
+        established_hostname_row = established_by_hostname.get(hostname)
+        if established_hostname_row:
+            established_uid = str(established_hostname_row[0] or "").strip()
+            if established_uid and established_uid != host_uid:
+                delete_reason = "superseded_by_hostname"
+        if not delete_reason:
+            cluster_key = _hostname_cluster_key(hostname)
+            established_cluster_row = established_by_cluster.get(cluster_key) if cluster_key else None
+            if established_cluster_row:
+                established_uid = str(established_cluster_row[0] or "").strip()
+                if established_uid and established_uid != host_uid:
+                    delete_reason = "superseded_by_cluster"
+        if not delete_reason:
+            delete_reason = "orphan_ghost"
+
+        ghosts_targeted += 1
+        if len(deleted_sample) < 40:
+            deleted_sample.append(
+                {
+                    "hostname": hostname,
+                    "host_uid": host_uid,
+                    "reason": delete_reason,
+                    "report_count": str(report_count),
+                    "last_seen_utc": last_seen_utc,
+                }
+            )
+        if dry_run:
+            continue
+
+        deleted = delete_host_card_data(conn, hostname, host_uid)
+        reports_deleted += int(deleted.get("reports", 0) or 0)
+        alerts_deleted += int(deleted.get("alerts", 0) or 0)
+
+    if not dry_run and ghosts_targeted > 0:
+        _invalidate_identity_maps_cache()
+
+    return {
+        "ghosts_scanned": ghosts_scanned,
+        "ghosts_targeted": ghosts_targeted,
+        "ghosts_deleted": 0 if dry_run else ghosts_targeted,
+        "reports_deleted": reports_deleted,
+        "alerts_deleted": alerts_deleted,
+        "min_age_hours": safe_min_age_hours,
+        "dry_run": dry_run,
+        "deleted_sample": deleted_sample,
+    }
 
 
 def _ensure_reports_host_uid_support(conn: sqlite3.Connection) -> None:
@@ -25670,6 +25805,60 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/admin/cleanup-ghost-hosts":
+            if not self._require_admin_session():
+                return
+
+            query = parse_qs(parsed.query)
+            min_age_hours = parse_int(
+                query,
+                "min_age_hours",
+                default=GHOST_HOST_CLEANUP_MIN_AGE_HOURS,
+                min_value=1,
+                max_value=720,
+            )
+            dry_run = str((query.get("dry_run") or ["0"])[0]).strip().lower() in {"1", "true", "yes", "on"}
+
+            if not dry_run and not _db_maintenance_lock.acquire(blocking=False):
+                self._send_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {"error": "Datenbankwartung läuft bereits. Bitte später erneut versuchen."},
+                )
+                return
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    if not dry_run:
+                        cleanup_superseded_host_identities(conn)
+                    result = cleanup_ghost_host_identities(
+                        conn,
+                        min_age_hours=min_age_hours,
+                        dry_run=dry_run,
+                    )
+                    if not dry_run:
+                        conn.commit()
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+            finally:
+                if not dry_run:
+                    _db_maintenance_lock.release()
+
+            if not dry_run:
+                _read_cache_invalidate_prefix("hosts:")
+                _read_cache_invalidate_prefix("inactive-hosts:")
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "message": "Ghost-Host-Vorschau abgeschlossen"
+                    if dry_run
+                    else "Ghost-Host-Leichen bereinigt",
+                    **result,
+                },
+            )
+            return
+
         if path == "/api/v1/external-monitor-probe/config":
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length <= 0:
@@ -26189,6 +26378,51 @@ def main() -> None:
     threading.Thread(
         target=_startup_identity_cleanup_loop,
         name="startup-identity-cleanup",
+        daemon=True,
+    ).start()
+
+    def _ghost_host_cleanup_loop() -> None:
+        enabled_raw = str(os.getenv("MONITORING_GHOST_HOST_CLEANUP", "1") or "1").strip().lower()
+        if enabled_raw in {"0", "false", "no", "off"}:
+            return
+
+        interval_hours = GHOST_HOST_CLEANUP_INTERVAL_HOURS
+        interval_seconds = max(3600, interval_hours * 3600)
+        startup_delay = max(
+            300,
+            min(7200, int(os.getenv("MONITORING_GHOST_HOST_CLEANUP_STARTUP_DELAY_SECONDS", "900") or "900")),
+        )
+        time.sleep(startup_delay)
+
+        while True:
+            if not _db_maintenance_lock.acquire(blocking=False):
+                print("[ghost-cleanup] skipped: maintenance lock busy")
+            else:
+                try:
+                    with sqlite_connect() as conn:
+                        cleanup_superseded_host_identities(conn)
+                        result = cleanup_ghost_host_identities(conn)
+                        conn.commit()
+                    ghosts_deleted = int(result.get("ghosts_deleted", 0) or 0)
+                    if ghosts_deleted > 0:
+                        print(
+                            "[ghost-cleanup] removed ghost host identities: "
+                            f"deleted={ghosts_deleted}, "
+                            f"reports={result.get('reports_deleted', 0)}, "
+                            f"alerts={result.get('alerts_deleted', 0)}"
+                        )
+                    _read_cache_invalidate_prefix("hosts:")
+                    _read_cache_invalidate_prefix("inactive-hosts:")
+                except Exception as exc:
+                    print(f"[ghost-cleanup] failed: {exc}")
+                finally:
+                    _db_maintenance_lock.release()
+
+            time.sleep(interval_seconds)
+
+    threading.Thread(
+        target=_ghost_host_cleanup_loop,
+        name="ghost-host-cleanup",
         daemon=True,
     ).start()
 
