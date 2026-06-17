@@ -7,8 +7,35 @@ function mobileEsc(value) {
     .replaceAll("'", "&#39;");
 }
 
+const MOBILE_FETCH_DEFAULTS = Object.freeze({
+  credentials: "same-origin",
+  cache: "no-store",
+});
+
+function mobileFetch(url, options = {}) {
+  return fetch(url, { ...MOBILE_FETCH_DEFAULTS, ...options });
+}
+
+function mobileSleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function mobileFetchWithRetry(url, options = {}, retryOptions = {}) {
+  const maxAttempts = Math.max(1, Number(retryOptions.maxAttempts) || 3);
+  const retryStatuses = retryOptions.retryStatuses || new Set([502, 503]);
+  let lastResp = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    lastResp = await mobileFetch(url, options);
+    if (lastResp.ok || !retryStatuses.has(lastResp.status) || attempt >= maxAttempts) {
+      return lastResp;
+    }
+    await mobileSleep(400 * attempt);
+  }
+  return lastResp;
+}
+
 async function mobileFetchSession() {
-  const resp = await fetch("/api/v1/session", { credentials: "same-origin" });
+  const resp = await mobileFetch("/api/v1/session");
   if (!resp.ok) {
     throw new Error("HTTP " + resp.status);
   }
@@ -16,10 +43,9 @@ async function mobileFetchSession() {
 }
 
 async function mobileLogin(username, password) {
-  const resp = await fetch("/api/v1/web-login", {
+  const resp = await mobileFetch("/api/v1/web-login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    credentials: "same-origin",
     body: JSON.stringify({ username, password }),
   });
   const data = await resp.json().catch(() => ({}));
@@ -31,9 +57,8 @@ async function mobileLogin(username, password) {
 
 async function mobileLogout() {
   stopMobileSessionKeepAlive();
-  await fetch("/api/v1/web-logout", {
+  await mobileFetch("/api/v1/web-logout", {
     method: "POST",
-    credentials: "same-origin",
   }).catch(() => {});
 }
 
@@ -46,9 +71,8 @@ function stopMobileSessionKeepAlive() {
 
 async function mobileRefreshSession() {
   try {
-    const response = await fetch("/api/v1/session/refresh", {
+    const response = await mobileFetch("/api/v1/session/refresh", {
       method: "POST",
-      credentials: "same-origin",
     });
     if (!response.ok) {
       if (response.status === 401 && Date.now() - mobileSessionEstablishedAtMs < MOBILE_SESSION_LOGIN_GRACE_MS) {
@@ -2695,7 +2719,7 @@ async function loadActiveHostsList(options = {}) {
   setActiveHostsStatus("Lade aktive Hosts…");
 
   try {
-    const resp = await fetch("/api/v1/hosts?limit=200&offset=0", { credentials: "same-origin" });
+    const resp = await mobileFetchWithRetry("/api/v1/hosts?limit=200&offset=0");
 
     if (resp.status === 401) {
       if (!authRetried && (await mobileRecoverSessionAfter401())) {
@@ -2720,6 +2744,7 @@ async function loadActiveHostsList(options = {}) {
 
     state.activeHosts = hosts;
     state.activeHostsCount = hosts.length;
+    state.hostKpisLoaded = true;
     renderHostKpis();
 
     const subtitle = document.getElementById("activeHostsSubtitle");
@@ -2755,9 +2780,7 @@ async function loadInactiveHostsList(options = {}) {
   setInactiveHostsStatus("Lade inaktive Hosts…");
 
   try {
-    const resp = await fetch("/api/v1/inactive-hosts?hours=" + encodeURIComponent(String(hours)), {
-      credentials: "same-origin",
-    });
+    const resp = await mobileFetchWithRetry("/api/v1/inactive-hosts?hours=" + encodeURIComponent(String(hours)));
 
     if (resp.status === 401) {
       if (!authRetried && (await mobileRecoverSessionAfter401())) {
@@ -2777,6 +2800,7 @@ async function loadInactiveHostsList(options = {}) {
     state.inactiveHosts = hosts;
     state.inactiveHostsHours = resolvedHours;
     state.inactiveHostsCount = Math.max(0, Number(data.total || hosts.length || 0));
+    state.hostKpisLoaded = true;
     renderHostKpis();
 
     const subtitle = document.getElementById("inactiveHostsSubtitle");
@@ -2810,6 +2834,7 @@ function mobileForceLogout(message) {
   renderAlerts([]);
   state.activeHostsCount = 0;
   state.inactiveHostsCount = 0;
+  state.hostKpisLoaded = false;
   state.inactiveHosts = [];
   state.activeHosts = [];
   renderHostKpis();
@@ -2896,6 +2921,7 @@ const state = {
   alertsLoading: false,
   activeHostsCount: 0,
   inactiveHostsCount: 0,
+  hostKpisLoaded: false,
   hostKpisHours: 1,
   mobileView: "alerts",
   inactiveHosts: [],
@@ -4284,8 +4310,14 @@ function countActiveHosts(hosts) {
 function renderHostKpis() {
   const elActive = document.getElementById("kpiActiveHosts");
   const elInactive = document.getElementById("kpiInactiveHosts");
-  if (elActive) elActive.textContent = String(Math.max(0, Number(state.activeHostsCount) || 0));
-  if (elInactive) elInactive.textContent = String(Math.max(0, Number(state.inactiveHostsCount) || 0));
+  const activeText = state.hostKpisLoaded
+    ? String(Math.max(0, Number(state.activeHostsCount) || 0))
+    : "…";
+  const inactiveText = state.hostKpisLoaded
+    ? String(Math.max(0, Number(state.inactiveHostsCount) || 0))
+    : "…";
+  if (elActive) elActive.textContent = activeText;
+  if (elInactive) elInactive.textContent = inactiveText;
 }
 
 function renderKpis(alerts) {
@@ -4298,20 +4330,19 @@ function renderKpis(alerts) {
   if (elCritical) elCritical.textContent = String(critical);
   if (elWarning) elWarning.textContent = String(warning);
   if (elOpen) elOpen.textContent = String(open.length);
-  renderHostKpis();
 }
 
 async function loadHostKpis(options = {}) {
   if (!state.authenticated) {
-    return;
+    return false;
   }
   const authRetried = options.authRetried === true;
 
   const hours = Math.max(1, Math.min(24 * 30, Number(state.hostKpisHours) || 1));
   try {
     const [inactiveResp, hostsResp] = await Promise.all([
-      fetch("/api/v1/inactive-hosts?hours=" + encodeURIComponent(String(hours)), { credentials: "same-origin" }),
-      fetch("/api/v1/hosts?limit=200&offset=0", { credentials: "same-origin" }),
+      mobileFetchWithRetry("/api/v1/inactive-hosts?hours=" + encodeURIComponent(String(hours))),
+      mobileFetchWithRetry("/api/v1/hosts?limit=200&offset=0"),
     ]);
 
     if (inactiveResp.status === 401 || hostsResp.status === 401) {
@@ -4319,23 +4350,23 @@ async function loadHostKpis(options = {}) {
         return loadHostKpis({ authRetried: true });
       }
       mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
-      return;
+      return false;
     }
 
-    if (inactiveResp.ok) {
-      const inactivePayload = await inactiveResp.json();
-      state.inactiveHostsCount = Math.max(0, Number(inactivePayload.total || 0));
+    if (!inactiveResp.ok || !hostsResp.ok) {
+      return false;
     }
 
-    if (hostsResp.ok) {
-      const hostsPayload = await hostsResp.json();
-      const hosts = Array.isArray(hostsPayload.hosts) ? hostsPayload.hosts : [];
-      state.activeHostsCount = countActiveHosts(hosts);
-    }
-
+    const inactivePayload = await inactiveResp.json();
+    const hostsPayload = await hostsResp.json();
+    const hosts = Array.isArray(hostsPayload.hosts) ? hostsPayload.hosts : [];
+    state.inactiveHostsCount = Math.max(0, Number(inactivePayload.total || 0));
+    state.activeHostsCount = countActiveHosts(hosts);
+    state.hostKpisLoaded = true;
     renderHostKpis();
+    return true;
   } catch (_error) {
-    // Host-KPIs sind optional; Alert-Liste bleibt nutzbar.
+    return false;
   }
 }
 
@@ -4356,7 +4387,8 @@ async function refreshMobileData() {
     await Promise.all([loadAddonSearchResults({ force: true }), loadHostKpis()]);
     return;
   }
-  await Promise.all([loadAlerts(), loadHostKpis()]);
+  await loadHostKpis();
+  await loadAlerts();
 }
 
 function mobileAsText(value, fallback = "") {
@@ -5349,7 +5381,7 @@ async function fetchMobileHostRecord(hostUid, hostname, options = {}) {
   if (!identity && !host) return null;
 
   try {
-    const resp = await fetch("/api/v1/hosts?limit=200&offset=0", { credentials: "same-origin" });
+    const resp = await mobileFetchWithRetry("/api/v1/hosts?limit=200&offset=0");
     if (resp.status === 401) {
       if (!authRetried && (await mobileRecoverSessionAfter401())) {
         return fetchMobileHostRecord(hostUid, hostname, { authRetried: true });
@@ -6186,6 +6218,7 @@ function wire() {
     renderAlerts([]);
     state.activeHostsCount = 0;
     state.inactiveHostsCount = 0;
+    state.hostKpisLoaded = false;
     state.inactiveHosts = [];
     state.activeHosts = [];
     state.externalMonitors = [];
@@ -6258,31 +6291,59 @@ function wire() {
     if (document.hidden || !state.authenticated) {
       return;
     }
-    void (async () => {
-      const ok = await mobileRefreshSession();
-      if (!ok) {
-        const recovered = await mobileRecoverSessionAfter401();
-        if (!recovered) {
-          mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
-          return;
-        }
-      }
-      await refreshPushState();
-      await refreshMobileData();
-      try {
-        await refreshMobileReportsTotalLive();
-      } catch (error) {
-        console.warn("refreshMobileReportsTotalLive on resume failed:", error);
-      }
-    })().catch((error) => setStatus("Fehler: " + (error?.message || String(error)), true));
+    scheduleMobileResumeFromBackground();
+  });
+
+  window.addEventListener("pageshow", (event) => {
+    if (!state.authenticated || !event.persisted) {
+      return;
+    }
+    state.hostKpisLoaded = false;
+    renderHostKpis();
+    scheduleMobileResumeFromBackground();
   });
 
   window.addEventListener("focus", () => {
-    if (!state.authenticated) {
+    if (!state.authenticated || document.hidden) {
       return;
     }
-    void mobileRefreshSession();
+    scheduleMobileResumeFromBackground();
   });
+}
+
+let mobileResumeTimerId = 0;
+
+async function mobileResumeFromBackground() {
+  if (!state.authenticated) {
+    return;
+  }
+  const ok = await mobileRefreshSession();
+  if (!ok) {
+    const recovered = await mobileRecoverSessionAfter401();
+    if (!recovered) {
+      mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
+      return;
+    }
+  }
+  await refreshPushState();
+  await refreshMobileData();
+  try {
+    await refreshMobileReportsTotalLive();
+  } catch (error) {
+    console.warn("refreshMobileReportsTotalLive on resume failed:", error);
+  }
+}
+
+function scheduleMobileResumeFromBackground() {
+  if (!state.authenticated) {
+    return;
+  }
+  window.clearTimeout(mobileResumeTimerId);
+  mobileResumeTimerId = window.setTimeout(() => {
+    void mobileResumeFromBackground().catch((error) =>
+      setStatus("Fehler: " + (error?.message || String(error)), true),
+    );
+  }, 150);
 }
 
 async function loadMobileReleaseVersions() {
@@ -6325,6 +6386,7 @@ async function loadMobileReleaseVersions() {
 async function init() {
   state.highlightAlertId = parseHighlightAlertId();
   wire();
+  renderHostKpis();
   void loadMobileReleaseVersions();
   try {
     await ensureAuthenticated();
