@@ -10707,6 +10707,41 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int, *, force_refres
     return inactive_hosts
 
 
+MOBILE_HOST_ACTIVE_WINDOW_MINUTES = max(
+    5,
+    min(720, int(os.getenv("MONITORING_MOBILE_HOST_ACTIVE_WINDOW_MINUTES", "60") or "60")),
+)
+
+
+def _build_mobile_host_kpis(conn: sqlite3.Connection, hours: int, *, force_refresh: bool = False) -> dict[str, object]:
+    """Authoritative host KPI counts for mobile (no pagination, ghosts excluded)."""
+    safe_hours = max(1, min(24 * 30, int(hours or 1)))
+    identity_rows, _, _, _ = _get_latest_identity_context(conn, force_refresh=force_refresh)
+    now_utc = datetime.now(timezone.utc)
+    active_window = timedelta(minutes=MOBILE_HOST_ACTIVE_WINDOW_MINUTES)
+    active_count = 0
+    for row in identity_rows:
+        host_uid = str(row[0] or "").strip()
+        if not host_uid or host_uid.startswith("__legacy_report__:"):
+            continue
+        report_count = int(row[5] or 0)
+        if _is_ghost_identity_report_count(report_count):
+            continue
+        parsed_last_seen = parse_utc_iso(str(row[2] or "").strip())
+        if parsed_last_seen is None:
+            continue
+        if (now_utc - parsed_last_seen) <= active_window:
+            active_count += 1
+
+    inactive_hosts = collect_inactive_hosts(conn, safe_hours, force_refresh=force_refresh)
+    return {
+        "active_hosts": active_count,
+        "inactive_hosts": len(inactive_hosts),
+        "hours": safe_hours,
+        "active_window_minutes": MOBILE_HOST_ACTIVE_WINDOW_MINUTES,
+    }
+
+
 def _invalidate_identity_maps_cache() -> None:
     with _identity_maps_cache_lock:
         _identity_maps_cache["expires_at"] = 0.0
@@ -11058,7 +11093,7 @@ def _sort_identity_rows_for_hosts_list(rows: list[tuple]) -> list[tuple]:
         is_ghost = report_count > 0 and report_count <= INACTIVE_HOST_GHOST_MAX_REPORTS
         parsed_last_seen = parse_utc_iso(str(row[2] or "").strip())
         last_seen_ts = parsed_last_seen.timestamp() if parsed_last_seen is not None else 0.0
-        return (1 if is_ghost else 0, -last_seen_ts)
+        return (0 if is_ghost else 1, -last_seen_ts)
 
     return sorted(rows, key=sort_key)
 
@@ -21769,6 +21804,34 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 })
             except Exception as e:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"host-update-log endpoint error: {str(e)}"})
+            return
+
+        if parsed.path == "/api/v1/mobile/host-kpis":
+            if not self._require_web_session():
+                return
+            query = parse_qs(parsed.query)
+            hours = parse_int(query, "hours", default=1, min_value=1, max_value=24 * 30)
+            force_refresh = parse_query_flag(query, "nocache")
+            try:
+                with sqlite_connect_read() as conn:
+                    response_data = _build_mobile_host_kpis(conn, hours, force_refresh=force_refresh)
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": "database_busy",
+                            "message": "Datenbank kurz gesperrt. Bitte in wenigen Sekunden erneut laden.",
+                        },
+                        extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+                    )
+                    return
+                raise
+            self._send_json(
+                HTTPStatus.OK,
+                response_data,
+                extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+            )
             return
 
         if parsed.path == "/api/v1/inactive-hosts":

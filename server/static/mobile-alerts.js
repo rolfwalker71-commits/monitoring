@@ -16,6 +16,27 @@ function mobileFetch(url, options = {}) {
   return fetch(url, { ...MOBILE_FETCH_DEFAULTS, ...options });
 }
 
+function isMobileStandalonePwa() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches
+    || window.navigator.standalone === true
+  );
+}
+
+function mobileFreshApiUrl(path) {
+  const base = String(path || "");
+  const separator = base.includes("?") ? "&" : "?";
+  return base + separator + "nocache=1&_=" + Date.now();
+}
+
+function isMobileTemporaryHost(host) {
+  if (host?.is_temporary_identity === true) {
+    return true;
+  }
+  const reportCount = Number(host?.report_count || 0);
+  return Number.isFinite(reportCount) && reportCount > 0 && reportCount <= 3;
+}
+
 function mobileSleep(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -2719,7 +2740,7 @@ async function loadActiveHostsList(options = {}) {
   setActiveHostsStatus("Lade aktive Hosts…");
 
   try {
-    const resp = await mobileFetchWithRetry("/api/v1/hosts?limit=200&offset=0");
+    const resp = await mobileFetchWithRetry(mobileFreshApiUrl("/api/v1/hosts?limit=200&offset=0"));
 
     if (resp.status === 401) {
       if (!authRetried && (await mobileRecoverSessionAfter401())) {
@@ -2735,7 +2756,7 @@ async function loadActiveHostsList(options = {}) {
 
     const data = await resp.json();
     const allHosts = Array.isArray(data.hosts) ? data.hosts : [];
-    const hosts = allHosts.filter((host) => isHostActive(host));
+    const hosts = allHosts.filter((host) => isHostActive(host) && !isMobileTemporaryHost(host));
     hosts.sort((a, b) => {
       const ta = parseUtcIso(a?.last_seen_utc || "")?.getTime() || 0;
       const tb = parseUtcIso(b?.last_seen_utc || "")?.getTime() || 0;
@@ -2780,7 +2801,9 @@ async function loadInactiveHostsList(options = {}) {
   setInactiveHostsStatus("Lade inaktive Hosts…");
 
   try {
-    const resp = await mobileFetchWithRetry("/api/v1/inactive-hosts?hours=" + encodeURIComponent(String(hours)));
+    const resp = await mobileFetchWithRetry(
+      mobileFreshApiUrl("/api/v1/inactive-hosts?hours=" + encodeURIComponent(String(hours))),
+    );
 
     if (resp.status === 401) {
       if (!authRetried && (await mobileRecoverSessionAfter401())) {
@@ -4304,7 +4327,9 @@ function isHostActive(host) {
 }
 
 function countActiveHosts(hosts) {
-  return (Array.isArray(hosts) ? hosts : []).filter((host) => isHostActive(host)).length;
+  return (Array.isArray(hosts) ? hosts : []).filter(
+    (host) => isHostActive(host) && !isMobileTemporaryHost(host),
+  ).length;
 }
 
 function renderHostKpis() {
@@ -4337,31 +4362,30 @@ async function loadHostKpis(options = {}) {
     return false;
   }
   const authRetried = options.authRetried === true;
+  const forceFresh = options.forceFresh !== false;
 
   const hours = Math.max(1, Math.min(24 * 30, Number(state.hostKpisHours) || 1));
+  const apiPath =
+    "/api/v1/mobile/host-kpis?hours=" + encodeURIComponent(String(hours));
+  const url = forceFresh ? mobileFreshApiUrl(apiPath) : apiPath;
   try {
-    const [inactiveResp, hostsResp] = await Promise.all([
-      mobileFetchWithRetry("/api/v1/inactive-hosts?hours=" + encodeURIComponent(String(hours))),
-      mobileFetchWithRetry("/api/v1/hosts?limit=200&offset=0"),
-    ]);
+    const resp = await mobileFetchWithRetry(url);
 
-    if (inactiveResp.status === 401 || hostsResp.status === 401) {
+    if (resp.status === 401) {
       if (!authRetried && (await mobileRecoverSessionAfter401())) {
-        return loadHostKpis({ authRetried: true });
+        return loadHostKpis({ authRetried: true, forceFresh });
       }
       mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
       return false;
     }
 
-    if (!inactiveResp.ok || !hostsResp.ok) {
+    if (!resp.ok) {
       return false;
     }
 
-    const inactivePayload = await inactiveResp.json();
-    const hostsPayload = await hostsResp.json();
-    const hosts = Array.isArray(hostsPayload.hosts) ? hostsPayload.hosts : [];
-    state.inactiveHostsCount = Math.max(0, Number(inactivePayload.total || 0));
-    state.activeHostsCount = countActiveHosts(hosts);
+    const payload = await resp.json();
+    state.inactiveHostsCount = Math.max(0, Number(payload.inactive_hosts || 0));
+    state.activeHostsCount = Math.max(0, Number(payload.active_hosts || 0));
     state.hostKpisLoaded = true;
     renderHostKpis();
     return true;
@@ -5381,7 +5405,7 @@ async function fetchMobileHostRecord(hostUid, hostname, options = {}) {
   if (!identity && !host) return null;
 
   try {
-    const resp = await mobileFetchWithRetry("/api/v1/hosts?limit=200&offset=0");
+    const resp = await mobileFetchWithRetry(mobileFreshApiUrl("/api/v1/hosts?limit=200&offset=0"));
     if (resp.status === 401) {
       if (!authRetried && (await mobileRecoverSessionAfter401())) {
         return fetchMobileHostRecord(hostUid, hostname, { authRetried: true });
@@ -6295,12 +6319,14 @@ function wire() {
   });
 
   window.addEventListener("pageshow", (event) => {
-    if (!state.authenticated || !event.persisted) {
+    if (!state.authenticated) {
       return;
     }
     state.hostKpisLoaded = false;
     renderHostKpis();
-    scheduleMobileResumeFromBackground();
+    if (isMobileStandalonePwa() || event.persisted) {
+      scheduleMobileResumeFromBackground();
+    }
   });
 
   window.addEventListener("focus", () => {
