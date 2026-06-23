@@ -4379,6 +4379,24 @@ body[data-theme="dark"] .trend-progress-bar {
   color: #fff;
 }
 
+.mfa-qr-wrap {
+  display: flex;
+  justify-content: flex-start;
+  margin: 0.75rem 0;
+}
+
+.mfa-qr-wrap svg {
+  width: 180px;
+  height: 180px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 .hidden {
   display: none !important;
 }

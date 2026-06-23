@@ -74,6 +74,8 @@ from external_monitors import (
     wake_external_monitor_worker,
 )
 
+import mfa as web_mfa
+
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
@@ -2091,6 +2093,7 @@ def init_db() -> None:
             )
             """
         )
+        web_mfa.init_mfa_tables(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS database_lifecycle (
@@ -5955,9 +5958,11 @@ def _execute_web_login(
     username: str,
     password: str,
     *,
+    skip_mfa: bool = False,
+    auth_method: str = "password",
     source_ip: str = "",
     user_agent: str = "",
-) -> tuple[dict, str, str]:
+) -> dict:
     last_exc: sqlite3.OperationalError | None = None
     deadline = time.monotonic() + WEB_AUTH_MAX_WALL_SECONDS
     for attempt in range(WEB_AUTH_BUSY_RETRY_ATTEMPTS):
@@ -5973,17 +5978,31 @@ def _execute_web_login(
                     if not verify_password(password, str(user["password_hash"]), str(user["password_salt"])):
                         raise ValueError("invalid credentials")
 
+                    if not skip_mfa and web_mfa.is_user_mfa_enabled(conn, username):
+                        challenge_token = web_mfa.create_mfa_challenge(conn, username)
+                        conn.commit()
+                        return {
+                            "status": "mfa_required",
+                            "user": user,
+                            "challenge_token": challenge_token,
+                        }
+
                     token, expires_at = create_web_session(conn, username)
                     record_web_login_event(
                         conn,
                         username=username,
                         display_name=str(user.get("display_name", "") or ""),
                         source_ip=source_ip,
-                        auth_method="password",
+                        auth_method=str(auth_method or "password").strip() or "password",
                         user_agent=user_agent,
                     )
                     conn.commit()
-                    return user, token, expires_at
+                    return {
+                        "status": "authenticated",
+                        "user": user,
+                        "token": token,
+                        "expires_at": expires_at,
+                    }
                 except ValueError:
                     conn.rollback()
                     raise
@@ -6003,6 +6022,94 @@ def _execute_web_login(
     if last_exc is not None:
         raise last_exc
     raise sqlite3.OperationalError("database is locked")
+
+
+def _execute_web_login_mfa(
+    challenge_token: str,
+    code: str,
+    *,
+    source_ip: str = "",
+    user_agent: str = "",
+) -> dict:
+    last_exc: sqlite3.OperationalError | None = None
+    deadline = time.monotonic() + WEB_AUTH_MAX_WALL_SECONDS
+    for attempt in range(WEB_AUTH_BUSY_RETRY_ATTEMPTS):
+        if time.monotonic() >= deadline:
+            break
+        try:
+            with sqlite_connect_interactive() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    challenge = web_mfa.get_mfa_challenge(conn, challenge_token)
+                    if not challenge:
+                        raise ValueError("invalid challenge")
+
+                    if int(challenge.get("attempts") or 0) >= web_mfa.MFA_MAX_ATTEMPTS:
+                        web_mfa.delete_mfa_challenge(conn, challenge_token)
+                        conn.commit()
+                        raise ValueError("too many attempts")
+
+                    username = str(challenge.get("username") or "").strip()
+                    user = get_web_user(conn, username)
+                    if not user or user.get("is_disabled"):
+                        web_mfa.delete_mfa_challenge(conn, challenge_token)
+                        conn.commit()
+                        raise ValueError("invalid credentials")
+
+                    if not web_mfa.verify_user_mfa_code(conn, username, code):
+                        attempts = web_mfa.increment_mfa_challenge_attempts(conn, challenge_token)
+                        conn.commit()
+                        if attempts >= web_mfa.MFA_MAX_ATTEMPTS:
+                            raise ValueError("too many attempts")
+                        raise ValueError("invalid code")
+
+                    web_mfa.delete_mfa_challenge(conn, challenge_token)
+                    token, expires_at = create_web_session(conn, username)
+                    record_web_login_event(
+                        conn,
+                        username=username,
+                        display_name=str(user.get("display_name", "") or ""),
+                        source_ip=source_ip,
+                        auth_method="password+mfa",
+                        user_agent=user_agent,
+                    )
+                    conn.commit()
+                    return {
+                        "status": "authenticated",
+                        "user": user,
+                        "token": token,
+                        "expires_at": expires_at,
+                    }
+                except ValueError:
+                    conn.rollback()
+                    raise
+                except Exception:
+                    conn.rollback()
+                    raise
+        except ValueError:
+            raise
+        except sqlite3.OperationalError as exc:
+            if not _sqlite_operational_error_is_lock(exc):
+                raise
+            last_exc = exc
+            if attempt + 1 >= WEB_AUTH_BUSY_RETRY_ATTEMPTS:
+                break
+            time.sleep(min(2.0, 0.35 * (attempt + 1)))
+
+    if last_exc is not None:
+        raise last_exc
+    raise sqlite3.OperationalError("database is locked")
+
+
+def _web_login_success_payload(user: dict, username: str, expires_at: str) -> dict:
+    return {
+        "status": "authenticated",
+        "username": username,
+        "display_name": str(user.get("display_name", "") or ""),
+        "is_admin": bool(user.get("is_admin")),
+        "expires_at_utc": expires_at,
+        "inactivity_timeout_minutes": WEB_SESSION_INACTIVITY_MINUTES,
+    }
 
 
 def create_web_session(conn: sqlite3.Connection, username: str) -> tuple[str, str]:
@@ -15990,6 +16097,7 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
             "updated_at_utc": connection["updated_at_utc"] if connection else "",
         },
         "mail_logic_help": build_user_mail_logic_help(),
+        "mfa": web_mfa.mfa_status_payload(conn, username),
     }
 
 
@@ -18608,7 +18716,10 @@ def is_known_hostname(conn: sqlite3.Connection, hostname: str) -> bool:
     if not normalized:
         return False
 
-    row = conn.execute("SELECT 1 FROM reports WHERE hostname = ? LIMIT 1", (normalized,)).fetchone()
+    row = conn.execute(
+        "SELECT 1 FROM reports WHERE LOWER(hostname) = LOWER(?) LIMIT 1",
+        (normalized,),
+    ).fetchone()
     return bool(row)
 
 
@@ -20228,7 +20339,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if not API_KEY:
             return False
 
-        request_key = self.headers.get("X-Api-Key", "")
+        request_key = (self.headers.get("X-Api-Key") or "").strip()
         if request_key == API_KEY:
             return False
 
@@ -20237,10 +20348,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if is_known_hostname(conn, hostname):
                     return False
 
-        if request_key != API_KEY:
-            self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid api key"})
-            return True
-        return False
+        if request_key:
+            self._send_json(
+                HTTPStatus.UNAUTHORIZED,
+                {"error": "invalid api key", "code": "invalid_api_key"},
+            )
+        else:
+            self._send_json(
+                HTTPStatus.UNAUTHORIZED,
+                {"error": "api key required", "code": "api_key_required"},
+            )
+        return True
 
     def _request_is_https(self) -> bool:
         scheme = (self.headers.get("X-Forwarded-Proto", "") or "").split(",")[0].strip().lower()
@@ -20529,6 +20647,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             username = self._web_session_username()
             with sqlite3.connect(DB_PATH) as conn:
                 payload = current_user_payload(conn, username)
+            self._send_json(HTTPStatus.OK, payload)
+            return
+
+        if parsed.path == "/api/v1/mfa/status":
+            username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "login required"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                payload = web_mfa.mfa_status_payload(conn, username)
             self._send_json(HTTPStatus.OK, payload)
             return
 
@@ -23287,9 +23415,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                user, token, expires_at = _execute_web_login(
+                login_result = _execute_web_login(
                     username,
                     password,
+                    skip_mfa=False,
                     source_ip=self._request_client_ip(),
                     user_agent=str(self.headers.get("User-Agent", "") or ""),
                 )
@@ -23308,16 +23437,148 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     return
                 raise
 
+            if login_result.get("status") == "mfa_required":
+                user = login_result.get("user") or {}
+                self._send_json(
+                    HTTPStatus.UNAUTHORIZED,
+                    {
+                        "error": "mfa required",
+                        "code": "mfa_required",
+                        "username": username,
+                        "display_name": str(user.get("display_name", "") or ""),
+                        "challenge_token": str(login_result.get("challenge_token", "") or ""),
+                    },
+                )
+                return
+
+            user = login_result.get("user") or {}
+            token = str(login_result.get("token", "") or "")
+            expires_at = str(login_result.get("expires_at", "") or "")
             self._send_json(
                 HTTPStatus.OK,
-                {
-                    "status": "authenticated",
-                    "username": username,
-                    "display_name": str(user.get("display_name", "") or ""),
-                    "is_admin": bool(user.get("is_admin")),
-                    "expires_at_utc": expires_at,
-                    "inactivity_timeout_minutes": WEB_SESSION_INACTIVITY_MINUTES,
+                _web_login_success_payload(user, username, expires_at),
+                extra_headers={
+                    "Set-Cookie": self._web_session_set_cookie_header(token),
                 },
+            )
+            return
+
+        if path == "/api/v1/mobile-login":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            username = str(payload.get("username", "")).strip()
+            password = str(payload.get("password", ""))
+            if not username or not password:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "username/password required"})
+                return
+
+            try:
+                login_result = _execute_web_login(
+                    username,
+                    password,
+                    skip_mfa=True,
+                    auth_method="mobile",
+                    source_ip=self._request_client_ip(),
+                    user_agent=str(self.headers.get("User-Agent", "") or ""),
+                )
+            except ValueError:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
+                return
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": _web_login_database_locked_message(),
+                            "code": "database_locked",
+                        },
+                    )
+                    return
+                raise
+
+            user = login_result.get("user") or {}
+            token = str(login_result.get("token", "") or "")
+            expires_at = str(login_result.get("expires_at", "") or "")
+            self._send_json(
+                HTTPStatus.OK,
+                _web_login_success_payload(user, username, expires_at),
+                extra_headers={
+                    "Set-Cookie": self._web_session_set_cookie_header(token),
+                },
+            )
+            return
+
+        if path == "/api/v1/web-login/mfa":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            challenge_token = str(payload.get("challenge_token", "") or "").strip()
+            code = str(payload.get("code", "") or "").strip()
+            if not challenge_token or not code:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "challenge_token/code required"})
+                return
+
+            try:
+                login_result = _execute_web_login_mfa(
+                    challenge_token,
+                    code,
+                    source_ip=self._request_client_ip(),
+                    user_agent=str(self.headers.get("User-Agent", "") or ""),
+                )
+            except ValueError as exc:
+                message = str(exc or "invalid credentials")
+                if message == "too many attempts":
+                    self._send_json(
+                        HTTPStatus.UNAUTHORIZED,
+                        {"error": "too many mfa attempts", "code": "mfa_locked"},
+                    )
+                    return
+                if message == "invalid code":
+                    self._send_json(
+                        HTTPStatus.UNAUTHORIZED,
+                        {"error": "invalid mfa code", "code": "invalid_mfa_code"},
+                    )
+                    return
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
+                return
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": _web_login_database_locked_message(),
+                            "code": "database_locked",
+                        },
+                    )
+                    return
+                raise
+
+            user = login_result.get("user") or {}
+            username = str(user.get("username", "") or "")
+            token = str(login_result.get("token", "") or "")
+            expires_at = str(login_result.get("expires_at", "") or "")
+            self._send_json(
+                HTTPStatus.OK,
+                _web_login_success_payload(user, username, expires_at),
                 extra_headers={
                     "Set-Cookie": self._web_session_set_cookie_header(token),
                 },
@@ -23426,6 +23687,96 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "Set-Cookie": self._web_session_set_cookie_header(token),
                 },
             )
+            return
+
+        if path == "/api/v1/mfa/enroll/start":
+            username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "login required"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                if web_mfa.is_user_mfa_enabled(conn, username):
+                    self._send_json(HTTPStatus.CONFLICT, {"error": "mfa already enabled"})
+                    return
+                payload = web_mfa.start_mfa_enrollment(conn, username)
+                conn.commit()
+            self._send_json(HTTPStatus.OK, {"status": "pending", **payload})
+            return
+
+        if path == "/api/v1/mfa/enroll/confirm":
+            username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "login required"})
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            code = str(payload.get("code", "") or "").strip()
+            if not code:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "code required"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                try:
+                    ok = web_mfa.confirm_mfa_enrollment(conn, username, code)
+                except ValueError as exc:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                    return
+                if not ok:
+                    self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid mfa code", "code": "invalid_mfa_code"})
+                    return
+                status = web_mfa.mfa_status_payload(conn, username)
+                conn.commit()
+            self._send_json(HTTPStatus.OK, {"status": "enabled", "mfa": status})
+            return
+
+        if path == "/api/v1/mfa/disable":
+            username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "login required"})
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            password = str(payload.get("password", "") or "")
+            code = str(payload.get("code", "") or "").strip()
+            if not password or not code:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "password/code required"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                user = get_web_user(conn, username)
+                if not user or not verify_password(password, str(user["password_hash"]), str(user["password_salt"])):
+                    self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "password invalid"})
+                    return
+                try:
+                    ok = web_mfa.disable_mfa(conn, username, code)
+                except ValueError as exc:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                    return
+                if not ok:
+                    self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid mfa code", "code": "invalid_mfa_code"})
+                    return
+                conn.commit()
+            self._send_json(HTTPStatus.OK, {"status": "disabled", "mfa": {"enabled": False, "enrolled_at_utc": ""}})
             return
 
         if path == "/api/v1/alarm-settings":

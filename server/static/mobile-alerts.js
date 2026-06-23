@@ -64,7 +64,7 @@ async function mobileFetchSession() {
 }
 
 async function mobileLogin(username, password) {
-  const resp = await mobileFetch("/api/v1/web-login", {
+  const resp = await mobileFetch("/api/v1/mobile-login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),

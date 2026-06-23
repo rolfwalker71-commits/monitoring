@@ -16,7 +16,7 @@ async function mobileFetchSession() {
 }
 
 async function mobileLogin(username, password) {
-  const resp = await fetch("/api/v1/web-login", {
+  const resp = await fetch("/api/v1/mobile-login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",

@@ -218,7 +218,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.8.53'
+$EmbeddedAgentVersion = '1.8.77'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -331,7 +331,8 @@ function Set-AgentApiKey {
 Ensure-HarvestSqlConfig
 
 $ServerUrl = $cfg['SERVER_URL']
-$ApiKey    = if ($cfg.ContainsKey('API_KEY') -and $cfg['API_KEY']) { $cfg['API_KEY'] } elseif ($cfg.ContainsKey('X_API_KEY')) { $cfg['X_API_KEY'] } else { '' }
+$ApiKey    = if ($cfg.ContainsKey('API_KEY') -and $cfg['API_KEY']) { [string]$cfg['API_KEY'] } elseif ($cfg.ContainsKey('X_API_KEY') -and $cfg['X_API_KEY']) { [string]$cfg['X_API_KEY'] } else { '' }
+$ApiKey    = $ApiKey.Trim()
 $SendJitterMaxSec = 300
 
 if ($JitterMaxSec -gt 0) {
@@ -2006,6 +2007,16 @@ function Invoke-ServerGet {
     }
 }
 
+function Get-Auth401Hint {
+    param([string]$Hostname = '')
+
+    $hostLabel = if ($Hostname) { $Hostname } else { '(unbekannt)' }
+    if ([string]::IsNullOrWhiteSpace($ApiKey)) {
+        return "Auth 401: Kein API_KEY in agent.conf. Hostname '$hostLabel' ist dem Server unbekannt oder Grace-Auth ist deaktiviert. HOSTNAME in agent.conf setzen oder API_KEY vom Server eintragen."
+    }
+    return "Auth 401: API_KEY in agent.conf stimmt nicht mit MONITORING_API_KEY auf dem Server ueberein (Hostname: '$hostLabel')."
+}
+
 function Get-HttpExceptionSummary($exception) {
     if ($null -eq $exception) {
         return ''
@@ -2104,6 +2115,11 @@ function Invoke-FlushQueue {
             Remove-Item $f.FullName -Force
         } catch {
             $statusCode = Get-HttpStatusCodeFromException $_.Exception
+            if ($statusCode -eq 401) {
+                Write-Warning ("Queue retry deferred for auth failure (HTTP 401); payload kept: {0}" -f $f.FullName)
+                Write-Warning (Get-Auth401Hint -Hostname $hostnameValue)
+                return $false
+            }
             if ($statusCode -ge 400 -and $statusCode -lt 500) {
                 Move-QueueFileToQuarantine -FilePath $f.FullName -Reason ("server_http_{0}" -f $statusCode)
                 continue
@@ -3225,6 +3241,9 @@ Sync-CoreScriptsBestEffort
 
 $hostnameValue = try { [System.Net.Dns]::GetHostEntry('').HostName } catch { $env:COMPUTERNAME }
 if (-not $hostnameValue) { $hostnameValue = $env:COMPUTERNAME }
+if ($cfg.ContainsKey('HOSTNAME') -and $cfg['HOSTNAME']) {
+    $hostnameValue = [string]$cfg['HOSTNAME']
+}
 
 $osInfo      = Get-CimInstance -ClassName Win32_OperatingSystem
 $cpuInfoList = @(Get-CimInstance -ClassName Win32_Processor)
@@ -3603,6 +3622,9 @@ try {
 
     if ($sendErrorSummary) {
         Write-Error "Send failed: $sendErrorSummary"
+        if ($sendErrorSummary -match '401') {
+            Write-Warning (Get-Auth401Hint -Hostname $hostnameValue)
+        }
     }
     Write-Error "Payload queued for retry: $qf"
     exit 1

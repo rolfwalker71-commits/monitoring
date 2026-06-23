@@ -581,6 +581,7 @@ const state = {
   dbSizeDelta1hBytes: null,
   authUser: "",
   authDisplayName: "",
+  loginMfaChallengeToken: "",
   isAuthenticated: false,
   sessionExpiresAtUtc: "",
   sessionInactivityTimeoutMinutes: 30,
@@ -2992,10 +2993,19 @@ function setLoginStatus(message, isError = false) {
 
 function setLoginBusy(busy) {
   const submitButton = document.getElementById("loginSubmitButton");
+  const mfaSubmitButton = document.getElementById("loginMfaSubmitButton");
+  const mfaBackButton = document.getElementById("loginMfaBackButton");
   const usernameInput = document.getElementById("loginUsernameInput");
   const passwordInput = document.getElementById("loginPasswordInput");
+  const mfaCodeInput = document.getElementById("loginMfaCodeInput");
   if (submitButton) {
     submitButton.disabled = busy;
+  }
+  if (mfaSubmitButton) {
+    mfaSubmitButton.disabled = busy;
+  }
+  if (mfaBackButton) {
+    mfaBackButton.disabled = busy;
   }
   if (usernameInput) {
     usernameInput.disabled = busy;
@@ -3003,6 +3013,64 @@ function setLoginBusy(busy) {
   if (passwordInput) {
     passwordInput.disabled = busy;
   }
+  if (mfaCodeInput) {
+    mfaCodeInput.disabled = busy;
+  }
+}
+
+function resetLoginMfaStep() {
+  state.loginMfaChallengeToken = "";
+  document.getElementById("loginPasswordStep")?.classList.remove("hidden");
+  document.getElementById("loginMfaStep")?.classList.add("hidden");
+  const mfaCodeInput = document.getElementById("loginMfaCodeInput");
+  if (mfaCodeInput) {
+    mfaCodeInput.value = "";
+  }
+}
+
+function showLoginMfaStep(data) {
+  state.loginMfaChallengeToken = asText(data.challenge_token, "");
+  document.getElementById("loginPasswordStep")?.classList.add("hidden");
+  document.getElementById("loginMfaStep")?.classList.remove("hidden");
+  setLoginStatus("Bitte Authenticator-Code eingeben.");
+  const mfaCodeInput = document.getElementById("loginMfaCodeInput");
+  if (mfaCodeInput) {
+    mfaCodeInput.value = "";
+    mfaCodeInput.focus();
+  }
+}
+
+async function completeWebLoginFromResponse(data, usernameFallback = "") {
+  state.authUser = asText(data.username, usernameFallback);
+  state.authDisplayName = asText(data.display_name, "");
+  state.isAdmin = data.is_admin === true;
+  state.viewMode = "overview";
+  state.overviewSection = "main";
+  updateSessionExpiry(
+    asText(data.expires_at_utc, ""),
+    Number.parseInt(String(data.inactivity_timeout_minutes || ""), 10)
+  );
+  loadHostFilterPreferences();
+  reloadHeaderSectionPreferencesForUser();
+  resetUserScopedPreferences();
+  sessionEstablishedAtMs = Date.now();
+  resetLoginMfaStep();
+  setAuthUiState(true);
+  const passwordInput = document.getElementById("loginPasswordInput");
+  if (passwordInput) {
+    passwordInput.value = "";
+  }
+  setLoginStatus("Anmeldung erfolgreich.");
+  const hostList = document.getElementById("hostList");
+  if (hostList) {
+    hostList.innerHTML = '<p class="muted">Lade Hosts…</p>';
+  }
+  void loadUserPreferences().then(() => {
+    if (state.hosts && state.hosts.length > 0) {
+      renderHosts(state.hosts);
+    }
+  });
+  return true;
 }
 
 function setPasswordChangeStatus(message, isError = false) {
@@ -3582,6 +3650,10 @@ async function loginWebClient() {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 401 && data.code === "mfa_required") {
+        showLoginMfaStep(data);
+        return false;
+      }
       if (response.status === 503 && data.code === "database_locked") {
         setLoginStatus(data.error || "Datenbank vorübergehend gesperrt. Bitte kurz warten und erneut versuchen.", true);
         return false;
@@ -3597,31 +3669,7 @@ async function loginWebClient() {
       return false;
     }
 
-    state.authUser = asText(data.username, username);
-    state.authDisplayName = asText(data.display_name, "");
-    state.isAdmin = data.is_admin === true;
-    state.viewMode = "overview";
-    state.overviewSection = "main";
-    updateSessionExpiry(
-      asText(data.expires_at_utc, ""),
-      Number.parseInt(String(data.inactivity_timeout_minutes || ""), 10)
-    );
-    loadHostFilterPreferences();
-    reloadHeaderSectionPreferencesForUser();
-    resetUserScopedPreferences();
-    sessionEstablishedAtMs = Date.now();
-    setAuthUiState(true);
-    passwordInput.value = "";
-    setLoginStatus("Anmeldung erfolgreich.");
-    const hostList = document.getElementById("hostList");
-    if (hostList) {
-      hostList.innerHTML = '<p class="muted">Lade Hosts…</p>';
-    }
-    void loadUserPreferences().then(() => {
-      if (state.hosts && state.hosts.length > 0) {
-        renderHosts(state.hosts);
-      }
-    });
+    await completeWebLoginFromResponse(data, username);
     return true;
   } catch (error) {
     let message = error?.message || "Anmeldung fehlgeschlagen.";
@@ -3638,6 +3686,174 @@ async function loginWebClient() {
   }
 }
 
+async function loginWebClientMfa() {
+  const codeInput = document.getElementById("loginMfaCodeInput");
+  const code = String(codeInput?.value || "").trim().replace(/\s+/g, "");
+  if (!state.loginMfaChallengeToken) {
+    setLoginStatus("Keine MFA-Challenge aktiv. Bitte erneut anmelden.", true);
+    resetLoginMfaStep();
+    return false;
+  }
+  if (!/^\d{6}$/.test(code)) {
+    setLoginStatus("Bitte einen 6-stelligen Code eingeben.", true);
+    return false;
+  }
+
+  setLoginBusy(true);
+  setLoginStatus("Code wird geprüft…");
+  try {
+    const response = await fetch("/api/v1/web-login/mfa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        challenge_token: state.loginMfaChallengeToken,
+        code,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (data.code === "mfa_locked") {
+        setLoginStatus("Zu viele Fehlversuche. Bitte erneut mit Passwort anmelden.", true);
+        resetLoginMfaStep();
+        return false;
+      }
+      setLoginStatus(data.error || ("MFA fehlgeschlagen (HTTP " + response.status + ")"), true);
+      return false;
+    }
+    return await completeWebLoginFromResponse(data, asText(data.username, ""));
+  } catch (error) {
+    setLoginStatus(error?.message || "MFA fehlgeschlagen.", true);
+    return false;
+  } finally {
+    setLoginBusy(false);
+  }
+}
+
+function setUserMfaStatus(message, isError = false) {
+  const statusEl = document.getElementById("userMfaStatus");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.toggle("status-error", isError);
+}
+
+function renderUserMfaSettings(profile) {
+  const mfa = profile?.mfa || {};
+  const enabled = mfa.enabled === true;
+  const summaryEl = document.getElementById("userMfaStatusSummary");
+  const setupBlock = document.getElementById("userMfaSetupBlock");
+  const enabledBlock = document.getElementById("userMfaEnabledBlock");
+  const disabledBlock = document.getElementById("userMfaDisabledBlock");
+  const disableForm = document.getElementById("userMfaDisableForm");
+
+  if (summaryEl) {
+    summaryEl.textContent = enabled
+      ? `Aktiv seit ${asText(mfa.enrolled_at_utc, "-")}`
+      : "Nicht aktiv (optional)";
+  }
+  setupBlock?.classList.add("hidden");
+  enabledBlock?.classList.toggle("hidden", !enabled);
+  disabledBlock?.classList.toggle("hidden", enabled);
+  disableForm?.classList.add("hidden");
+}
+
+async function startUserMfaSetup() {
+  setUserMfaStatus("QR-Code wird erstellt…");
+  try {
+    const response = await fetch("/api/v1/mfa/enroll/start", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || ("HTTP " + response.status));
+    }
+    document.getElementById("userMfaDisabledBlock")?.classList.add("hidden");
+    document.getElementById("userMfaSetupBlock")?.classList.remove("hidden");
+    const qrWrap = document.getElementById("userMfaQrWrap");
+    if (qrWrap) {
+      qrWrap.innerHTML = data.qr_svg || "";
+    }
+    const secretLine = document.getElementById("userMfaSecretLine");
+    if (secretLine) {
+      secretLine.textContent = data.secret ? ("Manueller Schlüssel: " + data.secret) : "";
+    }
+    const confirmInput = document.getElementById("userMfaConfirmCodeInput");
+    if (confirmInput) {
+      confirmInput.value = "";
+      confirmInput.focus();
+    }
+    setUserMfaStatus("Authenticator einrichten und Code bestätigen.");
+  } catch (error) {
+    setUserMfaStatus(error?.message || "Setup fehlgeschlagen.", true);
+  }
+}
+
+function cancelUserMfaSetup() {
+  document.getElementById("userMfaSetupBlock")?.classList.add("hidden");
+  document.getElementById("userMfaDisabledBlock")?.classList.remove("hidden");
+  const qrWrap = document.getElementById("userMfaQrWrap");
+  if (qrWrap) {
+    qrWrap.innerHTML = "";
+  }
+  setUserMfaStatus("");
+}
+
+async function confirmUserMfaSetup() {
+  const code = String(document.getElementById("userMfaConfirmCodeInput")?.value || "").trim().replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(code)) {
+    setUserMfaStatus("Bitte einen 6-stelligen Code eingeben.", true);
+    return;
+  }
+  setUserMfaStatus("Aktivierung läuft…");
+  try {
+    const response = await fetch("/api/v1/mfa/enroll/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ code }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || ("HTTP " + response.status));
+    }
+    cancelUserMfaSetup();
+    await loadUserProfile(true);
+    setUserMfaStatus("Zwei-Faktor-Authentifizierung ist aktiv.");
+  } catch (error) {
+    setUserMfaStatus(error?.message || "Aktivierung fehlgeschlagen.", true);
+  }
+}
+
+async function disableUserMfa() {
+  const password = String(document.getElementById("userMfaDisablePasswordInput")?.value || "");
+  const code = String(document.getElementById("userMfaDisableCodeInput")?.value || "").trim().replace(/\s+/g, "");
+  if (!password || !/^\d{6}$/.test(code)) {
+    setUserMfaStatus("Passwort und 6-stelliger Code erforderlich.", true);
+    return;
+  }
+  setUserMfaStatus("Deaktivierung läuft…");
+  try {
+    const response = await fetch("/api/v1/mfa/disable", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ password, code }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || ("HTTP " + response.status));
+    }
+    document.getElementById("userMfaDisableForm")?.classList.add("hidden");
+    await loadUserProfile(true);
+    setUserMfaStatus("Zwei-Faktor-Authentifizierung deaktiviert.");
+  } catch (error) {
+    setUserMfaStatus(error?.message || "Deaktivierung fehlgeschlagen.", true);
+  }
+}
+
 async function logoutWebClient() {
   try {
     await fetch("/api/v1/web-logout", { method: "POST", credentials: "same-origin" });
@@ -3650,6 +3866,7 @@ async function logoutWebClient() {
   updateAutoRefreshStatus(null);
   state.authUser = "";
   state.isAdmin = false;
+  resetLoginMfaStep();
   state.viewMode = "overview";
   state.overviewSection = "main";
   resetUserScopedPreferences();
@@ -3924,6 +4141,7 @@ async function loadUserProfile(force = false) {
       alertTestButton.disabled = !oauthConnected;
     }
 
+    renderUserMfaSettings(profile);
     state.userProfileLoaded = true;
     setUserMailSettingsStatus("Benutzerspezifische Mail-Einstellungen geladen.");
   } catch (error) {
@@ -19481,6 +19699,32 @@ function wireEvents() {
     startAutoRefreshTimer();
   });
 
+  document.getElementById("loginMfaSubmitButton")?.addEventListener("click", async () => {
+    const ok = await loginWebClientMfa();
+    if (!ok) {
+      return;
+    }
+    void refreshDashboard({ preserveScroll: false, force: true });
+    startAutoRefreshTimer();
+  });
+
+  document.getElementById("loginMfaBackButton")?.addEventListener("click", () => {
+    resetLoginMfaStep();
+    setLoginStatus("Bitte Benutzername und Passwort eingeben.");
+  });
+
+  document.getElementById("loginMfaCodeInput")?.addEventListener("keydown", async (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    const ok = await loginWebClientMfa();
+    if (!ok) {
+      return;
+    }
+    void refreshDashboard({ preserveScroll: false, force: true });
+    startAutoRefreshTimer();
+  });
+
   document.getElementById("loginPasswordInput").addEventListener("keydown", async (event) => {
     if (event.key !== "Enter") {
       return;
@@ -19499,6 +19743,22 @@ function wireEvents() {
 
   document.getElementById("savePasswordButton").addEventListener("click", async () => {
     await changePassword();
+  });
+
+  document.getElementById("userMfaStartSetupButton")?.addEventListener("click", () => {
+    void startUserMfaSetup();
+  });
+  document.getElementById("userMfaCancelSetupButton")?.addEventListener("click", () => {
+    cancelUserMfaSetup();
+  });
+  document.getElementById("userMfaConfirmButton")?.addEventListener("click", () => {
+    void confirmUserMfaSetup();
+  });
+  document.getElementById("userMfaDisableButton")?.addEventListener("click", () => {
+    document.getElementById("userMfaDisableForm")?.classList.remove("hidden");
+  });
+  document.getElementById("userMfaDisableConfirmButton")?.addEventListener("click", () => {
+    void disableUserMfa();
   });
 
   document.getElementById("globalSeverityFilter").addEventListener("change", async (event) => {

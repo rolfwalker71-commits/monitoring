@@ -30,15 +30,26 @@
               <span>Agent v<span id="loginAgentVersion">-</span></span>
             </p>
           </div>
-          <label>
-            Benutzername
-            <input id="loginUsernameInput" type="text" autocomplete="username" />
-          </label>
-          <label>
-            Passwort
-            <input id="loginPasswordInput" type="password" autocomplete="current-password" />
-          </label>
-          <button id="loginSubmitButton" type="button">Anmelden</button>
+          <div id="loginPasswordStep">
+            <label>
+              Benutzername
+              <input id="loginUsernameInput" type="text" autocomplete="username" />
+            </label>
+            <label>
+              Passwort
+              <input id="loginPasswordInput" type="password" autocomplete="current-password" />
+            </label>
+            <button id="loginSubmitButton" type="button">Anmelden</button>
+          </div>
+          <div id="loginMfaStep" class="hidden">
+            <p class="muted compact">Zwei-Faktor-Code aus Ihrer Authenticator-App eingeben.</p>
+            <label>
+              6-stelliger Code
+              <input id="loginMfaCodeInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code" />
+            </label>
+            <button id="loginMfaSubmitButton" type="button">Code bestätigen</button>
+            <button id="loginMfaBackButton" type="button" class="btn-secondary">Zurück</button>
+          </div>
           <p id="loginStatus" class="count compact"></p>
           <div class="login-ang-logo" aria-hidden="true">
             <img src="icons/ANG.png" alt="ANG" />
@@ -962,6 +973,51 @@
                 <button id="savePasswordButton" type="button">🔑 Passwort speichern</button>
                 <p id="passwordChangeStatus" class="count compact"></p>
               </div>
+            </section>
+
+            <section class="settings-subsection" id="userSettingsMfaPanel" data-user-settings-panel="password">
+              <div class="settings-subsection-head">
+                <h5>Zwei-Faktor-Authentifizierung (optional)</h5>
+                <p id="userMfaStatusSummary" class="count compact">Status wird geladen…</p>
+              </div>
+              <div id="userMfaSetupBlock" class="hidden">
+                <p class="count compact">QR-Code mit Google Authenticator, Microsoft Authenticator o.&auml;. scannen.</p>
+                <div id="userMfaQrWrap" class="mfa-qr-wrap" aria-hidden="true"></div>
+                <p id="userMfaSecretLine" class="count compact mono"></p>
+                <label>
+                  Code zur Bestätigung
+                  <input id="userMfaConfirmCodeInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code" />
+                </label>
+                <div class="alarm-settings-actions">
+                  <button id="userMfaConfirmButton" type="button">2FA aktivieren</button>
+                  <button id="userMfaCancelSetupButton" type="button" class="btn-secondary">Abbrechen</button>
+                </div>
+              </div>
+              <div id="userMfaEnabledBlock" class="hidden">
+                <div class="alarm-settings-actions">
+                  <button id="userMfaDisableButton" type="button">2FA deaktivieren</button>
+                </div>
+                <div id="userMfaDisableForm" class="hidden alarm-settings-grid">
+                  <label>
+                    Aktuelles Passwort
+                    <input id="userMfaDisablePasswordInput" type="password" autocomplete="current-password" />
+                  </label>
+                  <label>
+                    Authenticator-Code
+                    <input id="userMfaDisableCodeInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code" />
+                  </label>
+                  <div class="alarm-settings-actions">
+                    <button id="userMfaDisableConfirmButton" type="button">Deaktivierung bestätigen</button>
+                  </div>
+                </div>
+              </div>
+              <div id="userMfaDisabledBlock" class="hidden">
+                <div class="alarm-settings-actions">
+                  <button id="userMfaStartSetupButton" type="button">2FA einrichten</button>
+                </div>
+              </div>
+              <p id="userMfaStatus" class="count compact"></p>
+              <p class="count compact muted">Hinweis: Die Mobile App verwendet weiterhin nur Benutzername und Passwort.</p>
             </section>
 
             <section class="settings-subsection hidden" id="userSettingsChannelsPanel" data-user-settings-panel="channels">
