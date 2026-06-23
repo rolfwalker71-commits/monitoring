@@ -154,7 +154,16 @@ def purge_expired_mfa_challenges(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_mfa_schema(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'web_user_mfa' LIMIT 1"
+    ).fetchone()
+    if not row:
+        init_mfa_tables(conn)
+
+
 def get_mfa_row(conn: sqlite3.Connection, username: str) -> dict | None:
+    ensure_mfa_schema(conn)
     row = conn.execute(
         """
         SELECT username,
@@ -196,6 +205,7 @@ def mfa_status_payload(conn: sqlite3.Connection, username: str) -> dict:
 
 
 def start_mfa_enrollment(conn: sqlite3.Connection, username: str) -> dict:
+    ensure_mfa_schema(conn)
     secret = generate_totp_secret()
     pending_enc = encrypt_secret(secret)
     now_iso = _utc_now_iso()
@@ -280,6 +290,7 @@ def verify_user_mfa_code(conn: sqlite3.Connection, username: str, code: str) -> 
 
 
 def create_mfa_challenge(conn: sqlite3.Connection, username: str) -> str:
+    ensure_mfa_schema(conn)
     purge_expired_mfa_challenges(conn)
     challenge_token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
@@ -302,6 +313,7 @@ def create_mfa_challenge(conn: sqlite3.Connection, username: str) -> str:
 
 
 def get_mfa_challenge(conn: sqlite3.Connection, challenge_token: str) -> dict | None:
+    ensure_mfa_schema(conn)
     purge_expired_mfa_challenges(conn)
     row = conn.execute(
         """

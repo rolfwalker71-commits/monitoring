@@ -11,8 +11,8 @@ trap on_pull_script_error ERR
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
 PULL_SCRIPT_VERSION="20260611a"
 # Bump when FILES_LIST changes (must match script_guardian entries).
-PULL_FILES_MANIFEST="scripts-39-v1"
-PULL_FILES_EXPECTED_COUNT=39
+PULL_FILES_MANIFEST="scripts-41-v1"
+PULL_FILES_EXPECTED_COUNT=41
 _DEPLOY_MAIN_SHA_CACHED=""
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
@@ -1584,6 +1584,7 @@ export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF O
 FILES_LIST="
 server/receiver.py
 server/external_monitors.py
+server/mfa.py
 server/static/index.html
 server/static/app.js
 server/static/styles.css
@@ -1600,6 +1601,7 @@ server/static/mobile-alerts-mockup.html
 server/static/icons/sap.png
 BUILD_VERSION
 AGENT_VERSION
+requirements.txt
 MAIN_HEAD_SHA
 openapi.yaml
 scripts/watch-inventur-job.sh
@@ -1661,6 +1663,11 @@ repair_deploy_if_integrity_failed || true
 if [ ! -f "$TARGET_DIR/server/external_monitors.py" ]; then
   echo "FEHLER: server/external_monitors.py fehlt – receiver.py startet nicht (v1.8.0 Deploy-Luecke)." >&2
   echo "Bitte pull-server-only.sh erneut ausfuehren (>= v1.8.1)." >&2
+  exit 1
+fi
+if [ ! -f "$TARGET_DIR/server/mfa.py" ]; then
+  echo "FEHLER: server/mfa.py fehlt – receiver.py startet nicht (v1.8.78+ MFA)." >&2
+  echo "Bitte pull-server-only.sh erneut ausfuehren." >&2
   exit 1
 fi
 if [ -f "$TARGET_DIR/scripts/watch-inventur-job.sh" ]; then
@@ -1883,8 +1890,14 @@ if command -v apt-get >/dev/null 2>&1; then
   fi
 fi
 echo "Installiere/aktualisiere Python-Abhaengigkeiten ..."
-"$TARGET_DIR/.venv/bin/pip" install --quiet --upgrade cairosvg
-"$TARGET_DIR/.venv/bin/pip" install --quiet --upgrade pywebpush
+if [ -f "$TARGET_DIR/requirements.txt" ]; then
+  if ! "$TARGET_DIR/.venv/bin/pip" install --quiet --upgrade -r "$TARGET_DIR/requirements.txt"; then
+    echo "WARNUNG: pip install -r requirements.txt fehlgeschlagen (MFA-QR ggf. ohne qrcode)."
+    "$TARGET_DIR/.venv/bin/pip" install --quiet --upgrade cairosvg pywebpush || true
+  fi
+else
+  "$TARGET_DIR/.venv/bin/pip" install --quiet --upgrade cairosvg pywebpush
+fi
 
 # --- EnvironmentFile anlegen (nur wenn noch nicht vorhanden) ---
 ENV_FILE="$TARGET_DIR/monitoring.env"
