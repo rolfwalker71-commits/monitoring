@@ -22143,6 +22143,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             cutoff_iso = utc_hours_ago_iso(hours)
             where_clause, where_args = _host_reports_where_clause(host_uid, hostname)
+            analysis_alarm_settings: dict = {}
 
             try:
                 with sqlite_connect_read() as conn:
@@ -22177,6 +22178,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     blacklist_patterns = [
                         row[0] for row in conn.execute("SELECT pattern FROM filesystem_blacklist_patterns").fetchall()
                     ]
+                    analysis_alarm_settings = get_alarm_settings(conn)
             except sqlite3.OperationalError as exc:
                 if _sqlite_operational_error_is_lock(exc):
                     self._send_json(
@@ -22345,7 +22347,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             trends.sort(key=lambda item: item["current_used_percent"], reverse=True)
 
-            analysis_alarm_settings = get_alarm_settings(conn)
             fs_warning_threshold, fs_critical_threshold = filesystem_thresholds_for_os(
                 latest_os_family,
                 analysis_alarm_settings,
