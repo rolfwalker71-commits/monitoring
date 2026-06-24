@@ -2537,6 +2537,52 @@ def _host_uid_has_identity_suffix(host_uid: object) -> bool:
     return "::" in str(host_uid or "")
 
 
+def _established_rich_host_uids_by_hostname_from_rows(rows: list[tuple]) -> dict[str, set[str]]:
+    by_hostname: dict[str, set[str]] = {}
+    for row in rows:
+        hostname = str(row[1] or "").strip()
+        host_uid = str(row[0] or "").strip()
+        if not hostname or not host_uid or not _host_uid_has_identity_suffix(host_uid):
+            continue
+        if host_uid.startswith("__legacy_report__:"):
+            continue
+        if not _identity_is_established(row):
+            continue
+        by_hostname.setdefault(hostname, set()).add(host_uid)
+    return by_hostname
+
+
+def _hostname_has_multiple_established_rich_identities(
+    hostname: str,
+    *,
+    rich_uids_by_hostname: dict[str, set[str]] | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> bool:
+    safe_hostname = str(hostname or "").strip()
+    if not safe_hostname:
+        return False
+    if rich_uids_by_hostname is not None:
+        return len(rich_uids_by_hostname.get(safe_hostname, set())) > 1
+    if conn is None:
+        return False
+    row = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM (
+            SELECT host_uid
+            FROM reports
+            WHERE hostname = ?
+              AND COALESCE(host_uid, '') LIKE '%::%'
+              AND COALESCE(host_uid, '') <> ?
+            GROUP BY host_uid
+            HAVING COUNT(*) > ?
+        )
+        """,
+        (safe_hostname, safe_hostname, INACTIVE_HOST_GHOST_MAX_REPORTS),
+    ).fetchone()
+    return int(row[0] or 0) > 1 if row else False
+
+
 def _find_established_host_uid_for_ingest(
     conn: sqlite3.Connection,
     hostname: str,
@@ -2618,7 +2664,10 @@ def _find_established_host_uid_for_ingest(
             return uid
 
     if len(candidates) == 1:
-        return candidates[0][0]
+        only_uid = candidates[0][0]
+        if ip_guard or safe_agent_id:
+            return only_uid if _identity_matches(only_uid) else ""
+        return only_uid
 
     return ""
 
@@ -2674,6 +2723,10 @@ def _resolve_incoming_host_uid(
             primary_ip=primary_ip,
             payload=payload,
         )
+
+    # Rich host_uid from the agent is authoritative; never replace with another identity.
+    if _host_uid_has_identity_suffix(incoming_host_uid):
+        return incoming_host_uid
 
     canonical_uid = _find_established_host_uid_for_ingest(
         conn,
@@ -3119,6 +3172,12 @@ def _is_superseded_host_identity_key(
     if safe_host_uid.startswith("__legacy_report__:"):
         return True
 
+    if _host_uid_has_identity_suffix(safe_host_uid) and _hostname_has_multiple_established_rich_identities(
+        safe_hostname,
+        conn=conn,
+    ):
+        return False
+
     canonical_map = canonical_by_hostname if canonical_by_hostname is not None else _canonical_identities_by_hostname(conn)
     canonical = canonical_map.get(safe_hostname)
     if canonical:
@@ -3143,6 +3202,12 @@ def _is_superseded_host_identity_key(
 
     cluster_key = _hostname_cluster_key(safe_hostname)
     if not cluster_key:
+        return False
+
+    if _host_uid_has_identity_suffix(safe_host_uid) and _hostname_has_multiple_established_rich_identities(
+        safe_hostname,
+        conn=conn,
+    ):
         return False
 
     cluster_map = canonical_by_cluster if canonical_by_cluster is not None else _canonical_identities_by_cluster(conn)
@@ -3203,6 +3268,9 @@ def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, in
         identity_key = str(row[1] or "").strip()
         if not hostname or not identity_key or identity_key.startswith("__legacy_report__:"):
             continue
+        if _host_uid_has_identity_suffix(identity_key):
+            # Never collapse distinct rich identities that share a hostname.
+            continue
         totals["identities_scanned"] += 1
 
         canonical_uid = ""
@@ -3246,12 +3314,6 @@ def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, in
                 identity_key,
                 canonical_uid,
             )
-        else:
-            conn.execute(
-                f"DELETE FROM reports WHERE hostname = ? AND {host_key_expr} = ?",
-                (hostname, identity_key),
-            )
-            totals["orphan_reports_deleted"] += int(conn.execute("SELECT changes()").fetchone()[0] or 0)
 
     return totals
 
@@ -3313,6 +3375,7 @@ def _should_remove_stale_host_identity(
     last_seen_by_host_uid: dict[str, str],
     established_by_hostname: dict[str, tuple],
     established_by_cluster: dict[str, tuple],
+    rich_uids_by_hostname: dict[str, set[str]] | None = None,
 ) -> tuple[bool, str]:
     host_uid = str(row[0] or "").strip()
     hostname = str(row[1] or "").strip()
@@ -3320,6 +3383,10 @@ def _should_remove_stale_host_identity(
     report_count = int(row[5] or 0)
     if not host_uid or not hostname:
         return False, ""
+
+    rich_uids = rich_uids_by_hostname.get(hostname, set()) if rich_uids_by_hostname else set()
+    if rich_uids and host_uid in rich_uids:
+        return False, "established"
 
     if host_uid.startswith("__legacy_report__:"):
         if last_seen_utc and last_seen_utc < cutoff_iso:
@@ -3350,6 +3417,9 @@ def _should_remove_stale_host_identity(
 
     if _is_ghost_identity_report_count(report_count):
         return True, "ghost"
+
+    if len(rich_uids) > 1 and _host_uid_has_identity_suffix(host_uid):
+        return False, "established"
 
     if established_hostname_row:
         established_uid = str(established_hostname_row[0] or "").strip()
@@ -3383,6 +3453,7 @@ def cleanup_ghost_host_identities(
     canonical_by_cluster = _canonical_identities_by_cluster_from_rows(rows)
     last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(rows)
     established_by_hostname, established_by_cluster = _established_identity_maps_from_rows(rows)
+    rich_uids_by_hostname = _established_rich_host_uids_by_hostname_from_rows(rows)
 
     ghosts_scanned = 0
     ghosts_targeted = 0
@@ -3411,6 +3482,7 @@ def cleanup_ghost_host_identities(
             last_seen_by_host_uid=last_seen_by_host_uid,
             established_by_hostname=established_by_hostname,
             established_by_cluster=established_by_cluster,
+            rich_uids_by_hostname=rich_uids_by_hostname,
         )
         if not should_remove:
             if reason == "too_recent":
