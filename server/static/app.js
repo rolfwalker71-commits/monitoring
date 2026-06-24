@@ -6908,39 +6908,37 @@ function closeFilesystemVisibilityModal() {
 
 function openFilesystemVisibilityModal(section) {
   if (!state.selectedHost || !state.fsVisibilityEditable) return;
+  if (_filesystemVisibilitySaveAbortController) {
+    try {
+      _filesystemVisibilitySaveAbortController.abort();
+    } catch (_) {
+      // Ignore abort errors while reopening the modal.
+    }
+    _filesystemVisibilitySaveAbortController = null;
+  }
   state.fsVisibilitySection = section;
   setFilesystemVisibilityStatus("");
   setFilesystemVisibilityModalSaving(false);
   renderFilesystemVisibilityModalContent();
   const modal = document.getElementById("filesystemVisibilityModal");
-  const backdrop = document.getElementById("filesystemVisibilityBackdrop");
-  const closeButton = document.getElementById("filesystemVisibilityCloseButton");
-  const cancelButton = document.getElementById("filesystemVisibilityCancelButton");
-  const saveButton = document.getElementById("filesystemVisibilitySaveButton");
-
-  if (backdrop) backdrop.onclick = () => closeFilesystemVisibilityModal();
-  if (closeButton) closeButton.onclick = () => closeFilesystemVisibilityModal();
-  if (cancelButton) cancelButton.onclick = () => closeFilesystemVisibilityModal();
-  if (saveButton) {
-    saveButton.onclick = async () => {
-      try {
-        await saveFilesystemVisibilityFromModal();
-      } catch (error) {
-        const message = error && error.message ? error.message : "Unbekannter Fehler";
-        setFilesystemVisibilityStatus(`Fehler: ${message}`, true);
-      }
-    };
-  }
-
   if (modal) modal.classList.remove("hidden");
 }
 
 async function saveFilesystemVisibilityFromModal() {
   const section = state.fsVisibilitySection;
-  if (!section || !state.selectedHost) return;
-  if (_filesystemVisibilitySaveAbortController) return;
+  if (!section || !state.selectedHost) {
+    setFilesystemVisibilityStatus("Kein Host ausgewählt.", true);
+    return;
+  }
+  if (_filesystemVisibilitySaveAbortController) {
+    setFilesystemVisibilityStatus("Speichern läuft bereits…", true);
+    return;
+  }
   const listEl = document.getElementById("filesystemVisibilityList");
-  if (!listEl) return;
+  if (!listEl) {
+    setFilesystemVisibilityStatus("Dialog-Inhalt fehlt.", true);
+    return;
+  }
 
   const checkboxes = Array.from(listEl.querySelectorAll("input[type='checkbox'][data-mountpoint]"));
   const hiddenMountpoints = checkboxes
@@ -6963,6 +6961,7 @@ async function saveFilesystemVisibilityFromModal() {
     const response = await fetch("/api/v1/filesystem-visibility", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
       body: JSON.stringify({
         hostname: state.selectedHost,
         host_uid: state.selectedHostUid || "",
@@ -6977,9 +6976,10 @@ async function saveFilesystemVisibilityFromModal() {
     }
 
     setHiddenMountpointsForSection(section, payload.hidden_mountpoints || hiddenMountpoints);
+    setFilesystemVisibilityStatus("Gespeichert.");
     closeFilesystemVisibilityModal();
     try {
-      await loadAnalysisForHost();
+      await loadAnalysisForHost({ nocache: true });
     } catch (reloadError) {
       console.warn("loadAnalysisForHost after filesystem visibility save failed:", reloadError);
     }
@@ -15326,7 +15326,8 @@ async function openHostMetadataEditorDialog({
   });
 }
 
-async function loadAnalysisForHost() {
+async function loadAnalysisForHost(options = {}) {
+  const nocache = options && options.nocache === true;
   const analysisSummary = document.getElementById("analysisSummary");
   const analysisRows = document.getElementById("analysisRows");
   const resourceCharts = document.getElementById("resourceCharts");
@@ -15372,7 +15373,7 @@ async function loadAnalysisForHost() {
     const hostQuery = state.selectedHostUid
       ? `host_uid=${hostUidParam}`
       : `hostname=${hostNameParam}`;
-    const url = `/api/v1/analysis?${hostQuery}&hours=${state.analysisHours}`;
+    const url = `/api/v1/analysis?${hostQuery}&hours=${state.analysisHours}${nocache ? "&nocache=1" : ""}`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error("HTTP " + response.status);

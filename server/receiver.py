@@ -22000,15 +22000,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             endpoint_timer = _new_endpoint_timer("/api/v1/analysis")
 
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
+            force_refresh = parse_query_flag(query, "nocache")
             username = self._web_session_username()
             host_cache_key = host_uid or hostname
             analysis_cache_key = f"analysis:{host_cache_key}:{hours}:{username or ''}"
-            cached_data = _read_cache_get(analysis_cache_key)
-            if isinstance(cached_data, dict):
-                self._send_json(HTTPStatus.OK, cached_data)
-                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
-                _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=hit")
-                return
+            if not force_refresh:
+                cached_data = _read_cache_get(analysis_cache_key)
+                if isinstance(cached_data, dict):
+                    self._send_json(HTTPStatus.OK, cached_data)
+                    _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                    _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=hit")
+                    return
 
             cutoff_iso = utc_hours_ago_iso(hours)
             where_clause, where_args = _host_reports_where_clause(host_uid, hostname)
@@ -22245,6 +22247,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 },
                 "filesystem_visibility": {
                     "section": "analysis",
+                    "editable": bool(username),
                     "hidden_mountpoints": hidden_mountpoints,
                     "fs_focus_hidden": fs_focus_hidden,
                     "large_files_hidden": large_files_hidden,
@@ -23921,6 +23924,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if path == "/api/v1/filesystem-visibility":
             username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "login required"})
+                return
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length <= 0:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
@@ -23974,6 +23980,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     [str(item or "") for item in hidden_mountpoints_raw],
                 )
                 conn.commit()
+
+            host_cache_key = host_uid or resolved_hostname or hostname
+            if host_cache_key:
+                _read_cache_invalidate_prefix(f"analysis:{host_cache_key}:")
 
             self._send_json(
                 HTTPStatus.OK,
