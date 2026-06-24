@@ -1305,9 +1305,10 @@
               </div>
               <div class="alarm-settings-cards">
 
-                <div class="alarm-settings-card">
+                <div class="alarm-settings-card alarm-settings-card--wide">
                   <div class="alarm-settings-card-title">&#x1F4BE; Festplatte</div>
                   <div class="alarm-settings-grid">
+                    <div class="alarm-settings-os-heading alarm-settings-grid-span2">Linux</div>
                     <label>
                       Warnung ab (%)
                       <input id="warningThresholdInput" type="number" min="1" max="99" step="0.1" />
@@ -1315,6 +1316,15 @@
                     <label>
                       Kritisch ab (%)
                       <input id="criticalThresholdInput" type="number" min="2" max="100" step="0.1" />
+                    </label>
+                    <div class="alarm-settings-os-heading alarm-settings-grid-span2">Windows</div>
+                    <label>
+                      Warnung ab (%)
+                      <input id="windowsWarningThresholdInput" type="number" min="1" max="99" step="0.1" />
+                    </label>
+                    <label>
+                      Kritisch ab (%)
+                      <input id="windowsCriticalThresholdInput" type="number" min="2" max="100" step="0.1" />
                     </label>
                     <label>
                       Entprellung: Treffer

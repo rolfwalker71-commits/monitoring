@@ -538,6 +538,7 @@ const state = {
   changelogActiveJobStatus: "",
   inactiveHosts: [],
   alarmSettingsLoaded: false,
+  filesystemThresholds: { warning_percent: 80, critical_percent: 90 },
   globalAlertsCollapsed: false,
   globalAlertsOffset: 0,
   globalAlertsTotal: 0,
@@ -3933,6 +3934,8 @@ async function loadAlarmSettings(force = false) {
 
   const warningInput = document.getElementById("warningThresholdInput");
   const criticalInput = document.getElementById("criticalThresholdInput");
+  const windowsWarningInput = document.getElementById("windowsWarningThresholdInput");
+  const windowsCriticalInput = document.getElementById("windowsCriticalThresholdInput");
   const warningConsecutiveHitsInput = document.getElementById("warningConsecutiveHitsInput");
   const warningWindowMinutesInput = document.getElementById("warningWindowMinutesInput");
   const criticalImmediateInput = document.getElementById("criticalImmediateInput");
@@ -3966,6 +3969,24 @@ async function loadAlarmSettings(force = false) {
 
     warningInput.value = Number(settings.warning_threshold_percent || 80).toFixed(1);
     criticalInput.value = Number(settings.critical_threshold_percent || 90).toFixed(1);
+    if (windowsWarningInput) {
+      windowsWarningInput.value = Number(settings.windows_warning_threshold_percent || 95).toFixed(1);
+    }
+    if (windowsCriticalInput) {
+      windowsCriticalInput.value = Number(settings.windows_critical_threshold_percent || 98).toFixed(1);
+    }
+    state.filesystemThresholds = {
+      warning_percent: Number(settings.warning_threshold_percent || 80),
+      critical_percent: Number(settings.critical_threshold_percent || 90),
+      linux: {
+        warning_percent: Number(settings.warning_threshold_percent || 80),
+        critical_percent: Number(settings.critical_threshold_percent || 90),
+      },
+      windows: {
+        warning_percent: Number(settings.windows_warning_threshold_percent || 95),
+        critical_percent: Number(settings.windows_critical_threshold_percent || 98),
+      },
+    };
     cpuWarningThresholdInput.value = Number(settings.cpu_warning_threshold_percent || 80).toFixed(1);
     cpuCriticalThresholdInput.value = Number(settings.cpu_critical_threshold_percent || 95).toFixed(1);
     cpuAlertWindowReportsInput.value = String(Number(settings.cpu_alert_window_reports || 4));
@@ -6549,6 +6570,8 @@ async function applyStartRoute(startRoute) {
 async function saveAlarmSettings() {
   const warningInput = document.getElementById("warningThresholdInput");
   const criticalInput = document.getElementById("criticalThresholdInput");
+  const windowsWarningInput = document.getElementById("windowsWarningThresholdInput");
+  const windowsCriticalInput = document.getElementById("windowsCriticalThresholdInput");
   const cpuWarningThresholdInput = document.getElementById("cpuWarningThresholdInput");
   const cpuCriticalThresholdInput = document.getElementById("cpuCriticalThresholdInput");
   const cpuAlertWindowReportsInput = document.getElementById("cpuAlertWindowReportsInput");
@@ -6565,6 +6588,8 @@ async function saveAlarmSettings() {
   const inactiveHostAlertHoursInput = document.getElementById("inactiveHostAlertHoursInput");
 
   const warning = Number(warningInput.value);  const critical = Number(criticalInput.value);
+  const windowsWarning = Number(windowsWarningInput?.value);
+  const windowsCritical = Number(windowsCriticalInput?.value);
   const cpuWarning = Number(cpuWarningThresholdInput.value);
   const cpuCritical = Number(cpuCriticalThresholdInput.value);
   const cpuWindowReports = Number(cpuAlertWindowReportsInput.value);
@@ -6578,7 +6603,16 @@ async function saveAlarmSettings() {
   const inactiveHostAlertHours = Number(inactiveHostAlertHoursInput?.value || 3);
 
   if (!Number.isFinite(warning) || !Number.isFinite(critical) || warning < 1 || critical > 100 || warning >= critical) {
-    throw new Error("Schwellwerte ungültig: Warnung muss kleiner als Kritisch sein.");
+    throw new Error("Linux-Schwellwerte ungültig: Warnung muss kleiner als Kritisch sein.");
+  }
+  if (
+    !Number.isFinite(windowsWarning)
+    || !Number.isFinite(windowsCritical)
+    || windowsWarning < 1
+    || windowsCritical > 100
+    || windowsWarning >= windowsCritical
+  ) {
+    throw new Error("Windows-Schwellwerte ungültig: Warnung muss kleiner als Kritisch sein.");
   }
   if (!Number.isFinite(cpuWarning) || !Number.isFinite(cpuCritical) || cpuWarning < 1 || cpuCritical > 100 || cpuWarning >= cpuCritical) {
     throw new Error("CPU Schwellwerte ungültig: Warnung muss kleiner als Kritisch sein.");
@@ -6602,6 +6636,8 @@ async function saveAlarmSettings() {
   const payload = {
     warning_threshold_percent: warning,
     critical_threshold_percent: critical,
+    windows_warning_threshold_percent: windowsWarning,
+    windows_critical_threshold_percent: windowsCritical,
     cpu_warning_threshold_percent: cpuWarning,
     cpu_critical_threshold_percent: cpuCritical,
     cpu_alert_window_reports: Math.floor(cpuWindowReports),
@@ -7397,9 +7433,18 @@ function computeLinearRegression(series) {
   return { slope, intercept, currentEnd, projected };
 }
 
-function trendAlertLevel(projected) {
-  if (projected >= 100) return "crit";
-  if (projected >= 90) return "warn";
+function getFilesystemThresholds() {
+  const thresholds = state.filesystemThresholds || {};
+  return {
+    warning: Number(thresholds.warning_percent ?? 80),
+    critical: Number(thresholds.critical_percent ?? 90),
+  };
+}
+
+function trendAlertLevel(projected, thresholds) {
+  const t = thresholds || getFilesystemThresholds();
+  if (projected >= t.critical) return "crit";
+  if (projected >= t.warning) return "warn";
   return null;
 }
 
@@ -7685,15 +7730,16 @@ async function openAiTroubleshootModal(metricKey, metricLabel) {
   }
 }
 
-function filesystemLineColor(currentUsedPercent) {
+function filesystemLineColor(currentUsedPercent, thresholds) {
   const value = Number(currentUsedPercent);
   if (!Number.isFinite(value)) {
     return "#64748b";
   }
-  if (value >= 90) {
+  const t = thresholds || getFilesystemThresholds();
+  if (value >= t.critical) {
     return "#dc2626";
   }
-  if (value >= 80) {
+  if (value >= t.warning) {
     return "#d97706";
   }
   return "#0f766e";
@@ -15381,6 +15427,11 @@ async function loadAnalysisForHost(options = {}) {
 
     const data = await response.json();
     const trendRows = Array.isArray(data.filesystem_trends) ? data.filesystem_trends : [];
+    const fsThresholds = data.filesystem_thresholds || {};
+    state.filesystemThresholds = {
+      warning_percent: Number(fsThresholds.warning_percent ?? state.filesystemThresholds?.warning_percent ?? 80),
+      critical_percent: Number(fsThresholds.critical_percent ?? state.filesystemThresholds?.critical_percent ?? 90),
+    };
     const visibility = data.filesystem_visibility || {};
     state.fsVisibilityEditable = visibility.editable !== false;
     state.fsFocusHiddenMountpoints = uniqueSortedMountpoints(visibility.fs_focus_hidden || []);
@@ -15406,8 +15457,9 @@ async function loadAnalysisForHost(options = {}) {
       ? fsCurrentValues.reduce((sum, value) => sum + value, 0) / fsCurrentValues.length
       : null;
     const fsRising = sortedTrendRows.filter((row) => Number(row.delta_used_percent) > 0).length;
-    const fsWarnOrCritical = sortedTrendRows.filter((row) => Number(row.current_used_percent) >= 80).length;
-    filesystemStats.textContent = `${sortedTrendRows.length} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
+    const fsWarnThreshold = getFilesystemThresholds().warning;
+    const fsWarnOrCritical = sortedTrendRows.filter((row) => Number(row.current_used_percent) >= fsWarnThreshold).length;
+    filesystemStats.textContent = `${sortedTrendRows.length} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=${fsWarnThreshold.toFixed(0)}%: ${fsWarnOrCritical}`;
 
     const fsTabBtn = document.getElementById("overviewFilesystemTabButton");
     if (fsTabBtn) {

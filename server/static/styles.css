@@ -2284,6 +2284,13 @@ body[data-theme="dark"] .agent-update-admin-group-row td {
   letter-spacing: 0.01em;
 }
 
+.alarm-settings-os-heading {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  margin: 4px 0 0;
+}
+
 .alarm-settings-grid label {
   display: grid;
   gap: 4px;

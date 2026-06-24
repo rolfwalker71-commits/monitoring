@@ -102,6 +102,8 @@ REPORT_RETENTION_DAYS = max(1, int(os.getenv("MONITORING_REPORT_RETENTION_DAYS",
 MAX_REPORTS_PER_HOST = max(0, int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "0")))
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
+WINDOWS_WARNING_THRESHOLD_PERCENT_DEFAULT = 95.0
+WINDOWS_CRITICAL_THRESHOLD_PERCENT_DEFAULT = 98.0
 ALERT_RESOLVE_HYSTERESIS_PERCENT = max(
     0.0,
     min(20.0, float(os.getenv("MONITORING_ALERT_RESOLVE_HYSTERESIS_PERCENT", "2") or "2")),
@@ -1225,7 +1227,9 @@ def init_db() -> None:
                 openai_model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
                 openai_timeout_sec INTEGER NOT NULL DEFAULT 12,
                 openai_max_tokens INTEGER NOT NULL DEFAULT 1200,
-                ai_troubleshoot_cache_ttl_sec INTEGER NOT NULL DEFAULT 600
+                ai_troubleshoot_cache_ttl_sec INTEGER NOT NULL DEFAULT 600,
+                windows_warning_threshold_percent REAL NOT NULL DEFAULT 95,
+                windows_critical_threshold_percent REAL NOT NULL DEFAULT 98
             )
             """
         )
@@ -1271,6 +1275,14 @@ def init_db() -> None:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_max_tokens INTEGER NOT NULL DEFAULT 1200")
         if "ai_troubleshoot_cache_ttl_sec" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN ai_troubleshoot_cache_ttl_sec INTEGER NOT NULL DEFAULT 600")
+        if "windows_warning_threshold_percent" not in existing_alarm_columns:
+            conn.execute(
+                "ALTER TABLE alarm_settings ADD COLUMN windows_warning_threshold_percent REAL NOT NULL DEFAULT 95"
+            )
+        if "windows_critical_threshold_percent" not in existing_alarm_columns:
+            conn.execute(
+                "ALTER TABLE alarm_settings ADD COLUMN windows_critical_threshold_percent REAL NOT NULL DEFAULT 98"
+            )
 
         existing_alert_columns = {
             str(row[1])
@@ -2151,9 +2163,11 @@ def init_db() -> None:
                 openai_model,
                 openai_timeout_sec,
                 openai_max_tokens,
-                ai_troubleshoot_cache_ttl_sec
+                ai_troubleshoot_cache_ttl_sec,
+                windows_warning_threshold_percent,
+                windows_critical_threshold_percent
             )
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO NOTHING
             """,
             (
@@ -2182,6 +2196,8 @@ def init_db() -> None:
                 12,
                 1200,
                 600,
+                WINDOWS_WARNING_THRESHOLD_PERCENT_DEFAULT,
+                WINDOWS_CRITICAL_THRESHOLD_PERCENT_DEFAULT,
             ),
         )
         conn.execute(
@@ -10420,16 +10436,21 @@ def collect_critical_trends(
         intercept = (sum_y - slope * sum_x) / n
         return slope * (2 * (n - 1)) + intercept
 
-    def trend_level(projected: float | None) -> str | None:
+    def trend_level(
+        projected: float | None,
+        warning_threshold: float = 90.0,
+        critical_threshold: float = 100.0,
+    ) -> str | None:
         if projected is None:
             return None
-        if projected >= 100:
+        if projected >= critical_threshold:
             return "crit"
-        if projected >= 90:
+        if projected >= warning_threshold:
             return "warn"
         return None
 
     warnings: list[dict] = []
+    alarm_settings = get_alarm_settings(conn)
     normalized_allowed_hostnames: set[str] | None = None
     if allowed_hostnames is not None:
         normalized_allowed_hostnames = {
@@ -10531,6 +10552,7 @@ def collect_critical_trends(
         host_display_name = effective_display_name(last_payload, display_name_override, hostname)
         host_country_code = country_code_override or extract_country_code_from_payload(last_payload)
         host_os_family = normalize_os_family(last_payload.get("os", ""))
+        fs_warning_threshold, fs_critical_threshold = filesystem_thresholds_for_os(host_os_family, alarm_settings)
 
         resource_series: dict[str, list[float]] = {
             "cpu_usage_percent": [],
@@ -10606,7 +10628,7 @@ def collect_critical_trends(
                 if hidden_keys and mountpoint_key in hidden_keys:
                     continue
                 projected = linear_regression_projected(values)
-                level = trend_level(projected)
+                level = trend_level(projected, fs_warning_threshold, fs_critical_threshold)
                 if not level:
                     continue
                 current = values[-1] if values else None
@@ -10624,6 +10646,8 @@ def collect_critical_trends(
                         "level": level,
                         "country_code": host_country_code,
                         "os_family": host_os_family,
+                        "warning_threshold": fs_warning_threshold,
+                        "critical_threshold": fs_critical_threshold,
                     }
                 )
 
@@ -14751,7 +14775,9 @@ def build_ai_troubleshoot_response(conn: sqlite3.Connection, hostname: str, metr
     code_snippets: list[dict] = []
 
     if metric_key == "filesystem":
-        severity = "critical" if peak >= CRITICAL_THRESHOLD_PERCENT else ("warning" if peak >= WARNING_THRESHOLD_PERCENT else "info")
+        alarm_settings = get_alarm_settings(conn)
+        fs_warning, fs_critical = filesystem_thresholds_for_os(os_family, alarm_settings)
+        severity = "critical" if peak >= fs_critical else ("warning" if peak >= fs_warning else "info")
         confidence = "hoch" if len(values) >= 12 else "mittel"
         summary = (
             f"Filesystem-Analyse für {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%."
@@ -15010,13 +15036,25 @@ def build_alert_usage_graph_attachment(
     *,
     severity: str,
     hours: int = 24,
+    alarm_settings: dict | None = None,
+    os_family: str | None = None,
 ) -> tuple[str | None, dict | None]:
     series = collect_filesystem_usage_series(conn, hostname, mountpoint, host_uid=host_uid, hours=hours)
     if len(series) < 3:
         return None, None
 
+    effective_alarm_settings = alarm_settings if isinstance(alarm_settings, dict) else get_alarm_settings(conn)
+    effective_os_family = os_family if os_family is not None else host_os_family_from_reports(conn, hostname, host_uid)
+    warning_threshold, critical_threshold = filesystem_thresholds_for_os(effective_os_family, effective_alarm_settings)
+
     graph_title = f"{hostname} {mountpoint} Auslastung (letzte {hours}h)"
-    svg = render_usage_series_svg(series, severity=severity, title=graph_title)
+    svg = render_usage_series_svg(
+        series,
+        warning_threshold=warning_threshold,
+        critical_threshold=critical_threshold,
+        severity=severity,
+        title=graph_title,
+    )
     if not svg:
         return None, None
 
@@ -17014,7 +17052,9 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
                COALESCE(openai_model, 'gpt-4o-mini'),
                COALESCE(openai_timeout_sec, 12),
                COALESCE(openai_max_tokens, 1200),
-               COALESCE(ai_troubleshoot_cache_ttl_sec, 600)
+               COALESCE(ai_troubleshoot_cache_ttl_sec, 600),
+               COALESCE(windows_warning_threshold_percent, 95),
+               COALESCE(windows_critical_threshold_percent, 98)
         FROM alarm_settings
         WHERE id = 1
         """
@@ -17047,6 +17087,8 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
             "openai_timeout_sec": 12,
             "openai_max_tokens": 1200,
             "ai_troubleshoot_cache_ttl_sec": 600,
+            "windows_warning_threshold_percent": WINDOWS_WARNING_THRESHOLD_PERCENT_DEFAULT,
+            "windows_critical_threshold_percent": WINDOWS_CRITICAL_THRESHOLD_PERCENT_DEFAULT,
         }
 
     return {
@@ -17075,6 +17117,12 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         "openai_timeout_sec": max(3, min(60, int(row[22] or 12))) if row[22] is not None else 12,
         "openai_max_tokens": max(256, min(4000, int(row[23] or 1200))) if row[23] is not None else 1200,
         "ai_troubleshoot_cache_ttl_sec": max(30, min(3600, int(row[24] or 600))) if row[24] is not None else 600,
+        "windows_warning_threshold_percent": clamp_threshold(
+            row[25], 1, 99, WINDOWS_WARNING_THRESHOLD_PERCENT_DEFAULT
+        ),
+        "windows_critical_threshold_percent": clamp_threshold(
+            row[26], 1, 100, WINDOWS_CRITICAL_THRESHOLD_PERCENT_DEFAULT
+        ),
     }
 
 
@@ -17095,6 +17143,30 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
 
     if critical <= warning:
         critical = min(100.0, warning + 1.0)
+
+    try:
+        windows_warning = float(
+            payload.get(
+                "windows_warning_threshold_percent",
+                base.get("windows_warning_threshold_percent", WINDOWS_WARNING_THRESHOLD_PERCENT_DEFAULT),
+            )
+        )
+    except (TypeError, ValueError):
+        windows_warning = WINDOWS_WARNING_THRESHOLD_PERCENT_DEFAULT
+    windows_warning = clamp_threshold(windows_warning, 1, 99, WINDOWS_WARNING_THRESHOLD_PERCENT_DEFAULT)
+
+    try:
+        windows_critical = float(
+            payload.get(
+                "windows_critical_threshold_percent",
+                base.get("windows_critical_threshold_percent", WINDOWS_CRITICAL_THRESHOLD_PERCENT_DEFAULT),
+            )
+        )
+    except (TypeError, ValueError):
+        windows_critical = WINDOWS_CRITICAL_THRESHOLD_PERCENT_DEFAULT
+    windows_critical = clamp_threshold(windows_critical, 1, 100, WINDOWS_CRITICAL_THRESHOLD_PERCENT_DEFAULT)
+    if windows_critical <= windows_warning:
+        windows_critical = min(100.0, windows_warning + 1.0)
 
     try:
         warning_hits = int(payload.get("warning_consecutive_hits", base.get("warning_consecutive_hits", 2)))
@@ -17195,6 +17267,8 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
     return {
         "warning_threshold_percent": warning,
         "critical_threshold_percent": critical,
+        "windows_warning_threshold_percent": windows_warning,
+        "windows_critical_threshold_percent": windows_critical,
         "warning_consecutive_hits": warning_hits,
         "warning_window_minutes": warning_window,
         "critical_trigger_immediate": coerce_bool(payload.get("critical_trigger_immediate", base.get("critical_trigger_immediate", True))),
@@ -17260,12 +17334,16 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             openai_model,
             openai_timeout_sec,
             openai_max_tokens,
-            ai_troubleshoot_cache_ttl_sec
+            ai_troubleshoot_cache_ttl_sec,
+            windows_warning_threshold_percent,
+            windows_critical_threshold_percent
         )
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             warning_threshold_percent = excluded.warning_threshold_percent,
             critical_threshold_percent = excluded.critical_threshold_percent,
+            windows_warning_threshold_percent = excluded.windows_warning_threshold_percent,
+            windows_critical_threshold_percent = excluded.windows_critical_threshold_percent,
             warning_consecutive_hits = excluded.warning_consecutive_hits,
             warning_window_minutes = excluded.warning_window_minutes,
             critical_trigger_immediate = excluded.critical_trigger_immediate,
@@ -17316,6 +17394,8 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             normalized["openai_timeout_sec"],
             normalized["openai_max_tokens"],
             normalized["ai_troubleshoot_cache_ttl_sec"],
+            normalized["windows_warning_threshold_percent"],
+            normalized["windows_critical_threshold_percent"],
         ),
     )
 
@@ -17329,6 +17409,39 @@ def evaluate_severity_for_thresholds(used_percent: float, warning_threshold: flo
     if used_percent >= warning_threshold:
         return "warning"
     return "ok"
+
+
+def filesystem_thresholds_for_os(os_family: str, alarm_settings: dict) -> tuple[float, float]:
+    settings = alarm_settings or {}
+    if normalize_os_family(os_family) == "windows":
+        return (
+            float(settings.get("windows_warning_threshold_percent", WINDOWS_WARNING_THRESHOLD_PERCENT_DEFAULT)),
+            float(settings.get("windows_critical_threshold_percent", WINDOWS_CRITICAL_THRESHOLD_PERCENT_DEFAULT)),
+        )
+    return (
+        float(settings.get("warning_threshold_percent", WARNING_THRESHOLD_PERCENT)),
+        float(settings.get("critical_threshold_percent", CRITICAL_THRESHOLD_PERCENT)),
+    )
+
+
+def host_os_family_from_reports(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> str:
+    host_key = str(host_uid or "").strip() or str(hostname or "").strip()
+    if not host_key:
+        return "linux"
+    row = conn.execute(
+        """
+        SELECT payload_json
+        FROM reports
+        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (host_key,),
+    ).fetchone()
+    if not row:
+        return "linux"
+    payload = parse_payload_json(str(row[0] or "{}"))
+    return normalize_os_family(payload.get("os", "linux"))
 
 
 _LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
@@ -19486,7 +19599,16 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     if bool(host_settings.get("is_hidden", False)):
         resolve_open_alerts_for_host(conn, hostname, incoming_host_uid, report_id)
     else:
-        update_alerts_for_report(conn, hostname, incoming_host_uid, report_id, filesystems, alarm_settings)
+        os_family = normalize_os_family(payload.get("os", "linux"))
+        update_alerts_for_report(
+            conn,
+            hostname,
+            incoming_host_uid,
+            report_id,
+            filesystems,
+            alarm_settings,
+            os_family,
+        )
     maybe_send_alert_reminders(conn)
     maybe_send_inactive_host_notifications(conn)
     maybe_send_scheduled_user_mails(conn)
@@ -19874,7 +19996,15 @@ def evaluate_severity(used_percent: float) -> str:
     return "ok"
 
 
-def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
+def update_alerts_for_report(
+    conn: sqlite3.Connection,
+    hostname: str,
+    host_uid: str,
+    report_id: int,
+    filesystems: list,
+    alarm_settings: dict,
+    os_family: str = "linux",
+) -> None:
     now_utc = utc_now_iso()
     alert_key = alert_host_key(hostname, host_uid)
     _resolve_cross_identity_open_alerts(
@@ -19903,6 +20033,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
     warning_window_minutes = max(1, int(alarm_settings.get("warning_window_minutes", 15)))
     critical_trigger_immediate = bool(alarm_settings.get("critical_trigger_immediate", True))
     display_name = get_display_name_override(conn, hostname, host_uid) or hostname
+    warning_threshold, critical_threshold = filesystem_thresholds_for_os(os_family, alarm_settings)
 
     for fs in filesystems:
         if not isinstance(fs, dict):
@@ -19957,8 +20088,6 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
         except (TypeError, ValueError):
             continue
 
-        warning_threshold = float(alarm_settings.get("warning_threshold_percent", WARNING_THRESHOLD_PERCENT))
-        critical_threshold = float(alarm_settings.get("critical_threshold_percent", CRITICAL_THRESHOLD_PERCENT))
         severity = evaluate_severity_for_thresholds(used_percent, warning_threshold, critical_threshold)
         alert_started = False
 
@@ -22085,11 +22214,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             latest_delivery_mode = "live"
             latest_is_delayed = False
             latest_queue_depth = 0
+            latest_os_family = "linux"
 
             for row in rows:
                 report_count += 1
                 latest_report_time = row[1]
                 payload = parse_payload_json(row[2])
+                latest_os_family = normalize_os_family(payload.get("os", "linux"))
                 large_files_raw = payload.get("large_files") if isinstance(payload, dict) else None
                 if isinstance(large_files_raw, dict):
                     latest_large_files = large_files_raw
@@ -22214,6 +22345,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             trends.sort(key=lambda item: item["current_used_percent"], reverse=True)
 
+            analysis_alarm_settings = get_alarm_settings(conn)
+            fs_warning_threshold, fs_critical_threshold = filesystem_thresholds_for_os(
+                latest_os_family,
+                analysis_alarm_settings,
+            )
+
             _mark_endpoint_timer(endpoint_timer, "compute")
 
             response_data = {
@@ -22225,6 +22362,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "latest_report_time_utc": latest_report_time,
                 "latest_max_used_percent": latest_max_used_percent,
                 "latest_hotspots": latest_hotspots,
+                "os_family": latest_os_family,
+                "filesystem_thresholds": {
+                    "warning_percent": fs_warning_threshold,
+                    "critical_percent": fs_critical_threshold,
+                },
                 "resource_trends": {
                     "cpu_usage_percent": summarize_numeric_series(cpu_usage_values),
                     "load_avg_1": summarize_numeric_series(load_avg_1_values),
@@ -22896,6 +23038,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "thresholds": {
                     "warning_percent": alarm_settings["warning_threshold_percent"],
                     "critical_percent": alarm_settings["critical_threshold_percent"],
+                    "linux": {
+                        "warning_percent": alarm_settings["warning_threshold_percent"],
+                        "critical_percent": alarm_settings["critical_threshold_percent"],
+                    },
+                    "windows": {
+                        "warning_percent": alarm_settings["windows_warning_threshold_percent"],
+                        "critical_percent": alarm_settings["windows_critical_threshold_percent"],
+                    },
                 },
                 "open": {
                     "total": total_open,
