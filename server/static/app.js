@@ -12937,6 +12937,9 @@ function renderAgentIngestQueueOverview(data) {
   const inFlightEl = document.getElementById("agentIngestQueueInFlight");
   const delayedEl = document.getElementById("agentIngestQueueDelayed");
   const oldestAgeEl = document.getElementById("agentIngestQueueOldestAge");
+  const processingAvgEl = document.getElementById("agentIngestQueueProcessingAvg");
+  const loginLocksEl = document.getElementById("agentIngestQueueLoginLocks");
+  const healthEl = document.getElementById("agentIngestQueueHealth");
   const bodyEl = document.getElementById("agentIngestQueueErrorRows");
 
   if (depthEl) depthEl.textContent = formatInteger(data?.queue_depth || 0);
@@ -12947,6 +12950,34 @@ function renderAgentIngestQueueOverview(data) {
   if (oldestAgeEl) {
     const ageSeconds = Number(data?.oldest_age_seconds || 0);
     oldestAgeEl.textContent = ageSeconds > 0 ? formatDurationCompact(ageSeconds) : "-";
+  }
+  if (processingAvgEl) {
+    const auditRuntime = data?.audit_runtime && typeof data.audit_runtime === "object" ? data.audit_runtime : {};
+    const avgMs = Number(auditRuntime.processing_avg_ms || data?.runtime_metrics?.ingest_processing_ms_avg || 0);
+    processingAvgEl.textContent = avgMs > 0 ? formatLatencyMs(avgMs) : "-";
+  }
+  if (loginLocksEl) {
+    const runtimeMetrics = data?.runtime_metrics && typeof data.runtime_metrics === "object" ? data.runtime_metrics : {};
+    loginLocksEl.textContent = formatInteger(runtimeMetrics.web_login_database_locked_total || 0);
+  }
+  if (healthEl) {
+    const health = String(data?.health_status || "ok").toLowerCase();
+    const thresholds = data?.health_thresholds && typeof data.health_thresholds === "object" ? data.health_thresholds : {};
+    const warnDepth = Number(thresholds.queue_warn || 500);
+    const critDepth = Number(thresholds.queue_critical || 2000);
+    const healthLabels = {
+      ok: "Gesund",
+      warning: "Warnung",
+      critical: "Kritisch",
+    };
+    const healthMessages = {
+      ok: `Queue unter Schwellwerten (Warnung ab ${formatInteger(warnDepth)}, kritisch ab ${formatInteger(critDepth)}).`,
+      warning: `Erhöhte Last oder Verzögerung (Warnung ab ${formatInteger(warnDepth)} Items oder ältestes Item > 10 Min).`,
+      critical: `Starke Überlastung (kritisch ab ${formatInteger(critDepth)} Items oder ältestes Item > 60 Min).`,
+    };
+    healthEl.hidden = false;
+    healthEl.className = `agent-ingest-queue-health is-${health}`;
+    healthEl.textContent = `${healthLabels[health] || "Status"}: ${healthMessages[health] || healthMessages.ok}`;
   }
 
   if (!bodyEl) return;
@@ -12994,8 +13025,10 @@ async function loadAdminAgentIngestQueue() {
   const nextText = nextAttemptSeconds > 0 ? `in ${formatDurationCompact(nextAttemptSeconds)}` : "sofort";
   const pendingCount = Number(data?.pending_count || 0);
   const retryCount = Number(data?.retry_count || 0);
+  const auditRuntime = data?.audit_runtime && typeof data.audit_runtime === "object" ? data.audit_runtime : {};
+  const failedCount = Number(auditRuntime.failed_count || 0);
   setAgentIngestQueueStatus(
-    `Queue: ${formatInteger(data?.queue_depth || 0)} · Neu: ${formatInteger(pendingCount)} · Retry: ${formatInteger(retryCount)} · Fällig: ${formatInteger(data?.ready_count || 0)} · Ältestes: ${oldestText} · Nächster Versuch: ${nextText}`
+    `Queue: ${formatInteger(data?.queue_depth || 0)} · Neu: ${formatInteger(pendingCount)} · Retry: ${formatInteger(retryCount)} · Fällig: ${formatInteger(data?.ready_count || 0)} · Fehler (60m): ${formatInteger(failedCount)} · Ältestes: ${oldestText} · Nächster Versuch: ${nextText}`
   );
   return data;
 }

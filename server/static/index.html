@@ -673,6 +673,7 @@
                   </div>
                 </div>
                 <p id="agentIngestQueueStatus" class="count compact">Lade Queue-Status...</p>
+                <p id="agentIngestQueueHealth" class="agent-ingest-queue-health" hidden></p>
                 <div class="agent-ingest-queue-stats">
                   <div class="agent-ingest-queue-stat-card"><span>Queue Tiefe</span><strong id="agentIngestQueueDepth">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>Sofort fällig</span><strong id="agentIngestQueueReady">-</strong></div>
@@ -680,6 +681,8 @@
                   <div class="agent-ingest-queue-stat-card"><span>In Flight</span><strong id="agentIngestQueueInFlight">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>Verzögert</span><strong id="agentIngestQueueDelayed">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>Ältestes Item</span><strong id="agentIngestQueueOldestAge">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Ø Verarbeitung (60m)</span><strong id="agentIngestQueueProcessingAvg">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Login DB-Locks</span><strong id="agentIngestQueueLoginLocks">-</strong></div>
                 </div>
                 <div class="agent-update-admin-table-wrap db-maintenance-history-wrap">
                   <table class="agent-update-admin-table db-maintenance-history-table">

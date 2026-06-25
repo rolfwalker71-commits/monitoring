@@ -1747,6 +1747,34 @@ body[data-theme="dark"] .changelog-maintenance-panel-body {
   color: #0f172a;
 }
 
+.agent-ingest-queue-health {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  border: 1px solid #d8e2f0;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.agent-ingest-queue-health.is-ok {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.agent-ingest-queue-health.is-warning {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.agent-ingest-queue-health.is-critical {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
 .backup-automation-grid {
   margin-top: 8px;
   display: grid;
@@ -1988,6 +2016,30 @@ body[data-theme="dark"] .agent-ingest-queue-stat-card > span {
 
 body[data-theme="dark"] .agent-ingest-queue-stat-card > strong {
   color: #dbeafe;
+}
+
+body[data-theme="dark"] .agent-ingest-queue-health {
+  background: #15243c;
+  border-color: #2b3b56;
+  color: #cbd5e1;
+}
+
+body[data-theme="dark"] .agent-ingest-queue-health.is-ok {
+  border-color: #166534;
+  background: #0f2a1d;
+  color: #86efac;
+}
+
+body[data-theme="dark"] .agent-ingest-queue-health.is-warning {
+  border-color: #92400e;
+  background: #2a1f0d;
+  color: #fcd34d;
+}
+
+body[data-theme="dark"] .agent-ingest-queue-health.is-critical {
+  border-color: #991b1b;
+  background: #2a1212;
+  color: #fca5a5;
 }
 
 body[data-theme="dark"] .db-maintenance-chart-card {
