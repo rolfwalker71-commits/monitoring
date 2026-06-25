@@ -722,7 +722,7 @@ const ADMIN_SETTINGS_GROUP_TO_SECTION_IDS = {
 
 const ADMIN_OPERATIONS_GROUP_TO_SECTION_IDS = {
   quick: ["adminOpsQuickGroup"],
-  database: ["adminOpsDbMaintenanceCard"],
+  database: ["adminOpsDbMaintenanceCard", "adminOpsHostIdentityCard"],
   ingest: ["adminOpsIngestCard"],
   backup: ["adminOpsBackupCard"],
   agents: ["adminOpsAgentUpdateCard"],
@@ -6358,12 +6358,10 @@ async function loadAdminSettingsGroup(mode, force = false) {
     setDbMaintenanceStatus("Lade DB Kennzahlen-Verlauf...");
     setBackupAutomationStatus("Lade Backup-Automation...");
     setAgentIngestQueueStatus("Lade Queue-Status...");
-    setAgentIngestAuditStatus("Lade Ingest-Lieferlog...");
     const opsResults = await Promise.allSettled([
       loadAdminDatabaseStats(),
       loadAdminBackupAutomation(),
       loadAdminAgentIngestQueue(),
-      loadAdminAgentIngestAuditLog(),
     ]);
     if (opsResults[0]?.status === "rejected") {
       setDbMaintenanceStatus(`Fehler: ${opsResults[0].reason?.message || opsResults[0].reason}`, true);
@@ -6373,9 +6371,6 @@ async function loadAdminSettingsGroup(mode, force = false) {
     }
     if (opsResults[2]?.status === "rejected") {
       setAgentIngestQueueStatus(`Fehler: ${opsResults[2].reason?.message || opsResults[2].reason}`, true);
-    }
-    if (opsResults[3]?.status === "rejected") {
-      setAgentIngestAuditStatus(`Fehler: ${opsResults[3].reason?.message || opsResults[3].reason}`, true);
     }
     return;
   }
@@ -13085,6 +13080,16 @@ function renderAgentIngestQueueOverview(data) {
 
   if (!bodyEl) return;
   const recentErrors = Array.isArray(data?.recent_errors) ? data.recent_errors : [];
+  const errorsSummaryEl = document.getElementById("agentIngestQueueErrorsSummary");
+  const errorsDetailsEl = document.getElementById("agentIngestQueueErrorsDetails");
+  if (errorsSummaryEl) {
+    errorsSummaryEl.textContent = recentErrors.length > 0
+      ? `(${formatInteger(recentErrors.length)} offen)`
+      : "(keine)";
+  }
+  if (errorsDetailsEl) {
+    errorsDetailsEl.open = recentErrors.length > 0;
+  }
   if (recentErrors.length === 0) {
     bodyEl.innerHTML = '<tr><td colspan="6" class="muted">Keine Queue-Fehler vorhanden.</td></tr>';
     return;
@@ -13196,6 +13201,11 @@ function renderAgentIngestAuditLog(data) {
 }
 
 async function loadAdminAgentIngestAuditLog() {
+  const bodyEl = document.getElementById("agentIngestAuditRows");
+  if (bodyEl) {
+    bodyEl.innerHTML = '<tr><td colspan="9" class="muted">Lade Ingest-Lieferlog...</td></tr>';
+  }
+  setAgentIngestAuditStatus("Lade Ingest-Lieferlog...");
   const response = await fetch("/api/v1/admin/agent-ingest-log?limit=250", {
     method: "GET",
     credentials: "same-origin",
@@ -13213,6 +13223,12 @@ async function loadAdminAgentIngestAuditLog() {
   const payloadMode = mode === "inbox" ? "Payload in Inbox" : (mode === "disk" ? "Payload auf Disk" : "Payload aus");
   const modeSuffix = ingestMode === "file-inbox" ? " · File-Inbox" : "";
   setAgentIngestAuditStatus(`Einträge: ${formatInteger(count)} · Limit: ${formatInteger(data?.retention_limit || 250)} · ${payloadMode}${modeSuffix}`);
+  const auditSummaryEl = document.getElementById("agentIngestAuditSummary");
+  if (auditSummaryEl) {
+    auditSummaryEl.textContent = count > 0
+      ? `(${formatInteger(count)} Einträge)`
+      : "(noch leer)";
+  }
   return data;
 }
 
@@ -19755,16 +19771,30 @@ function wireEvents() {
     refreshAgentIngestQueueButton.addEventListener("click", async () => {
       refreshAgentIngestQueueButton.disabled = true;
       setAgentIngestQueueStatus("Queue-Status wird aktualisiert...");
-      setAgentIngestAuditStatus("Ingest-Lieferlog wird aktualisiert...");
       try {
         await loadAdminAgentIngestQueue();
-        await loadAdminAgentIngestAuditLog();
+        const auditDetailsEl = document.getElementById("agentIngestAuditDetails");
+        if (auditDetailsEl?.open) {
+          setAgentIngestAuditStatus("Ingest-Lieferlog wird aktualisiert...");
+          await loadAdminAgentIngestAuditLog();
+        }
       } catch (error) {
         setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
-        setAgentIngestAuditStatus(`Fehler: ${error.message}`, true);
       } finally {
         refreshAgentIngestQueueButton.disabled = false;
       }
+    });
+  }
+
+  const agentIngestAuditDetails = document.getElementById("agentIngestAuditDetails");
+  if (agentIngestAuditDetails) {
+    agentIngestAuditDetails.addEventListener("toggle", () => {
+      if (!agentIngestAuditDetails.open) {
+        return;
+      }
+      void loadAdminAgentIngestAuditLog().catch((error) => {
+        setAgentIngestAuditStatus(`Fehler: ${error.message}`, true);
+      });
     });
   }
 
@@ -19880,9 +19910,6 @@ function wireEvents() {
     });
     void loadAdminAgentIngestQueue().catch((error) => {
       setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
-    });
-    void loadAdminAgentIngestAuditLog().catch((error) => {
-      setAgentIngestAuditStatus(`Fehler: ${error.message}`, true);
     });
   }
 

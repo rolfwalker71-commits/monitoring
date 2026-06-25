@@ -1719,6 +1719,37 @@ body[data-theme="dark"] .changelog-maintenance-panel-body {
   margin-top: 8px;
 }
 
+.agent-ingest-panel-section {
+  margin-top: 18px;
+  padding-top: 4px;
+}
+
+.agent-ingest-panel-section + .agent-ingest-panel-section {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
+.agent-ingest-subsection-details {
+  margin-top: 0;
+}
+
+.agent-ingest-subsection-details > summary {
+  margin-bottom: 8px;
+}
+
+.agent-ingest-subsection-hint {
+  font-weight: 500;
+  color: #64748b;
+}
+
+.agent-ingest-audit-status {
+  margin: 0 0 10px;
+}
+
+#adminOpsHostIdentityCard {
+  margin-top: 12px;
+}
+
 .agent-ingest-section-label {
   margin: 14px 0 6px;
   font-size: 11px;
@@ -2132,6 +2163,14 @@ body[data-theme="dark"] .agent-ingest-queue-stat-card > strong {
 
 body[data-theme="dark"] .agent-ingest-section-label {
   color: #94a3b8;
+}
+
+body[data-theme="dark"] .agent-ingest-panel-section + .agent-ingest-panel-section {
+  border-top-color: #2b3b56;
+}
+
+body[data-theme="dark"] .agent-ingest-subsection-hint {
+  color: #93a9c4;
 }
 
 body[data-theme="dark"] .agent-ingest-kpi-card {

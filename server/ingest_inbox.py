@@ -833,6 +833,28 @@ def collect_ingest_queue_overview(
     }
 
 
+def _batch_customer_names_by_hostname(
+    main_conn: sqlite3.Connection | None,
+    hostnames: set[str],
+) -> dict[str, str]:
+    if main_conn is None:
+        return {}
+    safe_names = sorted({str(name or "").strip() for name in hostnames if str(name or "").strip()})
+    if not safe_names:
+        return {}
+    placeholders = ",".join("?" * len(safe_names))
+    rows = main_conn.execute(
+        f"""
+        SELECT hs.hostname, COALESCE(c.customer_name, '')
+        FROM host_settings hs
+        LEFT JOIN customers c ON c.id = hs.customer_id
+        WHERE hs.hostname IN ({placeholders})
+        """,
+        safe_names,
+    ).fetchall()
+    return {str(row[0] or "").strip(): str(row[1] or "").strip() for row in rows}
+
+
 def _lookup_customer_name(main_conn: sqlite3.Connection | None, hostname: str, host_uid: str) -> str:
     if main_conn is None:
         return ""
@@ -890,6 +912,9 @@ def collect_ingest_audit_log(
         (safe_limit,),
     ).fetchall()
 
+    hostnames = {str(row[3] or "").strip() for row in rows if str(row[3] or "").strip()}
+    customer_by_hostname = _batch_customer_names_by_hostname(main_conn, hostnames)
+
     entries: list[dict[str, object]] = []
     for row in rows:
         storage_path = str(row[9] or "").strip()
@@ -923,7 +948,7 @@ def collect_ingest_audit_log(
                 "error_message": str(row[16] or ""),
                 "updated_at_utc": str(row[17] or ""),
                 "main_report_id": int(row[18] or 0),
-                "customer_name": _lookup_customer_name(main_conn, str(row[3] or ""), str(row[4] or "")),
+                "customer_name": customer_by_hostname.get(str(row[3] or "").strip(), ""),
             }
         )
 

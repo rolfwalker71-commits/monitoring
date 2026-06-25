@@ -687,47 +687,57 @@
                   <div class="agent-ingest-queue-stat-card"><span>Ältestes Item</span><strong id="agentIngestQueueOldestAge">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>Login DB-Locks</span><strong id="agentIngestQueueLoginLocks">-</strong></div>
                 </div>
-                <div class="agent-update-admin-table-wrap db-maintenance-history-wrap">
-                  <table class="agent-update-admin-table db-maintenance-history-table">
-                    <thead>
-                      <tr>
-                        <th>Job ID</th>
-                        <th>Host</th>
-                        <th>Versuche</th>
-                        <th>Fehlerzeit</th>
-                        <th>Nächster Retry</th>
-                        <th>Fehlermeldung</th>
-                      </tr>
-                    </thead>
-                    <tbody id="agentIngestQueueErrorRows">
-                      <tr><td colspan="6" class="muted">Lade Queue-Fehler...</td></tr>
-                    </tbody>
-                  </table>
+                <div class="agent-ingest-panel-section">
+                  <details id="agentIngestQueueErrorsDetails" class="admin-login-audit-details agent-ingest-subsection-details">
+                    <summary class="admin-login-audit-summary">Queue-Fehler <span id="agentIngestQueueErrorsSummary" class="agent-ingest-subsection-hint">(keine)</span></summary>
+                    <div class="agent-update-admin-table-wrap db-maintenance-history-wrap">
+                      <table class="agent-update-admin-table db-maintenance-history-table">
+                        <thead>
+                          <tr>
+                            <th>Job ID</th>
+                            <th>Host</th>
+                            <th>Versuche</th>
+                            <th>Fehlerzeit</th>
+                            <th>Nächster Retry</th>
+                            <th>Fehlermeldung</th>
+                          </tr>
+                        </thead>
+                        <tbody id="agentIngestQueueErrorRows">
+                          <tr><td colspan="6" class="muted">Keine Queue-Fehler vorhanden.</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
                 </div>
-                <p id="agentIngestAuditStatus" class="count compact">Lade Ingest-Lieferlog...</p>
-                <details id="agentIngestAuditDetails" class="admin-login-audit-details agent-ingest-audit-details">
-                  <summary class="admin-login-audit-summary">Ingest-Lieferlog anzeigen (letzte 250 Einträge)</summary>
-                  <div class="agent-update-admin-table-wrap db-maintenance-history-wrap">
-                    <table class="agent-update-admin-table db-maintenance-history-table">
-                      <thead>
-                        <tr>
-                          <th>Job ID</th>
-                          <th>Host</th>
-                          <th>Kunde</th>
-                          <th>Empfangen</th>
-                          <th>Payload</th>
-                          <th>In DB geschrieben</th>
-                          <th>Ende-zu-Ende</th>
-                          <th>Payload Datei</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody id="agentIngestAuditRows">
-                        <tr><td colspan="9" class="muted">Lade Ingest-Lieferlog...</td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </details>
+                <div class="agent-ingest-panel-section">
+                  <details id="agentIngestAuditDetails" class="admin-login-audit-details agent-ingest-subsection-details">
+                    <summary class="admin-login-audit-summary">Ingest-Lieferlog <span id="agentIngestAuditSummary" class="agent-ingest-subsection-hint">(letzte 250 Einträge)</span></summary>
+                    <p id="agentIngestAuditStatus" class="count compact agent-ingest-audit-status">Lieferlog noch nicht geladen.</p>
+                    <div class="agent-update-admin-table-wrap db-maintenance-history-wrap">
+                      <table class="agent-update-admin-table db-maintenance-history-table">
+                        <thead>
+                          <tr>
+                            <th>Job ID</th>
+                            <th>Host</th>
+                            <th>Kunde</th>
+                            <th>Empfangen</th>
+                            <th>Payload</th>
+                            <th>In DB geschrieben</th>
+                            <th>Ende-zu-Ende</th>
+                            <th>Payload Datei</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody id="agentIngestAuditRows">
+                          <tr><td colspan="9" class="muted">Aufklappen zum Laden des Lieferlogs.</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                </div>
+              </div>
+
+              <div id="adminOpsHostIdentityCard" class="db-maintenance-panel admin-ops-card">
                 <div class="db-maintenance-head host-identity-maintenance-head">
                   <h6>Host-Identitäten (Ghost-Leichen)</h6>
                   <div class="db-maintenance-actions">
