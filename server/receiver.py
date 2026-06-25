@@ -139,11 +139,11 @@ DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAIN
 SQLITE_BUSY_TIMEOUT_SECONDS = max(1.0, min(300.0, float(os.getenv("MONITORING_SQLITE_BUSY_TIMEOUT_SECONDS", "120") or "120")))
 WEB_AUTH_BUSY_TIMEOUT_MS = max(
     1000,
-    int(os.getenv("MONITORING_WEB_AUTH_BUSY_TIMEOUT_MS", "12000") or "12000"),
+    int(os.getenv("MONITORING_WEB_AUTH_BUSY_TIMEOUT_MS", "20000") or "20000"),
 )
 WEB_AUTH_BUSY_RETRY_ATTEMPTS = max(
     1,
-    min(20, int(os.getenv("MONITORING_WEB_AUTH_BUSY_RETRY_ATTEMPTS", "8") or "8")),
+    min(20, int(os.getenv("MONITORING_WEB_AUTH_BUSY_RETRY_ATTEMPTS", "12") or "12")),
 )
 INGEST_QUEUE_WARN_DEPTH = max(10, int(os.getenv("MONITORING_INGEST_QUEUE_WARN_DEPTH", "500") or "500"))
 INGEST_QUEUE_CRIT_DEPTH = max(
@@ -168,7 +168,15 @@ CHANGELOG_MAINTENANCE_QUIET_HOURS_END = max(
 )
 INTERACTIVE_AUTH_YIELD_MAX_SECONDS = max(
     0.0,
-    min(5.0, float(os.getenv("MONITORING_INTERACTIVE_AUTH_YIELD_MAX_SECONDS", "2.0") or "2.0")),
+    min(30.0, float(os.getenv("MONITORING_INTERACTIVE_AUTH_YIELD_MAX_SECONDS", "30.0") or "30.0")),
+)
+INGEST_LOGIN_PAUSE_SECONDS = max(
+    1.0,
+    min(120.0, float(os.getenv("MONITORING_INGEST_LOGIN_PAUSE_SECONDS", "20.0") or "20.0")),
+)
+INGEST_ADAPTIVE_THROTTLE_MS = max(
+    0,
+    min(2000, int(os.getenv("MONITORING_INGEST_ADAPTIVE_THROTTLE_MS", "100") or "100")),
 )
 INGEST_SLOW_PROCESSING_LOG_MS = max(
     100,
@@ -371,6 +379,8 @@ _last_prune_monotonic_by_host_key: dict[str, float] = {}
 _last_prune_lock = threading.Lock()
 _identity_snapshot_persist_last_monotonic = 0.0
 _identity_snapshot_persist_lock = threading.Lock()
+_ingest_yield_until_monotonic = 0.0
+_ingest_yield_lock = threading.Lock()
 _local_cpu_sample_lock = threading.Lock()
 _local_cpu_prev_total: int | None = None
 _local_cpu_prev_idle: int | None = None
@@ -582,6 +592,33 @@ def _append_endpoint_timing_file_log(line: str) -> None:
             return
 
 
+def _extend_ingest_yield_for_login(seconds: float | None = None) -> None:
+    global _ingest_yield_until_monotonic
+    pause_seconds = INGEST_LOGIN_PAUSE_SECONDS if seconds is None else max(0.5, float(seconds))
+    deadline = time.monotonic() + pause_seconds
+    with _ingest_yield_lock:
+        _ingest_yield_until_monotonic = max(_ingest_yield_until_monotonic, deadline)
+
+
+def _ingest_should_pause_for_login() -> bool:
+    if time.monotonic() < _ingest_yield_until_monotonic:
+        return True
+    with _web_login_active_lock:
+        return _web_login_active_count > 0
+
+
+def _wait_while_ingest_paused_for_login() -> None:
+    while _ingest_should_pause_for_login():
+        time.sleep(0.1)
+
+
+def _ingest_adaptive_throttle_sleep(queue_depth: int) -> None:
+    if queue_depth >= INGEST_QUEUE_CRIT_DEPTH:
+        time.sleep(max(INGEST_ADAPTIVE_THROTTLE_MS, 250) / 1000.0)
+    elif queue_depth >= INGEST_QUEUE_WARN_DEPTH:
+        time.sleep(INGEST_ADAPTIVE_THROTTLE_MS / 1000.0)
+
+
 def _interactive_auth_enter() -> None:
     global _web_login_active_count
     with _web_login_active_lock:
@@ -619,6 +656,7 @@ def _record_web_login_database_locked() -> None:
     with _runtime_metrics_lock:
         total = int(_runtime_metrics.get("web_login_database_locked_total") or 0) + 1
         _runtime_metrics["web_login_database_locked_total"] = total
+    _extend_ingest_yield_for_login()
     print(f"[runtime-metric] web_login_database_locked total={total}")
 
 
@@ -753,6 +791,31 @@ def _execute_report_post_commit_tasks(tasks: dict[str, object]) -> None:
         return
     try:
         with sqlite_connect() as conn:
+            deferred_tracking = tasks.get("deferred_tracking")
+            if isinstance(deferred_tracking, dict):
+                hostname = str(deferred_tracking.get("hostname") or "").strip()
+                host_uid = str(deferred_tracking.get("host_uid") or "").strip()
+                payload = deferred_tracking.get("payload")
+                report_id = int(deferred_tracking.get("report_id") or 0)
+                report_received_at_utc = str(deferred_tracking.get("report_received_at_utc") or "")
+                if hostname and isinstance(payload, dict) and report_id > 0:
+                    _track_host_config_changes(
+                        conn,
+                        hostname,
+                        host_uid,
+                        payload,
+                        report_id,
+                        report_received_at_utc,
+                    )
+                    _track_sap_addon_changes(
+                        conn,
+                        hostname,
+                        host_uid,
+                        payload,
+                        report_id,
+                        report_received_at_utc,
+                    )
+                    _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
             if tasks.get("alert_reminders"):
                 maybe_send_alert_reminders(conn)
             if tasks.get("inactive_host_notifications"):
@@ -776,12 +839,17 @@ def _execute_report_post_commit_tasks(tasks: dict[str, object]) -> None:
         except Exception as exc:
             print(f"[report-post-commit] license sync failed: {exc}")
 
+    if isinstance(tasks.get("deferred_tracking"), dict):
+        _schedule_read_cache_invalidation("host-config-changes:")
+        _schedule_read_cache_invalidation("analysis:")
+
 
 def _schedule_report_post_commit_tasks(tasks: dict[str, object]) -> None:
     if not tasks:
         return
     has_work = any(
         [
+            isinstance(tasks.get("deferred_tracking"), dict),
             bool(tasks.get("alert_reminders")),
             bool(tasks.get("inactive_host_notifications")),
             bool(tasks.get("scheduled_user_mails")),
@@ -844,7 +912,7 @@ AGENT_INGEST_WORKER_IDLE_SECONDS = max(
 )
 AGENT_INGEST_BATCH_SIZE = max(
     1,
-    min(32, int(os.getenv("MONITORING_AGENT_INGEST_BATCH_SIZE", "8") or "8")),
+    min(32, int(os.getenv("MONITORING_AGENT_INGEST_BATCH_SIZE", "4") or "4")),
 )
 AGENT_INGEST_MAX_ATTEMPTS = max(
     5,
@@ -5409,6 +5477,7 @@ def collect_agent_ingest_queue_overview(conn: sqlite3.Connection, recent_errors_
         oldest_age_seconds=oldest_age_seconds,
         failed_last_hour=int(audit_runtime.get("failed_count") or 0),
     )
+    ingest_paused_for_login = _ingest_should_pause_for_login()
 
     return {
         "queue_depth": queue_depth,
@@ -5430,6 +5499,7 @@ def collect_agent_ingest_queue_overview(conn: sqlite3.Connection, recent_errors_
         },
         "audit_runtime": audit_runtime,
         "runtime_metrics": runtime_metrics,
+        "ingest_paused_for_login": ingest_paused_for_login,
     }
 
 
@@ -6404,74 +6474,80 @@ def _execute_web_login_mfa(
     source_ip: str = "",
     user_agent: str = "",
 ) -> dict:
-    last_exc: sqlite3.OperationalError | None = None
-    deadline = time.monotonic() + WEB_AUTH_MAX_WALL_SECONDS
-    for attempt in range(WEB_AUTH_BUSY_RETRY_ATTEMPTS):
-        if time.monotonic() >= deadline:
-            break
-        try:
-            with sqlite_connect_interactive() as conn:
-                conn.execute("BEGIN IMMEDIATE")
-                try:
-                    challenge = web_mfa.get_mfa_challenge(conn, challenge_token)
-                    if not challenge:
-                        raise ValueError("invalid challenge")
-
-                    if int(challenge.get("attempts") or 0) >= web_mfa.MFA_MAX_ATTEMPTS:
-                        web_mfa.delete_mfa_challenge(conn, challenge_token)
-                        conn.commit()
-                        raise ValueError("too many attempts")
-
-                    username = str(challenge.get("username") or "").strip()
-                    user = get_web_user(conn, username)
-                    if not user or user.get("is_disabled"):
-                        web_mfa.delete_mfa_challenge(conn, challenge_token)
-                        conn.commit()
-                        raise ValueError("invalid credentials")
-
-                    if not web_mfa.verify_user_mfa_code(conn, username, code):
-                        attempts = web_mfa.increment_mfa_challenge_attempts(conn, challenge_token)
-                        conn.commit()
-                        if attempts >= web_mfa.MFA_MAX_ATTEMPTS:
-                            raise ValueError("too many attempts")
-                        raise ValueError("invalid code")
-
-                    web_mfa.delete_mfa_challenge(conn, challenge_token)
-                    token, expires_at = create_web_session(conn, username)
-                    record_web_login_event(
-                        conn,
-                        username=username,
-                        display_name=str(user.get("display_name", "") or ""),
-                        source_ip=source_ip,
-                        auth_method="password+mfa",
-                        user_agent=user_agent,
-                    )
-                    conn.commit()
-                    return {
-                        "status": "authenticated",
-                        "user": user,
-                        "token": token,
-                        "expires_at": expires_at,
-                    }
-                except ValueError:
-                    conn.rollback()
-                    raise
-                except Exception:
-                    conn.rollback()
-                    raise
-        except ValueError:
-            raise
-        except sqlite3.OperationalError as exc:
-            if not _sqlite_operational_error_is_lock(exc):
-                raise
-            last_exc = exc
-            if attempt + 1 >= WEB_AUTH_BUSY_RETRY_ATTEMPTS:
+    _record_web_login_attempt()
+    _interactive_auth_enter()
+    try:
+        last_exc: sqlite3.OperationalError | None = None
+        deadline = time.monotonic() + WEB_AUTH_MAX_WALL_SECONDS
+        for attempt in range(WEB_AUTH_BUSY_RETRY_ATTEMPTS):
+            if time.monotonic() >= deadline:
                 break
-            time.sleep(min(2.0, 0.35 * (attempt + 1)))
+            try:
+                with sqlite_connect_interactive() as conn:
+                    conn.execute("BEGIN IMMEDIATE")
+                    try:
+                        challenge = web_mfa.get_mfa_challenge(conn, challenge_token)
+                        if not challenge:
+                            raise ValueError("invalid challenge")
 
-    if last_exc is not None:
-        raise last_exc
-    raise sqlite3.OperationalError("database is locked")
+                        if int(challenge.get("attempts") or 0) >= web_mfa.MFA_MAX_ATTEMPTS:
+                            web_mfa.delete_mfa_challenge(conn, challenge_token)
+                            conn.commit()
+                            raise ValueError("too many attempts")
+
+                        username = str(challenge.get("username") or "").strip()
+                        user = get_web_user(conn, username)
+                        if not user or user.get("is_disabled"):
+                            web_mfa.delete_mfa_challenge(conn, challenge_token)
+                            conn.commit()
+                            raise ValueError("invalid credentials")
+
+                        if not web_mfa.verify_user_mfa_code(conn, username, code):
+                            attempts = web_mfa.increment_mfa_challenge_attempts(conn, challenge_token)
+                            conn.commit()
+                            if attempts >= web_mfa.MFA_MAX_ATTEMPTS:
+                                raise ValueError("too many attempts")
+                            raise ValueError("invalid code")
+
+                        web_mfa.delete_mfa_challenge(conn, challenge_token)
+                        token, expires_at = create_web_session(conn, username)
+                        record_web_login_event(
+                            conn,
+                            username=username,
+                            display_name=str(user.get("display_name", "") or ""),
+                            source_ip=source_ip,
+                            auth_method="password+mfa",
+                            user_agent=user_agent,
+                        )
+                        conn.commit()
+                        _record_web_login_success()
+                        return {
+                            "status": "authenticated",
+                            "user": user,
+                            "token": token,
+                            "expires_at": expires_at,
+                        }
+                    except ValueError:
+                        conn.rollback()
+                        raise
+                    except Exception:
+                        conn.rollback()
+                        raise
+            except ValueError:
+                raise
+            except sqlite3.OperationalError as exc:
+                if not _sqlite_operational_error_is_lock(exc):
+                    raise
+                last_exc = exc
+                if attempt + 1 >= WEB_AUTH_BUSY_RETRY_ATTEMPTS:
+                    break
+                time.sleep(min(2.0, 0.35 * (attempt + 1)))
+
+        if last_exc is not None:
+            raise last_exc
+        raise sqlite3.OperationalError("database is locked")
+    finally:
+        _interactive_auth_leave()
 
 
 def _web_login_success_payload(user: dict, username: str, expires_at: str) -> dict:
@@ -11316,8 +11392,9 @@ def _ensure_deferred_performance_indexes(conn: sqlite3.Connection) -> None:
         print(f"[startup] deferred index created: {index_name}")
 
 
-def _persist_identity_snapshot(conn: sqlite3.Connection, rows: list[tuple]) -> None:
-    conn.execute("DELETE FROM host_identity_snapshot")
+def _persist_identity_snapshot(conn: sqlite3.Connection, rows: list[tuple], *, replace_all: bool = False) -> None:
+    if replace_all:
+        conn.execute("DELETE FROM host_identity_snapshot")
     if not rows:
         conn.commit()
         return
@@ -11326,6 +11403,12 @@ def _persist_identity_snapshot(conn: sqlite3.Connection, rows: list[tuple]) -> N
         INSERT INTO host_identity_snapshot (
             host_key, hostname, last_seen_utc, payload_json, primary_ip, report_count
         ) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(host_key) DO UPDATE SET
+            hostname = excluded.hostname,
+            last_seen_utc = excluded.last_seen_utc,
+            payload_json = excluded.payload_json,
+            primary_ip = excluded.primary_ip,
+            report_count = excluded.report_count
         """,
         [
             (
@@ -19883,10 +19966,69 @@ def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, host_uid: st
     )
 
 
+def _quick_duplicate_report_id(
+    payload: dict,
+    report_received_at_utc: str,
+    payload_json: str,
+) -> int:
+    hostname = str(payload.get("hostname", "")).strip()
+    if not hostname:
+        return 0
+    host_lookup_key = str(payload.get("host_uid", "") or "").strip() or hostname
+    try:
+        with sqlite_connect_read() as conn:
+            row = conn.execute(
+                """
+                SELECT id
+                FROM reports
+                WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+                  AND received_at_utc = ?
+                  AND payload_json = ?
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                (host_lookup_key, report_received_at_utc, payload_json),
+            ).fetchone()
+        return int(row[0] or 0) if row else 0
+    except sqlite3.Error:
+        return 0
+
+
+def _agent_ingest_finalize_duplicate(
+    conn: sqlite3.Connection,
+    *,
+    queue_id: int,
+    report_id: int,
+    attempt_count: int,
+    report_received_at_utc: str,
+    enqueued_at_utc: str,
+    processing_started_at_utc: str,
+) -> None:
+    written_at_utc = utc_now_iso()
+    queue_wait_ms = _agent_ingest_duration_ms(enqueued_at_utc, processing_started_at_utc)
+    processing_ms = _agent_ingest_duration_ms(processing_started_at_utc, written_at_utc)
+    end_to_end_ms = _agent_ingest_duration_ms(report_received_at_utc, written_at_utc)
+    _update_agent_ingest_audit_log_row(
+        conn,
+        queue_id=queue_id,
+        status="written",
+        updated_at_utc=written_at_utc,
+        attempt_count=attempt_count,
+        db_written_at_utc=written_at_utc,
+        queue_wait_ms=queue_wait_ms,
+        processing_ms=processing_ms,
+        end_to_end_ms=end_to_end_ms,
+        error_message="duplicate",
+    )
+    conn.execute("DELETE FROM agent_ingest_queue WHERE id = ?", (queue_id,))
+
+
 def _process_agent_report_payload(
     conn: sqlite3.Connection,
     payload: dict,
     report_received_at_utc: str,
+    *,
+    alarm_settings: dict | None = None,
 ) -> tuple[int, dict[str, object]]:
     hostname = str(payload.get("hostname", "")).strip()
     if not hostname:
@@ -19954,12 +20096,9 @@ def _process_agent_report_payload(
         payload,
         force=False,
     )
-    _track_host_config_changes(conn, hostname, incoming_host_uid, payload, report_id, report_received_at_utc)
-    _track_sap_addon_changes(conn, hostname, incoming_host_uid, payload, report_id, report_received_at_utc)
-    _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
     if _should_prune_reports_for_host(host_lookup_key):
         prune_reports_for_host(conn, hostname, incoming_host_uid, MAX_REPORTS_PER_HOST)
-    alarm_settings = get_alarm_settings(conn)
+    resolved_alarm_settings = alarm_settings if isinstance(alarm_settings, dict) else get_alarm_settings(conn)
     host_settings = get_host_settings(conn, hostname)
     if bool(host_settings.get("is_hidden", False)):
         resolve_open_alerts_for_host(conn, hostname, incoming_host_uid, report_id)
@@ -19971,25 +20110,19 @@ def _process_agent_report_payload(
             incoming_host_uid,
             report_id,
             filesystems,
-            alarm_settings,
+            resolved_alarm_settings,
             os_family,
         )
     _schedule_identity_maps_cache_invalidation()
-    _schedule_read_cache_invalidation("hosts:")
-    _schedule_read_cache_invalidation("inactive-hosts:")
-    _schedule_read_cache_invalidation("alerts-summary:")
-    _schedule_read_cache_invalidation("alerts-list:")
-    _schedule_read_cache_invalidation("system-overview:")
-    _schedule_read_cache_invalidation("backup-status-overview:")
-    _schedule_read_cache_invalidation("customer-overview:")
-    _schedule_read_cache_invalidation("critical-trends:")
-    _schedule_read_cache_invalidation("host-config-changes:")
-    _schedule_read_cache_invalidation("agent-source-status:")
-    _schedule_read_cache_invalidation("host-reports:")
-    _schedule_read_cache_invalidation("host-reports-meta:")
-    _schedule_read_cache_invalidation("analysis:")
 
     post_commit_tasks: dict[str, object] = {
+        "deferred_tracking": {
+            "hostname": hostname,
+            "host_uid": incoming_host_uid,
+            "payload": payload,
+            "report_id": report_id,
+            "report_received_at_utc": report_received_at_utc,
+        },
         "alert_reminders": True,
         "inactive_host_notifications": True,
         "scheduled_user_mails": True,
@@ -20133,6 +20266,11 @@ def _agent_ingest_schedule_retry(
 
 def _agent_ingest_worker_loop() -> None:
     while True:
+        if _ingest_should_pause_for_login():
+            _agent_ingest_queue_wakeup.wait(0.15)
+            _agent_ingest_queue_wakeup.clear()
+            continue
+
         had_work = False
         try:
             with sqlite_connect() as conn:
@@ -20147,12 +20285,18 @@ def _agent_ingest_worker_loop() -> None:
                     """,
                     (now_utc, AGENT_INGEST_BATCH_SIZE),
                 ).fetchall()
+                queue_depth_row = conn.execute("SELECT COUNT(*) FROM agent_ingest_queue").fetchone()
+                queue_depth = int((queue_depth_row[0] if queue_depth_row else 0) or 0)
 
                 if not rows:
                     conn.commit()
                 else:
                     had_work = True
+                    batch_alarm_settings = get_alarm_settings(conn)
                     for row in rows:
+                        if _ingest_should_pause_for_login():
+                            break
+
                         queue_id = int(row[0] or 0)
                         payload_json = str(row[1] or "{}")
                         report_received_at_utc = str(row[2] or "") or now_utc
@@ -20176,6 +20320,67 @@ def _agent_ingest_worker_loop() -> None:
                             print(f"[agent-ingest-worker] queue_id={queue_id} dropped: {error_message}")
                             continue
 
+                        payload: dict | None = None
+                        try:
+                            parsed_payload = json.loads(payload_json)
+                            if isinstance(parsed_payload, dict):
+                                payload = parsed_payload
+                        except json.JSONDecodeError:
+                            parsed_payload = None
+                        if payload is None:
+                            _wait_for_interactive_auth_slot()
+                            conn.execute("BEGIN IMMEDIATE")
+                            try:
+                                _agent_ingest_schedule_retry(
+                                    conn,
+                                    queue_id=queue_id,
+                                    attempt_count=attempt_count,
+                                    error_message="queued payload must be a JSON object",
+                                )
+                            except Exception as exc:
+                                conn.rollback()
+                                print(f"[agent-ingest-worker] queue_id={queue_id} invalid payload: {exc}")
+                            continue
+
+                        duplicate_report_id = _quick_duplicate_report_id(
+                            payload,
+                            report_received_at_utc,
+                            payload_json,
+                        )
+                        if duplicate_report_id > 0:
+                            _wait_for_interactive_auth_slot()
+                            conn.execute("BEGIN IMMEDIATE")
+                            try:
+                                conn.execute(
+                                    """
+                                    UPDATE agent_ingest_queue
+                                    SET attempt_count = ?,
+                                        processing_started_at_utc = ?,
+                                        updated_at_utc = ?
+                                    WHERE id = ?
+                                    """,
+                                    (attempt_count, processing_started_at_utc, processing_started_at_utc, queue_id),
+                                )
+                                _agent_ingest_finalize_duplicate(
+                                    conn,
+                                    queue_id=queue_id,
+                                    report_id=duplicate_report_id,
+                                    attempt_count=attempt_count,
+                                    report_received_at_utc=report_received_at_utc,
+                                    enqueued_at_utc=enqueued_at_utc,
+                                    processing_started_at_utc=processing_started_at_utc,
+                                )
+                                conn.commit()
+                            except Exception as exc:
+                                conn.rollback()
+                                _agent_ingest_schedule_retry(
+                                    conn,
+                                    queue_id=queue_id,
+                                    attempt_count=attempt_count,
+                                    error_message=str(exc),
+                                )
+                            continue
+
                         _wait_for_interactive_auth_slot()
                         conn.execute("BEGIN IMMEDIATE")
                         try:
@@ -20197,14 +20402,11 @@ def _agent_ingest_worker_loop() -> None:
                                 attempt_count=attempt_count,
                             )
 
-                            payload = json.loads(payload_json)
-                            if not isinstance(payload, dict):
-                                raise ValueError("queued payload must be a JSON object")
-
                             _report_id, post_commit_tasks = _process_agent_report_payload(
                                 conn,
                                 payload,
                                 report_received_at_utc,
+                                alarm_settings=batch_alarm_settings,
                             )
                             written_at_utc = utc_now_iso()
                             queue_wait_ms = _agent_ingest_duration_ms(enqueued_at_utc, processing_started_at_utc)
@@ -20237,6 +20439,7 @@ def _agent_ingest_worker_loop() -> None:
                             conn.commit()
                             _schedule_report_post_commit_tasks(post_commit_tasks)
                             _read_cache_invalidate_prefix("dashboard-db-kpis")
+                            _ingest_adaptive_throttle_sleep(queue_depth)
                         except Exception as exc:
                             conn.rollback()
                             _agent_ingest_schedule_retry(
@@ -24105,6 +24308,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             except sqlite3.OperationalError as exc:
                 if _sqlite_operational_error_is_lock(exc):
+                    _record_web_login_database_locked()
                     self._send_json(
                         HTTPStatus.SERVICE_UNAVAILABLE,
                         {

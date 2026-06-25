@@ -13027,8 +13027,9 @@ async function loadAdminAgentIngestQueue() {
   const retryCount = Number(data?.retry_count || 0);
   const auditRuntime = data?.audit_runtime && typeof data.audit_runtime === "object" ? data.audit_runtime : {};
   const failedCount = Number(auditRuntime.failed_count || 0);
+  const loginPause = Boolean(data?.ingest_paused_for_login);
   setAgentIngestQueueStatus(
-    `Queue: ${formatInteger(data?.queue_depth || 0)} · Neu: ${formatInteger(pendingCount)} · Retry: ${formatInteger(retryCount)} · Fällig: ${formatInteger(data?.ready_count || 0)} · Fehler (60m): ${formatInteger(failedCount)} · Ältestes: ${oldestText} · Nächster Versuch: ${nextText}`
+    `Queue: ${formatInteger(data?.queue_depth || 0)} · Neu: ${formatInteger(pendingCount)} · Retry: ${formatInteger(retryCount)} · Fällig: ${formatInteger(data?.ready_count || 0)} · Fehler (60m): ${formatInteger(failedCount)} · Login-Priorität: ${loginPause ? "aktiv" : "nein"} · Ältestes: ${oldestText} · Nächster Versuch: ${nextText}`
   );
   return data;
 }
