@@ -74,6 +74,7 @@ from external_monitors import (
     wake_external_monitor_worker,
 )
 
+import ingest_inbox
 import mfa as web_mfa
 
 STATIC_DIR = BASE_DIR / "static"
@@ -182,6 +183,21 @@ INGEST_SLOW_PROCESSING_LOG_MS = max(
     100,
     int(os.getenv("MONITORING_INGEST_SLOW_PROCESSING_LOG_MS", "500") or "500"),
 )
+INGEST_FILE_INBOX_ENABLED = os.getenv("MONITORING_INGEST_FILE_INBOX_ENABLED", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+INGEST_SCANNER_INTERVAL_SECONDS = max(
+    0.05,
+    min(2.0, float(os.getenv("MONITORING_INGEST_SCANNER_INTERVAL_MS", "100") or "100") / 1000.0),
+)
+INGEST_SCANNER_BATCH_SIZE = max(
+    1,
+    min(200, int(os.getenv("MONITORING_INGEST_SCANNER_BATCH_SIZE", "50") or "50")),
+)
+INGEST_INBOX_FSYNC = os.getenv("MONITORING_INGEST_INBOX_FSYNC", "1").strip().lower() in {"1", "true", "yes", "on"}
 WEB_AUTH_MAX_WALL_SECONDS = max(
     2.0,
     min(30.0, float(os.getenv("MONITORING_WEB_AUTH_MAX_WALL_SECONDS", "22") or "22")),
@@ -2717,6 +2733,9 @@ def init_db() -> None:
                 (LINUX_MOUNTPOINT_DEFAULTS_MIGRATION_KEY, utc_now_iso()),
             )
         init_external_monitor_tables(conn)
+        if INGEST_FILE_INBOX_ENABLED:
+            ingest_inbox.init_ingest_status_db()
+            ingest_inbox.migrate_legacy_agent_ingest_queue(conn)
         conn.commit()
 
 
@@ -5502,6 +5521,7 @@ def collect_agent_ingest_queue_overview(conn: sqlite3.Connection, recent_errors_
     ingest_paused_for_login = _ingest_should_pause_for_login()
 
     return {
+        "ingest_mode": "sqlite-queue",
         "queue_depth": queue_depth,
         "ready_count": ready_count,
         "retry_count": retry_count,
@@ -20186,6 +20206,42 @@ def _run_sqlite_with_busy_retry(
     raise sqlite3.OperationalError("database is locked")
 
 
+def _configure_ingest_inbox_runtime() -> None:
+    ingest_inbox.configure(
+        data_dir=DATA_DIR,
+        enabled=INGEST_FILE_INBOX_ENABLED,
+        scanner_interval_seconds=INGEST_SCANNER_INTERVAL_SECONDS,
+        scanner_batch_size=INGEST_SCANNER_BATCH_SIZE,
+        inbox_fsync=INGEST_INBOX_FSYNC,
+        audit_max_rows=AGENT_INGEST_AUDIT_MAX_ROWS,
+        max_attempts=AGENT_INGEST_MAX_ATTEMPTS,
+        retry_max_backoff_seconds=AGENT_INGEST_RETRY_MAX_BACKOFF_SECONDS,
+        worker_idle_seconds=AGENT_INGEST_WORKER_IDLE_SECONDS,
+        batch_size=AGENT_INGEST_BATCH_SIZE,
+        db_timeout_seconds=30,
+        slow_log_ms=INGEST_SLOW_PROCESSING_LOG_MS,
+        queue_warn_depth=INGEST_QUEUE_WARN_DEPTH,
+        queue_crit_depth=INGEST_QUEUE_CRIT_DEPTH,
+    )
+    ingest_inbox.register_runtime_hooks(
+        process_job=_process_agent_report_payload,
+        should_pause_for_login=_ingest_should_pause_for_login,
+        wait_for_login_slot=_wait_while_ingest_paused_for_login,
+        record_ingest_written=_record_ingest_report_written,
+        schedule_post_commit=_schedule_report_post_commit_tasks,
+        invalidate_dashboard_kpis=lambda: _read_cache_invalidate_prefix("dashboard-db-kpis"),
+        adaptive_throttle_sleep=_ingest_adaptive_throttle_sleep,
+        runtime_metrics_snapshot=_runtime_metrics_snapshot,
+        derive_queue_health=_derive_ingest_queue_health,
+        collect_audit_runtime_stats=ingest_inbox.collect_ingest_audit_runtime_stats,
+        sqlite_connect_main=sqlite_connect,
+        get_alarm_settings=get_alarm_settings,
+        get_host_settings=get_host_settings,
+        quick_duplicate_report_id=_quick_duplicate_report_id,
+        agent_ingest_duration_ms=_agent_ingest_duration_ms,
+    )
+
+
 def enqueue_agent_report(payload: dict, report_received_at_utc: str) -> int:
     hostname = str(payload.get("hostname", "")).strip()
     host_uid = str(payload.get("host_uid", "") or "").strip()
@@ -21629,8 +21685,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             query = parse_qs(parsed.query)
             recent_limit = parse_int(query, "recent_limit", default=20, min_value=5, max_value=100)
-            with sqlite3.connect(DB_PATH) as conn:
-                payload = collect_agent_ingest_queue_overview(conn, recent_errors_limit=recent_limit)
+            if INGEST_FILE_INBOX_ENABLED:
+                with ingest_inbox.sqlite_connect_ingest_status() as ingest_conn:
+                    payload = ingest_inbox.collect_ingest_queue_overview(
+                        ingest_conn,
+                        recent_errors_limit=recent_limit,
+                    )
+            else:
+                with sqlite3.connect(DB_PATH) as conn:
+                    payload = collect_agent_ingest_queue_overview(conn, recent_errors_limit=recent_limit)
             self._send_json(HTTPStatus.OK, {"status": "ok", **payload})
             return
 
@@ -21639,8 +21702,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=AGENT_INGEST_AUDIT_MAX_ROWS, min_value=10, max_value=2000)
-            with sqlite3.connect(DB_PATH) as conn:
-                payload = collect_agent_ingest_audit_log(conn, limit=limit)
+            if INGEST_FILE_INBOX_ENABLED:
+                with ingest_inbox.sqlite_connect_ingest_status() as ingest_conn, sqlite_connect_read() as main_conn:
+                    payload = ingest_inbox.collect_ingest_audit_log(
+                        ingest_conn,
+                        main_conn,
+                        limit=limit,
+                    )
+            else:
+                with sqlite3.connect(DB_PATH) as conn:
+                    payload = collect_agent_ingest_audit_log(conn, limit=limit)
             self._send_json(HTTPStatus.OK, {"status": "ok", **payload})
             return
 
@@ -21652,6 +21723,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "audit_id missing"})
                 return
             audit_id = parse_int(query, "audit_id", default=0, min_value=1, max_value=2_000_000_000)
+            if INGEST_FILE_INBOX_ENABLED:
+                payload_file = ingest_inbox.resolve_audit_payload_path(audit_id)
+                if payload_file is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "audit entry not found"})
+                    return
+                self._send_file(
+                    payload_file,
+                    "application/json; charset=utf-8",
+                    extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+                )
+                return
+
             with sqlite3.connect(DB_PATH) as conn:
                 row = conn.execute(
                     "SELECT payload_file_path FROM agent_ingest_audit_log WHERE id = ?",
@@ -27507,8 +27590,24 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         report_received_at_utc = utc_now_iso()
 
         try:
+            if INGEST_FILE_INBOX_ENABLED:
+                inbox_id = ingest_inbox.accept_agent_report_to_inbox(
+                    payload,
+                    report_received_at_utc=report_received_at_utc,
+                    remote_addr=self._request_client_ip(),
+                )
+                self._send_json(
+                    HTTPStatus.ACCEPTED,
+                    {
+                        "status": "accepted",
+                        "inbox_id": inbox_id,
+                        "queue_id": inbox_id,
+                        "received_at_utc": report_received_at_utc,
+                    },
+                )
+                return
             queue_id = enqueue_agent_report(payload, report_received_at_utc)
-        except sqlite3.OperationalError as exc:
+        except (sqlite3.OperationalError, OSError) as exc:
             error_text = str(exc)
             if "locked" in error_text.lower() or "busy" in error_text.lower():
                 self._send_json(
@@ -27621,6 +27720,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    _configure_ingest_inbox_runtime()
     init_db()
     _restore_backup_jobs_from_disk()
 
@@ -27754,12 +27854,28 @@ def main() -> None:
     )
     backup_scheduler_thread.start()
 
-    agent_ingest_worker_thread = threading.Thread(
-        target=_agent_ingest_worker_loop,
-        name="agent-ingest-worker",
-        daemon=True,
-    )
-    agent_ingest_worker_thread.start()
+    if INGEST_FILE_INBOX_ENABLED:
+        ingest_scanner_thread = threading.Thread(
+            target=ingest_inbox.ingest_scanner_loop,
+            name="ingest-inbox-scanner",
+            daemon=True,
+        )
+        ingest_scanner_thread.start()
+        ingest_worker_thread = threading.Thread(
+            target=ingest_inbox.ingest_worker_loop,
+            name="ingest-inbox-worker",
+            daemon=True,
+        )
+        ingest_worker_thread.start()
+        print("[startup] file-inbox ingest enabled (scanner + worker threads)")
+    else:
+        agent_ingest_worker_thread = threading.Thread(
+            target=_agent_ingest_worker_loop,
+            name="agent-ingest-worker",
+            daemon=True,
+        )
+        agent_ingest_worker_thread.start()
+        print("[startup] legacy sqlite-queue ingest enabled")
 
     start_external_monitor_worker(str(DB_PATH))
 

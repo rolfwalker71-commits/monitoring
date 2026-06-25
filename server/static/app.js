@@ -12932,6 +12932,8 @@ function formatDurationCompact(seconds) {
 
 function renderAgentIngestQueueOverview(data) {
   const depthEl = document.getElementById("agentIngestQueueDepth");
+  const inboxPendingEl = document.getElementById("agentIngestInboxPending");
+  const jobsDepthEl = document.getElementById("agentIngestJobsDepth");
   const readyEl = document.getElementById("agentIngestQueueReady");
   const retryEl = document.getElementById("agentIngestQueueRetry");
   const inFlightEl = document.getElementById("agentIngestQueueInFlight");
@@ -12943,6 +12945,14 @@ function renderAgentIngestQueueOverview(data) {
   const bodyEl = document.getElementById("agentIngestQueueErrorRows");
 
   if (depthEl) depthEl.textContent = formatInteger(data?.queue_depth || 0);
+  if (inboxPendingEl) {
+    const pendingInbox = Number(data?.pending_inbox_count);
+    inboxPendingEl.textContent = Number.isFinite(pendingInbox) ? formatInteger(pendingInbox) : "-";
+  }
+  if (jobsDepthEl) {
+    const jobsDepth = Number(data?.jobs_depth);
+    jobsDepthEl.textContent = Number.isFinite(jobsDepth) ? formatInteger(jobsDepth) : "-";
+  }
   if (readyEl) readyEl.textContent = formatInteger(data?.ready_count || 0);
   if (retryEl) retryEl.textContent = formatInteger(data?.retry_count || 0);
   if (inFlightEl) inFlightEl.textContent = formatInteger(data?.in_flight_count || 0);
@@ -13028,8 +13038,15 @@ async function loadAdminAgentIngestQueue() {
   const auditRuntime = data?.audit_runtime && typeof data.audit_runtime === "object" ? data.audit_runtime : {};
   const failedCount = Number(auditRuntime.failed_count || 0);
   const loginPause = Boolean(data?.ingest_paused_for_login);
+  const ingestMode = asText(data?.ingest_mode, "sqlite-queue");
+  const modeLabel = ingestMode === "file-inbox" ? "File-Inbox" : "SQLite-Queue";
+  const pendingInbox = Number(data?.pending_inbox_count || 0);
+  const jobsDepth = Number(data?.jobs_depth);
+  const inboxPart = ingestMode === "file-inbox"
+    ? ` · Inbox: ${formatInteger(pendingInbox)} · Jobs: ${formatInteger(Number.isFinite(jobsDepth) ? jobsDepth : 0)}`
+    : "";
   setAgentIngestQueueStatus(
-    `Queue: ${formatInteger(data?.queue_depth || 0)} · Neu: ${formatInteger(pendingCount)} · Retry: ${formatInteger(retryCount)} · Fällig: ${formatInteger(data?.ready_count || 0)} · Fehler (60m): ${formatInteger(failedCount)} · Login-Priorität: ${loginPause ? "aktiv" : "nein"} · Ältestes: ${oldestText} · Nächster Versuch: ${nextText}`
+    `Modus: ${modeLabel} · Queue: ${formatInteger(data?.queue_depth || 0)}${inboxPart} · Neu: ${formatInteger(pendingCount)} · Retry: ${formatInteger(retryCount)} · Fällig: ${formatInteger(data?.ready_count || 0)} · Fehler (60m): ${formatInteger(failedCount)} · Login-Priorität: ${loginPause ? "aktiv" : "nein"} · Ältestes: ${oldestText} · Nächster Versuch: ${nextText}`
   );
   return data;
 }
@@ -13051,13 +13068,17 @@ function renderAgentIngestAuditLog(data) {
   }
 
   bodyEl.innerHTML = entries.map((item) => {
-    const queueId = Number(item?.queue_id || 0);
+    const queueId = Number(item?.job_id || item?.queue_id || 0);
     const host = asText(item?.hostname || item?.host_uid, "-");
     const customerName = asText(item?.customer_name, "").trim() || "-";
     const receivedAt = formatUtcPlus2(asText(item?.report_received_at_utc, ""));
     const writtenAt = formatUtcPlus2(asText(item?.db_written_at_utc, ""));
     const payloadBytes = Number(item?.payload_bytes || 0);
-    const latencyText = formatLatencyMs(item?.end_to_end_ms || 0);
+    const inboxWaitMs = Number(item?.inbox_wait_ms || 0);
+    const endToEndMs = Number(item?.end_to_end_ms || 0);
+    const latencyText = inboxWaitMs > 0
+      ? `${formatLatencyMs(endToEndMs)} (Inbox ${formatLatencyMs(inboxWaitMs)})`
+      : formatLatencyMs(endToEndMs);
     const status = asText(item?.status, "-");
     const payloadStored = !!item?.payload_stored;
     const payloadPath = asText(item?.payload_download_path, "");
@@ -13094,8 +13115,10 @@ async function loadAdminAgentIngestAuditLog() {
   renderAgentIngestAuditLog(data);
   const count = Array.isArray(data?.entries) ? data.entries.length : 0;
   const mode = asText(data?.payload_capture_mode, "off");
-  const payloadMode = mode === "disk" ? "Payload auf Disk" : "Payload aus";
-  setAgentIngestAuditStatus(`Einträge: ${formatInteger(count)} · Limit: ${formatInteger(data?.retention_limit || 250)} · ${payloadMode}`);
+  const ingestMode = asText(data?.ingest_mode, "");
+  const payloadMode = mode === "inbox" ? "Payload in Inbox" : (mode === "disk" ? "Payload auf Disk" : "Payload aus");
+  const modeSuffix = ingestMode === "file-inbox" ? " · File-Inbox" : "";
+  setAgentIngestAuditStatus(`Einträge: ${formatInteger(count)} · Limit: ${formatInteger(data?.retention_limit || 250)} · ${payloadMode}${modeSuffix}`);
   return data;
 }
 

@@ -667,7 +667,7 @@
 
               <div id="adminOpsIngestCard" class="db-maintenance-panel admin-ops-card">
                 <div class="db-maintenance-head">
-                  <h6>Agent Ingest Queue</h6>
+                  <h6>Agent Ingest</h6>
                   <div class="db-maintenance-actions">
                     <button id="refreshAgentIngestQueueButton" class="btn-secondary" type="button" title="Queue Kennzahlen aktualisieren">↻ Aktualisieren</button>
                   </div>
@@ -676,6 +676,8 @@
                 <p id="agentIngestQueueHealth" class="agent-ingest-queue-health" hidden></p>
                 <div class="agent-ingest-queue-stats">
                   <div class="agent-ingest-queue-stat-card"><span>Queue Tiefe</span><strong id="agentIngestQueueDepth">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Inbox Pending</span><strong id="agentIngestInboxPending">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Jobs (Scanner)</span><strong id="agentIngestJobsDepth">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>Sofort fällig</span><strong id="agentIngestQueueReady">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>Retry</span><strong id="agentIngestQueueRetry">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>In Flight</span><strong id="agentIngestQueueInFlight">-</strong></div>
@@ -688,7 +690,7 @@
                   <table class="agent-update-admin-table db-maintenance-history-table">
                     <thead>
                       <tr>
-                        <th>Queue ID</th>
+                        <th>Job ID</th>
                         <th>Host</th>
                         <th>Versuche</th>
                         <th>Fehlerzeit</th>
@@ -708,7 +710,7 @@
                     <table class="agent-update-admin-table db-maintenance-history-table">
                       <thead>
                         <tr>
-                          <th>Queue ID</th>
+                          <th>Job ID</th>
                           <th>Host</th>
                           <th>Kunde</th>
                           <th>Empfangen</th>
