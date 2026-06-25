@@ -799,6 +799,7 @@ def _collect_ingest_audit_runtime_stats(conn: sqlite3.Connection, window_minutes
         "processing_avg_ms": processing_avg_ms,
         "processing_p95_ms": processing_p95_ms,
         "queue_wait_avg_ms": queue_wait_avg_ms,
+        "inbox_wait_avg_ms": 0,
     }
 
 

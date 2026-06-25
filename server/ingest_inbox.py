@@ -977,8 +977,10 @@ def _collect_audit_runtime_stats_local(conn: sqlite3.Connection, window_minutes:
     ).fetchall()
     processing_samples = [max(0, int(row[0] or 0)) for row in sample_rows]
     queue_wait_samples = [max(0, int(row[1] or 0)) for row in sample_rows]
+    inbox_wait_samples = [max(0, int(row[2] or 0)) for row in sample_rows]
     processing_avg_ms = int(sum(processing_samples) / len(processing_samples)) if processing_samples else 0
     queue_wait_avg_ms = int(sum(queue_wait_samples) / len(queue_wait_samples)) if queue_wait_samples else 0
+    inbox_wait_avg_ms = int(sum(inbox_wait_samples) / len(inbox_wait_samples)) if inbox_wait_samples else 0
     processing_p95_ms = 0
     if processing_samples:
         ordered = sorted(processing_samples)
@@ -991,6 +993,7 @@ def _collect_audit_runtime_stats_local(conn: sqlite3.Connection, window_minutes:
         "processing_avg_ms": processing_avg_ms,
         "processing_p95_ms": processing_p95_ms,
         "queue_wait_avg_ms": queue_wait_avg_ms,
+        "inbox_wait_avg_ms": inbox_wait_avg_ms,
     }
 
 

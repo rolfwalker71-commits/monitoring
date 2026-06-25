@@ -12930,6 +12930,105 @@ function formatDurationCompact(seconds) {
   return `${secs}s`;
 }
 
+function formatIngestKpiLatency(valueMs) {
+  const ms = Number(valueMs || 0);
+  if (!Number.isFinite(ms) || ms <= 0) return "—";
+  return formatLatencyMs(ms);
+}
+
+function renderAgentIngestKpiCard(modifier, title, value, subtitle, extraClass) {
+  const alertClass = extraClass ? ` ${extraClass}` : "";
+  return `
+    <article class="agent-ingest-kpi-card agent-ingest-kpi-card--${modifier}${alertClass}">
+      <h4>${escapeHtml(title)}</h4>
+      <p>${escapeHtml(value)}</p>
+      <small>${escapeHtml(subtitle)}</small>
+    </article>
+  `;
+}
+
+function renderAgentIngestKpiCards(data) {
+  const container = document.getElementById("agentIngestKpiGrid");
+  if (!container) return;
+
+  const auditRuntime = data?.audit_runtime && typeof data.audit_runtime === "object" ? data.audit_runtime : {};
+  const runtimeMetrics = data?.runtime_metrics && typeof data.runtime_metrics === "object" ? data.runtime_metrics : {};
+  const ingestMode = asText(data?.ingest_mode, "sqlite-queue");
+  const windowMinutes = Number(auditRuntime.window_minutes || 60);
+
+  const writtenCount = Number(auditRuntime.written_sample_count || 0);
+  const totalSinceStart = Number(runtimeMetrics.ingest_reports_written_total || 0);
+  const processingAvgMs = Number(auditRuntime.processing_avg_ms || runtimeMetrics.ingest_processing_ms_avg || 0);
+  const processingP95Ms = Number(auditRuntime.processing_p95_ms || 0);
+  const queueWaitAvgMs = Number(auditRuntime.queue_wait_avg_ms || 0);
+  const inboxWaitAvgMs = Number(auditRuntime.inbox_wait_avg_ms || 0);
+  const failedCount = Number(auditRuntime.failed_count || 0);
+  const slowCount = Number(runtimeMetrics.ingest_slow_reports_total || 0);
+
+  const windowLabel = `${formatInteger(windowMinutes)}m`;
+  const cards = [
+    renderAgentIngestKpiCard(
+      "written",
+      `Geschrieben (${windowLabel})`,
+      formatInteger(writtenCount),
+      "erfolgreich in monitoring.db",
+    ),
+    renderAgentIngestKpiCard(
+      "total",
+      "Seit Serverstart",
+      formatInteger(totalSinceStart),
+      "Reports verarbeitet",
+    ),
+    renderAgentIngestKpiCard(
+      "processing",
+      "Ø DB-Schreibzeit",
+      formatIngestKpiLatency(processingAvgMs),
+      `Fenster ${windowLabel}`,
+    ),
+    renderAgentIngestKpiCard(
+      "p95",
+      "P95 Schreibzeit",
+      formatIngestKpiLatency(processingP95Ms),
+      `Fenster ${windowLabel}`,
+    ),
+    renderAgentIngestKpiCard(
+      "queue-wait",
+      "Ø Queue-Warte",
+      formatIngestKpiLatency(queueWaitAvgMs),
+      "bis Worker startet",
+    ),
+  ];
+
+  if (ingestMode === "file-inbox") {
+    cards.push(
+      renderAgentIngestKpiCard(
+        "inbox-wait",
+        "Ø Inbox-Warte",
+        formatIngestKpiLatency(inboxWaitAvgMs),
+        "bis Scanner übernimmt",
+      ),
+    );
+  }
+
+  cards.push(
+    renderAgentIngestKpiCard(
+      "failed",
+      `Fehler (${windowLabel})`,
+      formatInteger(failedCount),
+      failedCount > 0 ? "Retry oder Drop prüfen" : "keine Fehler",
+      failedCount > 0 ? "is-alert" : "",
+    ),
+    renderAgentIngestKpiCard(
+      "slow",
+      "Langsame Jobs",
+      formatInteger(slowCount),
+      "seit Serverstart",
+    ),
+  );
+
+  container.innerHTML = cards.join("");
+}
+
 function renderAgentIngestQueueOverview(data) {
   const depthEl = document.getElementById("agentIngestQueueDepth");
   const inboxPendingEl = document.getElementById("agentIngestInboxPending");
@@ -12939,7 +13038,6 @@ function renderAgentIngestQueueOverview(data) {
   const inFlightEl = document.getElementById("agentIngestQueueInFlight");
   const delayedEl = document.getElementById("agentIngestQueueDelayed");
   const oldestAgeEl = document.getElementById("agentIngestQueueOldestAge");
-  const processingAvgEl = document.getElementById("agentIngestQueueProcessingAvg");
   const loginLocksEl = document.getElementById("agentIngestQueueLoginLocks");
   const healthEl = document.getElementById("agentIngestQueueHealth");
   const bodyEl = document.getElementById("agentIngestQueueErrorRows");
@@ -12960,11 +13058,6 @@ function renderAgentIngestQueueOverview(data) {
   if (oldestAgeEl) {
     const ageSeconds = Number(data?.oldest_age_seconds || 0);
     oldestAgeEl.textContent = ageSeconds > 0 ? formatDurationCompact(ageSeconds) : "-";
-  }
-  if (processingAvgEl) {
-    const auditRuntime = data?.audit_runtime && typeof data.audit_runtime === "object" ? data.audit_runtime : {};
-    const avgMs = Number(auditRuntime.processing_avg_ms || data?.runtime_metrics?.ingest_processing_ms_avg || 0);
-    processingAvgEl.textContent = avgMs > 0 ? formatLatencyMs(avgMs) : "-";
   }
   if (loginLocksEl) {
     const runtimeMetrics = data?.runtime_metrics && typeof data.runtime_metrics === "object" ? data.runtime_metrics : {};
@@ -13027,6 +13120,7 @@ async function loadAdminAgentIngestQueue() {
   if (!response.ok) {
     throw new Error(data.error || ("HTTP " + response.status));
   }
+  renderAgentIngestKpiCards(data);
   renderAgentIngestQueueOverview(data);
 
   const oldestAge = Number(data?.oldest_age_seconds || 0);
