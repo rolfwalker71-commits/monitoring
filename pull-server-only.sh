@@ -9,10 +9,10 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260611a"
+PULL_SCRIPT_VERSION="20260625a"
 # Bump when FILES_LIST changes (must match script_guardian entries).
-PULL_FILES_MANIFEST="scripts-41-v1"
-PULL_FILES_EXPECTED_COUNT=41
+PULL_FILES_MANIFEST="scripts-42-v1"
+PULL_FILES_EXPECTED_COUNT=42
 _DEPLOY_MAIN_SHA_CACHED=""
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
@@ -1583,6 +1583,7 @@ export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF O
 
 FILES_LIST="
 server/receiver.py
+server/ingest_inbox.py
 server/external_monitors.py
 server/mfa.py
 server/static/index.html
@@ -1949,7 +1950,18 @@ systemctl enable monitoring
 echo ""
 echo "systemd Service installiert: $SERVICE_FILE"
 
-changelog_jobs_blocking_restart() {
+show_monitoring_service_brief() {
+  local state sub main_pid mem_mb
+  state="$(systemctl is-active monitoring 2>/dev/null || echo unknown)"
+  sub="$(systemctl show monitoring -p SubState --value 2>/dev/null || echo "?")"
+  main_pid="$(systemctl show monitoring -p MainPID --value 2>/dev/null || echo "?")"
+  mem_mb="$(
+    systemctl show monitoring -p MemoryCurrent --value 2>/dev/null \
+      | awk '{ if ($1 > 0) printf "%.0f", $1 / 1024 / 1024; else print "?" }'
+  )"
+  echo "  monitoring: ${state} (${sub}), PID ${main_pid}, RAM ~${mem_mb}M"
+}
+
   local db_path="$TARGET_DIR/server/data/monitoring.db"
   if [ ! -f "$db_path" ] || ! command -v sqlite3 >/dev/null 2>&1; then
     return 1
@@ -1989,12 +2001,13 @@ fi
 
 if [ "$SKIP_MONITORING_RESTART" = "1" ]; then
   echo "monitoring-Service läuft weiter mit bisherigem Prozess (kein Restart)."
-  systemctl --no-pager --full status monitoring | sed -n '1,10p' || true
+  show_monitoring_service_brief
 else
   echo "Versuche monitoring-Service neu zu starten ..."
   if systemctl restart monitoring; then
     echo "✓ monitoring wurde neu gestartet"
-    systemctl --no-pager --full status monitoring | sed -n '1,14p' || true
+    show_monitoring_service_brief
+    echo "  (Details: systemctl status monitoring --no-pager -n 20)"
   else
     echo "✗ monitoring konnte nicht automatisch neu gestartet werden" >&2
     echo "  Bitte manuell ausführen: systemctl restart monitoring" >&2

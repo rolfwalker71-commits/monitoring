@@ -85,6 +85,7 @@ checksum_file() {
 
 FILES_LIST="
 server/receiver.py
+server/ingest_inbox.py
 server/static/index.html
 server/static/app.js
 server/static/styles.css
