@@ -816,6 +816,27 @@ def _execute_report_post_commit_tasks(tasks: dict[str, object]) -> None:
                         report_received_at_utc,
                     )
                     _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
+            deferred_maintenance = tasks.get("deferred_maintenance")
+            if isinstance(deferred_maintenance, dict):
+                maint_hostname = str(deferred_maintenance.get("hostname") or "").strip()
+                maint_host_uid = str(deferred_maintenance.get("host_uid") or "").strip()
+                maint_host_lookup_key = str(deferred_maintenance.get("host_lookup_key") or "").strip()
+                maint_payload = deferred_maintenance.get("payload")
+                if maint_hostname and isinstance(maint_payload, dict):
+                    ensure_linux_mountpoint_defaults_for_host(
+                        conn,
+                        maint_hostname,
+                        maint_host_uid,
+                        maint_payload,
+                        force=False,
+                    )
+                    if _should_prune_reports_for_host(maint_host_lookup_key or maint_host_uid or maint_hostname):
+                        prune_reports_for_host(
+                            conn,
+                            maint_hostname,
+                            maint_host_uid,
+                            MAX_REPORTS_PER_HOST,
+                        )
             if tasks.get("alert_reminders"):
                 maybe_send_alert_reminders(conn)
             if tasks.get("inactive_host_notifications"):
@@ -850,6 +871,7 @@ def _schedule_report_post_commit_tasks(tasks: dict[str, object]) -> None:
     has_work = any(
         [
             isinstance(tasks.get("deferred_tracking"), dict),
+            isinstance(tasks.get("deferred_maintenance"), dict),
             bool(tasks.get("alert_reminders")),
             bool(tasks.get("inactive_host_notifications")),
             bool(tasks.get("scheduled_user_mails")),
@@ -20029,6 +20051,7 @@ def _process_agent_report_payload(
     report_received_at_utc: str,
     *,
     alarm_settings: dict | None = None,
+    host_settings: dict | None = None,
 ) -> tuple[int, dict[str, object]]:
     hostname = str(payload.get("hostname", "")).strip()
     if not hostname:
@@ -20089,18 +20112,9 @@ def _process_agent_report_payload(
         ),
     )
     report_id = int(cursor.lastrowid)
-    ensure_linux_mountpoint_defaults_for_host(
-        conn,
-        hostname,
-        incoming_host_uid,
-        payload,
-        force=False,
-    )
-    if _should_prune_reports_for_host(host_lookup_key):
-        prune_reports_for_host(conn, hostname, incoming_host_uid, MAX_REPORTS_PER_HOST)
     resolved_alarm_settings = alarm_settings if isinstance(alarm_settings, dict) else get_alarm_settings(conn)
-    host_settings = get_host_settings(conn, hostname)
-    if bool(host_settings.get("is_hidden", False)):
+    resolved_host_settings = host_settings if isinstance(host_settings, dict) else get_host_settings(conn, hostname)
+    if bool(resolved_host_settings.get("is_hidden", False)):
         resolve_open_alerts_for_host(conn, hostname, incoming_host_uid, report_id)
     else:
         os_family = normalize_os_family(payload.get("os", "linux"))
@@ -20122,6 +20136,12 @@ def _process_agent_report_payload(
             "payload": payload,
             "report_id": report_id,
             "report_received_at_utc": report_received_at_utc,
+        },
+        "deferred_maintenance": {
+            "hostname": hostname,
+            "host_uid": incoming_host_uid,
+            "host_lookup_key": host_lookup_key,
+            "payload": payload,
         },
         "alert_reminders": True,
         "inactive_host_notifications": True,
@@ -20293,6 +20313,7 @@ def _agent_ingest_worker_loop() -> None:
                 else:
                     had_work = True
                     batch_alarm_settings = get_alarm_settings(conn)
+                    batch_host_settings_cache: dict[str, dict] = {}
                     for row in rows:
                         if _ingest_should_pause_for_login():
                             break
@@ -20402,11 +20423,15 @@ def _agent_ingest_worker_loop() -> None:
                                 attempt_count=attempt_count,
                             )
 
+                            hostname_key = str(payload.get("hostname", "") or "").strip()
+                            if hostname_key and hostname_key not in batch_host_settings_cache:
+                                batch_host_settings_cache[hostname_key] = get_host_settings(conn, hostname_key)
                             _report_id, post_commit_tasks = _process_agent_report_payload(
                                 conn,
                                 payload,
                                 report_received_at_utc,
                                 alarm_settings=batch_alarm_settings,
+                                host_settings=batch_host_settings_cache.get(hostname_key) if hostname_key else None,
                             )
                             written_at_utc = utc_now_iso()
                             queue_wait_ms = _agent_ingest_duration_ms(enqueued_at_utc, processing_started_at_utc)
@@ -27480,17 +27505,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         report_received_at_utc = utc_now_iso()
-        incoming_agent_id = str(payload.get("agent_id", "") or "")
-        incoming_primary_ip = str(payload.get("primary_ip", "") or "")
-        with sqlite_connect() as conn:
-            incoming_host_uid = _resolve_incoming_host_uid(
-                conn,
-                payload,
-                hostname,
-                agent_id=incoming_agent_id,
-                primary_ip=incoming_primary_ip,
-            )
-        payload["host_uid"] = incoming_host_uid
 
         try:
             queue_id = enqueue_agent_report(payload, report_received_at_utc)
