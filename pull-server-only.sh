@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260625a"
+PULL_SCRIPT_VERSION="20260625b"
 # Bump when FILES_LIST changes (must match script_guardian entries).
 PULL_FILES_MANIFEST="scripts-42-v1"
 PULL_FILES_EXPECTED_COUNT=42
@@ -1962,6 +1962,7 @@ show_monitoring_service_brief() {
   echo "  monitoring: ${state} (${sub}), PID ${main_pid}, RAM ~${mem_mb}M"
 }
 
+changelog_jobs_blocking_restart() {
   local db_path="$TARGET_DIR/server/data/monitoring.db"
   if [ ! -f "$db_path" ] || ! command -v sqlite3 >/dev/null 2>&1; then
     return 1
