@@ -32,6 +32,8 @@ _get_alarm_settings: Callable[[sqlite3.Connection], dict] | None = None
 _get_host_settings: Callable[[sqlite3.Connection, str], dict] | None = None
 _quick_duplicate_report_id: Callable[..., int] | None = None
 _agent_ingest_duration_ms: Callable[..., int] | None = None
+_main_db_write_enter: Callable[[], None] | None = None
+_main_db_write_leave: Callable[[], None] | None = None
 _ingest_slow_log_ms: int = 500
 _ingest_queue_warn_depth: int = 500
 _ingest_queue_crit_depth: int = 2000
@@ -120,12 +122,15 @@ def register_runtime_hooks(
     get_host_settings: Callable[[sqlite3.Connection, str], dict],
     quick_duplicate_report_id: Callable[..., int],
     agent_ingest_duration_ms: Callable[..., int],
+    main_db_write_enter: Callable[[], None] | None = None,
+    main_db_write_leave: Callable[[], None] | None = None,
 ) -> None:
     global _process_job_callback, _should_pause_for_login, _wait_for_login_slot
     global _record_ingest_written, _schedule_post_commit, _invalidate_dashboard_kpis
     global _adaptive_throttle_sleep, _runtime_metrics_snapshot, _derive_queue_health
     global _collect_audit_runtime_stats, _sqlite_connect_main, _get_alarm_settings
     global _get_host_settings, _quick_duplicate_report_id, _agent_ingest_duration_ms
+    global _main_db_write_enter, _main_db_write_leave
 
     _process_job_callback = process_job
     _should_pause_for_login = should_pause_for_login
@@ -142,6 +147,8 @@ def register_runtime_hooks(
     _get_host_settings = get_host_settings
     _quick_duplicate_report_id = quick_duplicate_report_id
     _agent_ingest_duration_ms = agent_ingest_duration_ms
+    _main_db_write_enter = main_db_write_enter
+    _main_db_write_leave = main_db_write_leave
 
 
 def ingest_file_inbox_enabled() -> bool:
@@ -179,9 +186,7 @@ def _ensure_inbox_dirs() -> None:
     INGEST_INBOX_FAILED_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def init_ingest_status_db() -> None:
-    _ensure_inbox_dirs()
-    INGEST_STATUS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+def _init_ingest_status_db_schema() -> None:
     with sqlite_connect_ingest_status() as conn:
         conn.execute(
             """
@@ -271,7 +276,39 @@ def init_ingest_status_db() -> None:
                 "INSERT INTO ingest_schema_migrations(version, applied_at_utc) VALUES (?, ?)",
                 (INGEST_SCHEMA_VERSION, _utc_now_iso()),
             )
+        now_utc = _utc_now_iso()
+        conn.execute(
+            """
+            UPDATE ingest_jobs
+            SET status = 'ready',
+                processing_started_at_utc = '',
+                updated_at_utc = ?
+            WHERE status = 'processing'
+            """,
+            (now_utc,),
+        )
         conn.commit()
+
+
+def init_ingest_status_db() -> None:
+    _ensure_inbox_dirs()
+    INGEST_STATUS_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        _init_ingest_status_db_schema()
+    except sqlite3.DatabaseError as exc:
+        corrupt_suffix = f".corrupt-{int(time.time())}"
+        backup_path = INGEST_STATUS_DB_PATH.with_suffix(INGEST_STATUS_DB_PATH.suffix + corrupt_suffix)
+        print(
+            f"[ingest-inbox] ingest-status.db unusable ({exc}); "
+            f"renaming to {backup_path.name} and recreating",
+            flush=True,
+        )
+        try:
+            if INGEST_STATUS_DB_PATH.exists():
+                INGEST_STATUS_DB_PATH.rename(backup_path)
+        except OSError:
+            INGEST_STATUS_DB_PATH.unlink(missing_ok=True)
+        _init_ingest_status_db_schema()
 
 
 def _atomic_write_json(path: Path, payload: dict) -> None:
@@ -1114,23 +1151,32 @@ def _process_single_job(job_row: tuple) -> None:
         )
         ingest_conn.commit()
 
+    if callable(_wait_for_login_slot):
+        _wait_for_login_slot()
+
     try:
-        with _sqlite_connect_main() as main_conn:
-            batch_alarm_settings = _get_alarm_settings(main_conn) if callable(_get_alarm_settings) else {}
-            hostname_key = str(payload.get("hostname", "") or "").strip()
-            host_settings = (
-                _get_host_settings(main_conn, hostname_key)
-                if callable(_get_host_settings) and hostname_key
-                else {}
-            )
-            report_id, post_commit_tasks = _process_job_callback(
-                main_conn,
-                payload,
-                report_received_at_utc,
-                alarm_settings=batch_alarm_settings,
-                host_settings=host_settings,
-            )
-            main_conn.commit()
+        if callable(_main_db_write_enter):
+            _main_db_write_enter()
+        try:
+            with _sqlite_connect_main() as main_conn:
+                batch_alarm_settings = _get_alarm_settings(main_conn) if callable(_get_alarm_settings) else {}
+                hostname_key = str(payload.get("hostname", "") or "").strip()
+                host_settings = (
+                    _get_host_settings(main_conn, hostname_key)
+                    if callable(_get_host_settings) and hostname_key
+                    else {}
+                )
+                report_id, post_commit_tasks = _process_job_callback(
+                    main_conn,
+                    payload,
+                    report_received_at_utc,
+                    alarm_settings=batch_alarm_settings,
+                    host_settings=host_settings,
+                )
+                main_conn.commit()
+        finally:
+            if callable(_main_db_write_leave):
+                _main_db_write_leave()
 
         written_at_utc = _utc_now_iso()
         duration = _agent_ingest_duration_ms if callable(_agent_ingest_duration_ms) else (lambda *_a, **_k: 0)
@@ -1227,6 +1273,10 @@ def ingest_worker_loop() -> None:
 
 def ingest_scanner_loop() -> None:
     while True:
+        if callable(_should_pause_for_login) and _should_pause_for_login():
+            _wakeup.wait(0.15)
+            _wakeup.clear()
+            continue
         try:
             if ingest_file_inbox_enabled():
                 processed = scan_pending_inbox_batch()

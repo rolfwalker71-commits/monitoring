@@ -1671,6 +1671,11 @@ if [ ! -f "$TARGET_DIR/server/mfa.py" ]; then
   echo "Bitte pull-server-only.sh erneut ausfuehren." >&2
   exit 1
 fi
+if [ ! -s "$TARGET_DIR/server/ingest_inbox.py" ]; then
+  echo "FEHLER: server/ingest_inbox.py fehlt oder ist leer – receiver.py startet nicht (v1.9.0+ File-Inbox)." >&2
+  echo "Bitte pull-server-only.sh erneut ausfuehren (>= v1.9.2)." >&2
+  exit 1
+fi
 if [ -f "$TARGET_DIR/scripts/watch-inventur-job.sh" ]; then
   chmod 0755 "$TARGET_DIR/scripts/watch-inventur-job.sh"
 fi

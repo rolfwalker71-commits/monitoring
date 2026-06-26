@@ -169,11 +169,15 @@ CHANGELOG_MAINTENANCE_QUIET_HOURS_END = max(
 )
 INTERACTIVE_AUTH_YIELD_MAX_SECONDS = max(
     0.0,
-    min(30.0, float(os.getenv("MONITORING_INTERACTIVE_AUTH_YIELD_MAX_SECONDS", "30.0") or "30.0")),
+    min(120.0, float(os.getenv("MONITORING_INTERACTIVE_AUTH_YIELD_MAX_SECONDS", "45.0") or "45.0")),
 )
 INGEST_LOGIN_PAUSE_SECONDS = max(
     1.0,
-    min(120.0, float(os.getenv("MONITORING_INGEST_LOGIN_PAUSE_SECONDS", "20.0") or "20.0")),
+    min(120.0, float(os.getenv("MONITORING_INGEST_LOGIN_PAUSE_SECONDS", "30.0") or "30.0")),
+)
+LOGIN_INGEST_QUIESCE_SECONDS = max(
+    0.0,
+    min(15.0, float(os.getenv("MONITORING_LOGIN_INGEST_QUIESCE_SECONDS", "6.0") or "6.0")),
 )
 INGEST_ADAPTIVE_THROTTLE_MS = max(
     0,
@@ -397,6 +401,11 @@ _identity_snapshot_persist_last_monotonic = 0.0
 _identity_snapshot_persist_lock = threading.Lock()
 _ingest_yield_until_monotonic = 0.0
 _ingest_yield_lock = threading.Lock()
+_ingest_main_db_in_flight = 0
+_ingest_main_db_in_flight_lock = threading.Lock()
+_report_post_commit_semaphore = threading.Semaphore(
+    max(1, min(8, int(os.getenv("MONITORING_REPORT_POST_COMMIT_MAX_PARALLEL", "2") or "2")))
+)
 _local_cpu_sample_lock = threading.Lock()
 _local_cpu_prev_total: int | None = None
 _local_cpu_prev_idle: int | None = None
@@ -616,6 +625,30 @@ def _extend_ingest_yield_for_login(seconds: float | None = None) -> None:
         _ingest_yield_until_monotonic = max(_ingest_yield_until_monotonic, deadline)
 
 
+def _ingest_main_db_write_enter() -> None:
+    global _ingest_main_db_in_flight
+    with _ingest_main_db_in_flight_lock:
+        _ingest_main_db_in_flight += 1
+
+
+def _ingest_main_db_write_leave() -> None:
+    global _ingest_main_db_in_flight
+    with _ingest_main_db_in_flight_lock:
+        _ingest_main_db_in_flight = max(0, _ingest_main_db_in_flight - 1)
+
+
+def _wait_for_ingest_main_db_quiesce(max_seconds: float | None = None) -> None:
+    wait_seconds = LOGIN_INGEST_QUIESCE_SECONDS if max_seconds is None else max(0.0, float(max_seconds))
+    if wait_seconds <= 0:
+        return
+    deadline = time.monotonic() + wait_seconds
+    while time.monotonic() < deadline:
+        with _ingest_main_db_in_flight_lock:
+            if _ingest_main_db_in_flight <= 0:
+                return
+        time.sleep(0.05)
+
+
 def _ingest_should_pause_for_login() -> bool:
     if time.monotonic() < _ingest_yield_until_monotonic:
         return True
@@ -639,12 +672,17 @@ def _interactive_auth_enter() -> None:
     global _web_login_active_count
     with _web_login_active_lock:
         _web_login_active_count += 1
+    _extend_ingest_yield_for_login()
 
 
-def _interactive_auth_leave() -> None:
+def _interactive_auth_leave(*, lock_failed: bool = False) -> None:
     global _web_login_active_count
     with _web_login_active_lock:
         _web_login_active_count = max(0, _web_login_active_count - 1)
+    if lock_failed:
+        _extend_ingest_yield_for_login(INGEST_LOGIN_PAUSE_SECONDS)
+    else:
+        _extend_ingest_yield_for_login(4.0)
 
 
 def _wait_for_interactive_auth_slot() -> None:
@@ -806,69 +844,73 @@ def _collect_ingest_audit_runtime_stats(conn: sqlite3.Connection, window_minutes
 def _execute_report_post_commit_tasks(tasks: dict[str, object]) -> None:
     if not tasks:
         return
-    try:
-        with sqlite_connect() as conn:
-            deferred_tracking = tasks.get("deferred_tracking")
-            if isinstance(deferred_tracking, dict):
-                hostname = str(deferred_tracking.get("hostname") or "").strip()
-                host_uid = str(deferred_tracking.get("host_uid") or "").strip()
-                payload = deferred_tracking.get("payload")
-                report_id = int(deferred_tracking.get("report_id") or 0)
-                report_received_at_utc = str(deferred_tracking.get("report_received_at_utc") or "")
-                if hostname and isinstance(payload, dict) and report_id > 0:
-                    _track_host_config_changes(
-                        conn,
-                        hostname,
-                        host_uid,
-                        payload,
-                        report_id,
-                        report_received_at_utc,
-                    )
-                    _track_sap_addon_changes(
-                        conn,
-                        hostname,
-                        host_uid,
-                        payload,
-                        report_id,
-                        report_received_at_utc,
-                    )
-                    _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
-            deferred_maintenance = tasks.get("deferred_maintenance")
-            if isinstance(deferred_maintenance, dict):
-                maint_hostname = str(deferred_maintenance.get("hostname") or "").strip()
-                maint_host_uid = str(deferred_maintenance.get("host_uid") or "").strip()
-                maint_host_lookup_key = str(deferred_maintenance.get("host_lookup_key") or "").strip()
-                maint_payload = deferred_maintenance.get("payload")
-                if maint_hostname and isinstance(maint_payload, dict):
-                    ensure_linux_mountpoint_defaults_for_host(
-                        conn,
-                        maint_hostname,
-                        maint_host_uid,
-                        maint_payload,
-                        force=False,
-                    )
-                    if _should_prune_reports_for_host(maint_host_lookup_key or maint_host_uid or maint_hostname):
-                        prune_reports_for_host(
+    while _ingest_should_pause_for_login():
+        time.sleep(0.1)
+    _wait_for_interactive_auth_slot()
+    with _report_post_commit_semaphore:
+        try:
+            with sqlite_connect() as conn:
+                deferred_tracking = tasks.get("deferred_tracking")
+                if isinstance(deferred_tracking, dict):
+                    hostname = str(deferred_tracking.get("hostname") or "").strip()
+                    host_uid = str(deferred_tracking.get("host_uid") or "").strip()
+                    payload = deferred_tracking.get("payload")
+                    report_id = int(deferred_tracking.get("report_id") or 0)
+                    report_received_at_utc = str(deferred_tracking.get("report_received_at_utc") or "")
+                    if hostname and isinstance(payload, dict) and report_id > 0:
+                        _track_host_config_changes(
+                            conn,
+                            hostname,
+                            host_uid,
+                            payload,
+                            report_id,
+                            report_received_at_utc,
+                        )
+                        _track_sap_addon_changes(
+                            conn,
+                            hostname,
+                            host_uid,
+                            payload,
+                            report_id,
+                            report_received_at_utc,
+                        )
+                        _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
+                deferred_maintenance = tasks.get("deferred_maintenance")
+                if isinstance(deferred_maintenance, dict):
+                    maint_hostname = str(deferred_maintenance.get("hostname") or "").strip()
+                    maint_host_uid = str(deferred_maintenance.get("host_uid") or "").strip()
+                    maint_host_lookup_key = str(deferred_maintenance.get("host_lookup_key") or "").strip()
+                    maint_payload = deferred_maintenance.get("payload")
+                    if maint_hostname and isinstance(maint_payload, dict):
+                        ensure_linux_mountpoint_defaults_for_host(
                             conn,
                             maint_hostname,
                             maint_host_uid,
-                            MAX_REPORTS_PER_HOST,
+                            maint_payload,
+                            force=False,
                         )
-            if tasks.get("alert_reminders"):
-                maybe_send_alert_reminders(conn)
-            if tasks.get("inactive_host_notifications"):
-                maybe_send_inactive_host_notifications(conn)
-            if tasks.get("scheduled_user_mails"):
-                maybe_send_scheduled_user_mails(conn)
-            live_push = tasks.get("live_push")
-            if isinstance(live_push, dict):
-                try:
-                    maybe_send_live_report_web_push(conn, **live_push)
-                except Exception as exc:
-                    print(f"[report-post-commit] live push failed: {exc}")
-            conn.commit()
-    except Exception as exc:
-        print(f"[report-post-commit] {exc}")
+                        if _should_prune_reports_for_host(maint_host_lookup_key or maint_host_uid or maint_hostname):
+                            prune_reports_for_host(
+                                conn,
+                                maint_hostname,
+                                maint_host_uid,
+                                MAX_REPORTS_PER_HOST,
+                            )
+                if tasks.get("alert_reminders"):
+                    maybe_send_alert_reminders(conn)
+                if tasks.get("inactive_host_notifications"):
+                    maybe_send_inactive_host_notifications(conn)
+                if tasks.get("scheduled_user_mails"):
+                    maybe_send_scheduled_user_mails(conn)
+                live_push = tasks.get("live_push")
+                if isinstance(live_push, dict):
+                    try:
+                        maybe_send_live_report_web_push(conn, **live_push)
+                    except Exception as exc:
+                        print(f"[report-post-commit] live push failed: {exc}")
+                conn.commit()
+        except Exception as exc:
+            print(f"[report-post-commit] {exc}")
 
     license_payload = tasks.get("license_sync_payload")
     if license_payload is not None:
@@ -2736,7 +2778,10 @@ def init_db() -> None:
         init_external_monitor_tables(conn)
         if INGEST_FILE_INBOX_ENABLED:
             ingest_inbox.init_ingest_status_db()
-            ingest_inbox.migrate_legacy_agent_ingest_queue(conn)
+            try:
+                ingest_inbox.migrate_legacy_agent_ingest_queue(conn)
+            except Exception as exc:
+                print(f"[ingest-inbox] legacy queue migration failed (continuing): {exc}", flush=True)
         conn.commit()
 
 
@@ -6445,7 +6490,9 @@ def _execute_web_login(
 ) -> dict:
     _record_web_login_attempt()
     _interactive_auth_enter()
+    lock_failed = False
     try:
+        _wait_for_ingest_main_db_quiesce()
         last_exc: sqlite3.OperationalError | None = None
         deadline = time.monotonic() + WEB_AUTH_MAX_WALL_SECONDS
         for attempt in range(WEB_AUTH_BUSY_RETRY_ATTEMPTS):
@@ -6504,10 +6551,12 @@ def _execute_web_login(
                 time.sleep(min(2.0, 0.35 * (attempt + 1)))
 
         if last_exc is not None:
+            lock_failed = True
             raise last_exc
+        lock_failed = True
         raise sqlite3.OperationalError("database is locked")
     finally:
-        _interactive_auth_leave()
+        _interactive_auth_leave(lock_failed=lock_failed)
 
 
 def _execute_web_login_mfa(
@@ -6519,7 +6568,9 @@ def _execute_web_login_mfa(
 ) -> dict:
     _record_web_login_attempt()
     _interactive_auth_enter()
+    lock_failed = False
     try:
+        _wait_for_ingest_main_db_quiesce()
         last_exc: sqlite3.OperationalError | None = None
         deadline = time.monotonic() + WEB_AUTH_MAX_WALL_SECONDS
         for attempt in range(WEB_AUTH_BUSY_RETRY_ATTEMPTS):
@@ -6587,10 +6638,12 @@ def _execute_web_login_mfa(
                 time.sleep(min(2.0, 0.35 * (attempt + 1)))
 
         if last_exc is not None:
+            lock_failed = True
             raise last_exc
+        lock_failed = True
         raise sqlite3.OperationalError("database is locked")
     finally:
-        _interactive_auth_leave()
+        _interactive_auth_leave(lock_failed=lock_failed)
 
 
 def _web_login_success_payload(user: dict, username: str, expires_at: str) -> dict:
@@ -20228,6 +20281,8 @@ def _configure_ingest_inbox_runtime() -> None:
         process_job=_process_agent_report_payload,
         should_pause_for_login=_ingest_should_pause_for_login,
         wait_for_login_slot=_wait_while_ingest_paused_for_login,
+        main_db_write_enter=_ingest_main_db_write_enter,
+        main_db_write_leave=_ingest_main_db_write_leave,
         record_ingest_written=_record_ingest_report_written,
         schedule_post_commit=_schedule_report_post_commit_tasks,
         invalidate_dashboard_kpis=lambda: _read_cache_invalidate_prefix("dashboard-db-kpis"),
@@ -27922,4 +27977,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        traceback.print_exc()
+        sys.exit(1)
