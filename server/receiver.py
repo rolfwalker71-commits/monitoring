@@ -26982,6 +26982,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/admin/agent-ingest-queue/purge":
+            if not self._require_admin_session():
+                return
+            if not INGEST_FILE_INBOX_ENABLED:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "file-inbox ingest is disabled"})
+                return
+            result = ingest_inbox.purge_ingest_queue(include_pending=True)
+            with ingest_inbox.sqlite_connect_ingest_status() as ingest_conn:
+                overview = ingest_inbox.collect_ingest_queue_overview(ingest_conn)
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "message": "Ingest-Queue geleert",
+                    "purge": result,
+                    **overview,
+                },
+            )
+            return
+
         if path == "/api/v1/admin/backup-automation/trigger-local":
             if not self._require_admin_session():
                 return

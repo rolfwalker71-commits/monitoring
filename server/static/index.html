@@ -668,8 +668,9 @@
               <div id="adminOpsIngestCard" class="db-maintenance-panel admin-ops-card">
                 <div class="db-maintenance-head">
                   <h6>Agent Ingest</h6>
-                  <div class="db-maintenance-actions">
+                    <div class="db-maintenance-actions">
                     <button id="refreshAgentIngestQueueButton" class="btn-secondary" type="button" title="Queue Kennzahlen aktualisieren">↻ Aktualisieren</button>
+                    <button id="purgeAgentIngestQueueButton" class="btn-secondary" type="button" title="Alle Jobs in ingest-status.db und Payload-Dateien löschen">Queue leeren</button>
                   </div>
                 </div>
                 <p id="agentIngestQueueStatus" class="count compact">Lade Queue-Status...</p>
@@ -678,8 +679,8 @@
                 <h6 class="agent-ingest-section-label">Queue Status</h6>
                 <div class="agent-ingest-queue-stats">
                   <div class="agent-ingest-queue-stat-card"><span>Queue Tiefe</span><strong id="agentIngestQueueDepth">-</strong></div>
-                  <div class="agent-ingest-queue-stat-card"><span>Inbox Pending</span><strong id="agentIngestInboxPending">-</strong></div>
-                  <div class="agent-ingest-queue-stat-card"><span>Jobs (Scanner)</span><strong id="agentIngestJobsDepth">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Inbox-Dateien (pending/)</span><strong id="agentIngestInboxPending">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Jobs in DB</span><strong id="agentIngestJobsDepth">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>Sofort fällig</span><strong id="agentIngestQueueReady">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>Retry</span><strong id="agentIngestQueueRetry">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>In Flight</span><strong id="agentIngestQueueInFlight">-</strong></div>

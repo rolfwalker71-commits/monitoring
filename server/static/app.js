@@ -13137,15 +13137,24 @@ async function loadAdminAgentIngestQueue() {
   const auditRuntime = data?.audit_runtime && typeof data.audit_runtime === "object" ? data.audit_runtime : {};
   const failedCount = Number(auditRuntime.failed_count || 0);
   const loginPause = Boolean(data?.ingest_paused_for_login);
+  const diskPause = Boolean(data?.ingest_paused_for_disk);
+  const diskFreeMb = Number(data?.disk_free_mb);
+  const missingStorage = Number(data?.missing_storage_jobs || 0);
   const ingestMode = asText(data?.ingest_mode, "sqlite-queue");
   const modeLabel = ingestMode === "file-inbox" ? "File-Inbox" : "SQLite-Queue";
   const pendingInbox = Number(data?.pending_inbox_count || 0);
   const jobsDepth = Number(data?.jobs_depth);
   const inboxPart = ingestMode === "file-inbox"
-    ? ` · Inbox: ${formatInteger(pendingInbox)} · Jobs: ${formatInteger(Number.isFinite(jobsDepth) ? jobsDepth : 0)}`
+    ? ` · Inbox-Dateien: ${formatInteger(pendingInbox)} · Jobs in DB: ${formatInteger(Number.isFinite(jobsDepth) ? jobsDepth : 0)}`
     : "";
+  const pauseParts = [];
+  if (loginPause) pauseParts.push("Login");
+  if (diskPause) pauseParts.push("Speicher knapp");
+  const pauseText = pauseParts.length > 0 ? pauseParts.join(", ") : "nein";
+  const diskText = Number.isFinite(diskFreeMb) ? `${formatInteger(diskFreeMb)} MB frei` : "?";
+  const storageHint = missingStorage > 0 ? ` · Ohne Payload-Datei: ${formatInteger(missingStorage)}` : "";
   setAgentIngestQueueStatus(
-    `Modus: ${modeLabel} · Queue: ${formatInteger(data?.queue_depth || 0)}${inboxPart} · Neu: ${formatInteger(pendingCount)} · Retry: ${formatInteger(retryCount)} · Fällig: ${formatInteger(data?.ready_count || 0)} · Fehler (60m): ${formatInteger(failedCount)} · Login-Priorität: ${loginPause ? "aktiv" : "nein"} · Ältestes: ${oldestText} · Nächster Versuch: ${nextText}`
+    `Modus: ${modeLabel} · Queue gesamt: ${formatInteger(data?.queue_depth || 0)}${inboxPart} · Neu: ${formatInteger(pendingCount)} · Retry: ${formatInteger(retryCount)} · Fällig: ${formatInteger(data?.ready_count || 0)} · Fehler (60m): ${formatInteger(failedCount)} · Pause: ${pauseText} · Disk: ${diskText}${storageHint} · Ältestes: ${oldestText} · Nächster Versuch: ${nextText}`
   );
   return data;
 }
@@ -19782,6 +19791,41 @@ function wireEvents() {
         setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
       } finally {
         refreshAgentIngestQueueButton.disabled = false;
+      }
+    });
+  }
+
+  const purgeAgentIngestQueueButton = document.getElementById("purgeAgentIngestQueueButton");
+  if (purgeAgentIngestQueueButton) {
+    purgeAgentIngestQueueButton.addEventListener("click", async () => {
+      const confirmed = window.confirm(
+        "Ingest-Queue wirklich leeren?\n\nAlle Jobs in ingest-status.db und alle Payload-Dateien (storage/, pending/, failed/) werden gelöscht. Agents senden beim nächsten Lauf neu."
+      );
+      if (!confirmed) {
+        return;
+      }
+      purgeAgentIngestQueueButton.disabled = true;
+      setAgentIngestQueueStatus("Ingest-Queue wird geleert...");
+      try {
+        const response = await fetch("/api/v1/admin/agent-ingest-queue/purge", {
+          method: "POST",
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || ("HTTP " + response.status));
+        }
+        renderAgentIngestKpiCards(data);
+        renderAgentIngestQueueOverview(data);
+        const purge = data.purge && typeof data.purge === "object" ? data.purge : {};
+        setAgentIngestQueueStatus(
+          `Queue geleert: ${formatInteger(purge.deleted_jobs || 0)} Jobs, ${formatInteger(purge.deleted_storage_files || 0)} Storage-Dateien entfernt.`
+        );
+      } catch (error) {
+        setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        purgeAgentIngestQueueButton.disabled = false;
       }
     });
   }

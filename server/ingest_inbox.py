@@ -173,8 +173,17 @@ def _disk_free_bytes() -> int:
         return 2**62
 
 
-def _disk_write_allowed(extra_bytes: int = 0) -> bool:
+def _disk_write_allowed_for_new_ingest_files(extra_bytes: int = 0) -> bool:
     return _disk_free_bytes() >= INGEST_DISK_MIN_FREE_BYTES + max(0, int(extra_bytes or 0))
+
+
+def _ingest_pause_reasons() -> list[str]:
+    reasons: list[str] = []
+    if callable(_should_pause_for_login) and _should_pause_for_login():
+        reasons.append("login")
+    if not _disk_write_allowed_for_new_ingest_files():
+        reasons.append("disk_low")
+    return reasons
 
 
 def _utc_now_iso() -> str:
@@ -358,7 +367,7 @@ def accept_agent_report_to_inbox(
         raise ValueError("hostname missing")
 
     payload_json = json.dumps(payload, separators=(",", ":"))
-    if not _disk_write_allowed(len(payload_json.encode("utf-8")) + 8192):
+    if not _disk_write_allowed_for_new_ingest_files(len(payload_json.encode("utf-8")) + 8192):
         raise OSError("insufficient disk space for ingest inbox write")
 
     inbox_id = str(uuid.uuid4())
@@ -760,6 +769,65 @@ def migrate_legacy_agent_ingest_queue(main_conn: sqlite3.Connection) -> int:
     return migrated
 
 
+def purge_ingest_queue(*, include_pending: bool = True) -> dict[str, object]:
+    deleted_jobs = 0
+    deleted_audit = 0
+    deleted_storage_files = 0
+    deleted_pending_files = 0
+
+    with sqlite_connect_ingest_status() as conn:
+        deleted_jobs = int(conn.execute("SELECT COUNT(*) FROM ingest_jobs").fetchone()[0] or 0)
+        deleted_audit = int(conn.execute("SELECT COUNT(*) FROM ingest_audit_log").fetchone()[0] or 0)
+        conn.execute("DELETE FROM ingest_jobs")
+        conn.execute("DELETE FROM ingest_audit_log")
+        conn.commit()
+
+    for directory in (INGEST_INBOX_STORAGE_DIR, INGEST_INBOX_FAILED_DIR):
+        for path in directory.glob("*.json"):
+            try:
+                path.unlink()
+                deleted_storage_files += 1
+            except OSError:
+                pass
+
+    if include_pending:
+        for path in INGEST_INBOX_PENDING_DIR.glob("*.json"):
+            try:
+                path.unlink()
+                deleted_pending_files += 1
+            except OSError:
+                pass
+
+    print(
+        "[ingest-inbox] queue purged: "
+        f"jobs={deleted_jobs}, audit={deleted_audit}, "
+        f"storage_files={deleted_storage_files}, pending_files={deleted_pending_files}",
+        flush=True,
+    )
+    return {
+        "deleted_jobs": deleted_jobs,
+        "deleted_audit_rows": deleted_audit,
+        "deleted_storage_files": deleted_storage_files,
+        "deleted_pending_files": deleted_pending_files,
+    }
+
+
+def _count_jobs_missing_storage(ingest_conn: sqlite3.Connection, *, sample_limit: int = 5000) -> int:
+    rows = ingest_conn.execute(
+        "SELECT storage_path FROM ingest_jobs LIMIT ?",
+        (max(1, int(sample_limit)),),
+    ).fetchall()
+    missing = 0
+    for row in rows:
+        storage_rel = str(row[0] or "").strip()
+        if not storage_rel:
+            missing += 1
+            continue
+        if not (INGEST_INBOX_DIR / storage_rel).is_file():
+            missing += 1
+    return missing
+
+
 def collect_ingest_queue_overview(
     ingest_conn: sqlite3.Connection,
     *,
@@ -858,6 +926,9 @@ def collect_ingest_queue_overview(
         else "ok"
     )
     ingest_paused_for_login = _should_pause_for_login() if callable(_should_pause_for_login) else False
+    ingest_paused_for_disk = not _disk_write_allowed_for_new_ingest_files()
+    pause_reasons = _ingest_pause_reasons()
+    missing_storage_jobs = _count_jobs_missing_storage(ingest_conn)
 
     return {
         "ingest_mode": "file-inbox",
@@ -884,6 +955,10 @@ def collect_ingest_queue_overview(
         "audit_runtime": audit_runtime,
         "runtime_metrics": runtime_metrics,
         "ingest_paused_for_login": ingest_paused_for_login,
+        "ingest_paused_for_disk": ingest_paused_for_disk,
+        "ingest_pause_reasons": pause_reasons,
+        "disk_free_mb": int(_disk_free_bytes() // (1024 * 1024)),
+        "missing_storage_jobs": missing_storage_jobs,
     }
 
 
@@ -1115,7 +1190,23 @@ def _process_single_job(job_row: tuple) -> None:
         print(f"[ingest-inbox-worker] job_id={job_id} dropped: {error_message}")
         return
 
-    envelope, payload = _load_job_payload(job_row)
+    try:
+        envelope, payload = _load_job_payload(job_row)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        error_message = f"payload unreadable: {exc}"
+        with sqlite_connect_ingest_status() as ingest_conn:
+            _update_audit_row(
+                ingest_conn,
+                job_id=job_id,
+                status="failed",
+                attempt_count=attempt_count,
+                error_message=error_message,
+            )
+            ingest_conn.execute("DELETE FROM ingest_jobs WHERE id = ?", (job_id,))
+            ingest_conn.commit()
+        print(f"[ingest-inbox-worker] job_id={job_id} dropped: {error_message}")
+        return
+
     payload_json = json.dumps(payload, separators=(",", ":"))
 
     if callable(_quick_duplicate_report_id):
@@ -1242,10 +1333,6 @@ def _process_single_job(job_row: tuple) -> None:
 
 def ingest_worker_loop() -> None:
     while True:
-        if not _disk_write_allowed():
-            _wakeup.wait(5.0)
-            _wakeup.clear()
-            continue
         if callable(_should_pause_for_login) and _should_pause_for_login():
             _wakeup.wait(0.15)
             _wakeup.clear()
@@ -1294,7 +1381,7 @@ def ingest_worker_loop() -> None:
 
 def ingest_scanner_loop() -> None:
     while True:
-        if not _disk_write_allowed():
+        if not _disk_write_allowed_for_new_ingest_files():
             _wakeup.wait(5.0)
             _wakeup.clear()
             continue
