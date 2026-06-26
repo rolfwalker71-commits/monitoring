@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sqlite3
 import threading
 import time
@@ -55,6 +56,8 @@ INGEST_RETRY_MAX_BACKOFF_SECONDS = 300
 INGEST_WORKER_IDLE_SECONDS = 0.5
 INGEST_BATCH_SIZE = 4
 INGEST_DB_TIMEOUT_SECONDS = 30
+INGEST_DISK_MIN_FREE_MB = max(256, int(os.getenv("MONITORING_DISK_MIN_FREE_MB", "1024") or "1024"))
+INGEST_DISK_MIN_FREE_BYTES = INGEST_DISK_MIN_FREE_MB * 1024 * 1024
 
 _wakeup = threading.Event()
 _scanner_lock = threading.Lock()
@@ -161,6 +164,17 @@ def wakeup_worker() -> None:
 
 def sqlite_connect_ingest_status() -> sqlite3.Connection:
     return sqlite3.connect(str(INGEST_STATUS_DB_PATH), timeout=INGEST_DB_TIMEOUT_SECONDS)
+
+
+def _disk_free_bytes() -> int:
+    try:
+        return int(shutil.disk_usage(str(DATA_DIR)).free)
+    except OSError:
+        return 2**62
+
+
+def _disk_write_allowed(extra_bytes: int = 0) -> bool:
+    return _disk_free_bytes() >= INGEST_DISK_MIN_FREE_BYTES + max(0, int(extra_bytes or 0))
 
 
 def _utc_now_iso() -> str:
@@ -343,8 +357,11 @@ def accept_agent_report_to_inbox(
     if not hostname:
         raise ValueError("hostname missing")
 
-    inbox_id = str(uuid.uuid4())
     payload_json = json.dumps(payload, separators=(",", ":"))
+    if not _disk_write_allowed(len(payload_json.encode("utf-8")) + 8192):
+        raise OSError("insufficient disk space for ingest inbox write")
+
+    inbox_id = str(uuid.uuid4())
     envelope = {
         "schema_version": INGEST_ENVELOPE_SCHEMA_VERSION,
         "inbox_id": inbox_id,
@@ -1225,6 +1242,10 @@ def _process_single_job(job_row: tuple) -> None:
 
 def ingest_worker_loop() -> None:
     while True:
+        if not _disk_write_allowed():
+            _wakeup.wait(5.0)
+            _wakeup.clear()
+            continue
         if callable(_should_pause_for_login) and _should_pause_for_login():
             _wakeup.wait(0.15)
             _wakeup.clear()
@@ -1273,6 +1294,10 @@ def ingest_worker_loop() -> None:
 
 def ingest_scanner_loop() -> None:
     while True:
+        if not _disk_write_allowed():
+            _wakeup.wait(5.0)
+            _wakeup.clear()
+            continue
         if callable(_should_pause_for_login) and _should_pause_for_login():
             _wakeup.wait(0.15)
             _wakeup.clear()

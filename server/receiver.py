@@ -289,7 +289,7 @@ CRITICAL_TRENDS_MAX_POINTS_PER_HOST = max(
 )
 CHANGELOG_REBUILD_STALE_MINUTES = max(10, min(1440, int(os.getenv("MONITORING_CHANGELOG_REBUILD_STALE_MINUTES", "120") or "120")))
 SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES = max(5, min(720, int(os.getenv("MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES", "60") or "60")))
-AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
+AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES = [
     {"match_text": "CRM-LTD", "display_name": "Limited CRM", "visible": True},
     {"match_text": "LOGISTICS-LTD", "display_name": "Logistics CRM", "visible": True},
@@ -300,7 +300,18 @@ AUTO_BACKUP_DEFAULT_INTERVAL_HOURS = max(1, min(168, int(os.getenv("MONITORING_A
 AUTO_BACKUP_DEFAULT_RETENTION_DAYS = max(1, min(365, int(os.getenv("MONITORING_AUTO_BACKUP_RETENTION_DAYS", "3") or "3")))
 AUTO_BACKUP_DEFAULT_RETENTION_MAX_FILES = max(
     0,
-    min(20, int(os.getenv("MONITORING_AUTO_BACKUP_RETENTION_MAX_FILES", "4") or "4")),
+    min(20, int(os.getenv("MONITORING_AUTO_BACKUP_RETENTION_MAX_FILES", "2") or "2")),
+)
+DISK_MIN_FREE_MB = max(256, int(os.getenv("MONITORING_DISK_MIN_FREE_MB", "1024") or "1024"))
+DISK_MIN_FREE_BYTES = DISK_MIN_FREE_MB * 1024 * 1024
+DISK_BACKUP_HEADROOM_FACTOR = max(
+    1.05,
+    min(2.0, float(os.getenv("MONITORING_DISK_BACKUP_HEADROOM_FACTOR", "1.15") or "1.15")),
+)
+RECEIVER_LOG_PATH = DATA_DIR / "receiver.log"
+RECEIVER_LOG_MAX_BYTES = max(
+    10 * 1024 * 1024,
+    int(os.getenv("MONITORING_RECEIVER_LOG_MAX_BYTES", str(80 * 1024 * 1024)) or str(80 * 1024 * 1024)),
 )
 SFTP_TEST_TIMEOUT_SECONDS = max(10, min(300, int(os.getenv("MONITORING_SFTP_TEST_TIMEOUT_SECONDS", "45") or "45")))
 SFTP_UPLOAD_TIMEOUT_MIN_SECONDS = max(30, min(3600, int(os.getenv("MONITORING_SFTP_UPLOAD_TIMEOUT_MIN_SECONDS", "300") or "300")))
@@ -615,6 +626,61 @@ def _append_endpoint_timing_file_log(line: str) -> None:
                 handle.write(payload_line)
         except OSError:
             return
+
+
+def _volume_free_bytes(path: Path | None = None) -> int:
+    target = path or DATA_DIR
+    try:
+        return int(shutil.disk_usage(str(target)).free)
+    except OSError:
+        return 0
+
+
+def _database_file_bytes() -> int:
+    try:
+        if DB_PATH.exists():
+            return int(DB_PATH.stat().st_size)
+    except OSError:
+        pass
+    return 0
+
+
+def _backup_automation_env_enabled() -> bool:
+    return os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _disk_bytes_needed_for_local_backup() -> int:
+    db_bytes = _database_file_bytes()
+    return int(db_bytes * DISK_BACKUP_HEADROOM_FACTOR) + DISK_MIN_FREE_BYTES
+
+
+def _disk_has_headroom_for_backup() -> bool:
+    return _volume_free_bytes(DATA_DIR) >= _disk_bytes_needed_for_local_backup()
+
+
+def _disk_has_headroom_for_writes(extra_bytes: int = 0) -> bool:
+    return _volume_free_bytes(DATA_DIR) >= DISK_MIN_FREE_BYTES + max(0, int(extra_bytes or 0))
+
+
+def _rotate_receiver_log_if_needed() -> None:
+    path = RECEIVER_LOG_PATH
+    if not path.exists():
+        return
+    try:
+        size = int(path.stat().st_size)
+    except OSError:
+        return
+    if size <= RECEIVER_LOG_MAX_BYTES:
+        return
+    try:
+        with path.open("w", encoding="utf-8"):
+            pass
+        print(
+            f"[startup] receiver.log truncated ({size} bytes > {RECEIVER_LOG_MAX_BYTES} byte limit)",
+            flush=True,
+        )
+    except OSError as exc:
+        print(f"[startup] receiver.log truncate failed: {exc}", flush=True)
 
 
 def _extend_ingest_yield_for_login(seconds: float | None = None) -> None:
@@ -5052,18 +5118,6 @@ def _run_local_automated_backup(settings: dict[str, object], trigger_source: str
     started_at = utc_now_iso()
     local_target_dir = _normalize_backup_target_dir(settings.get("local_target_dir", AUTO_BACKUP_DIR.name))
     target_dir = DATA_DIR / local_target_dir
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    backup_file = target_dir / f"monitoring-auto-{timestamp}.db"
-    temp_file = target_dir / f".{backup_file.name}.tmp"
-
-    with sqlite3.connect(DB_PATH) as src_conn:
-        with sqlite3.connect(temp_file) as dst_conn:
-            src_conn.backup(dst_conn)
-    os.replace(temp_file, backup_file)
-    size_bytes = int(backup_file.stat().st_size)
-
     retention_days = _coerce_int(
         settings.get("local_retention_days", AUTO_BACKUP_DEFAULT_RETENTION_DAYS),
         AUTO_BACKUP_DEFAULT_RETENTION_DAYS,
@@ -5076,6 +5130,67 @@ def _run_local_automated_backup(settings: dict[str, object], trigger_source: str
         0,
         20,
     )
+    local_enabled = bool(settings.get("local_enabled", False))
+    sftp_enabled = bool(settings.get("sftp_enabled", False))
+
+    if local_enabled or sftp_enabled:
+        _prune_local_automated_backups(
+            target_dir,
+            max_files=retention_max_files,
+            retention_days=retention_days,
+        )
+
+    if not _disk_has_headroom_for_backup():
+        finished_at = utc_now_iso()
+        free_bytes = _volume_free_bytes(DATA_DIR)
+        needed_bytes = _disk_bytes_needed_for_local_backup()
+        reason = (
+            f"insufficient disk space for local backup "
+            f"(free={free_bytes}, need~={needed_bytes}, db={_database_file_bytes()})"
+        )
+        print(f"[auto-backup] skipped: {reason}", flush=True)
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                """
+                INSERT INTO backup_automation_runs (
+                    started_at_utc,
+                    finished_at_utc,
+                    trigger_source,
+                    status,
+                    backup_path,
+                    backup_size_bytes,
+                    uploaded_sftp,
+                    error_message
+                ) VALUES (?, ?, ?, 'skipped', '', 0, 0, ?)
+                """,
+                (started_at, finished_at, trigger_source, reason),
+            )
+            conn.commit()
+        return {
+            "status": "skipped",
+            "reason": "insufficient_disk_space",
+            "free_bytes": free_bytes,
+            "needed_bytes": needed_bytes,
+        }
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    backup_file = target_dir / f"monitoring-auto-{timestamp}.db"
+    temp_file = target_dir / f".{backup_file.name}.tmp"
+
+    try:
+        with sqlite3.connect(DB_PATH) as src_conn:
+            with sqlite3.connect(temp_file) as dst_conn:
+                src_conn.backup(dst_conn)
+        os.replace(temp_file, backup_file)
+        size_bytes = int(backup_file.stat().st_size)
+    except Exception:
+        try:
+            temp_file.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
     uploaded_sftp = False
     upload_error_message = ""
@@ -5147,6 +5262,9 @@ def trigger_automated_backup_now(trigger_source: str = "manual", force_local: bo
         if not force_local and not bool(settings.get("local_enabled", False)) and not bool(settings.get("sftp_enabled", False)):
             return {"status": "skipped", "reason": "backup automation disabled"}
 
+        if not _backup_automation_env_enabled():
+            return {"status": "skipped", "reason": "MONITORING_AUTO_BACKUP_ENABLED=0"}
+
         return _run_local_automated_backup(settings, trigger_source)
     except Exception as exc:
         finished_at = utc_now_iso()
@@ -5183,6 +5301,9 @@ def _auto_backup_scheduler_loop() -> None:
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 settings = get_backup_automation_settings(conn)
+                if not _backup_automation_env_enabled():
+                    threading.Event().wait(60)
+                    continue
                 if bool(settings.get("local_enabled", False)) or bool(settings.get("sftp_enabled", False)):
                     latest_row = conn.execute(
                         """
@@ -27675,6 +27796,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     },
                 )
                 return
+            if "disk" in error_text.lower() or "no space" in error_text.lower() or "enospc" in error_text.lower():
+                self._send_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {
+                        "error": "Server-Speicher knapp — Report bitte spaeter erneut senden.",
+                        "code": "disk_full",
+                        "retry": True,
+                    },
+                )
+                return
             raise
 
         self._send_json(
@@ -27776,6 +27907,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    _rotate_receiver_log_if_needed()
     _configure_ingest_inbox_runtime()
     init_db()
     _restore_backup_jobs_from_disk()
